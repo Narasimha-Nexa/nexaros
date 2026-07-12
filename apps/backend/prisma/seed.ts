@@ -373,19 +373,46 @@ async function main() {
   const managerRole = await prisma.role.upsert({
     where: { tenantId_name: { tenantId: tenant.id, name: 'Manager' } },
     update: {},
-    create: { tenantId: tenant.id, name: 'Manager', description: 'Manages daily operations' },
+    create: {
+      tenantId: tenant.id,
+      name: 'Manager',
+      description: 'Manages daily operations',
+      permissions: {
+        create: permissions
+          .filter(p => ['orders', 'menu', 'tables', 'inventory', 'payments', 'reports', 'staff'].includes(p.module) && p.action !== 'delete')
+          .map(p => ({ permissionId: p.id })),
+      },
+    },
   });
 
   const waiterRole = await prisma.role.upsert({
     where: { tenantId_name: { tenantId: tenant.id, name: 'Waiter' } },
     update: {},
-    create: { tenantId: tenant.id, name: 'Waiter', description: 'Takes orders and serves customers' },
+    create: {
+      tenantId: tenant.id,
+      name: 'Waiter',
+      description: 'Takes orders and serves customers',
+      permissions: {
+        create: permissions
+          .filter(p => ['orders', 'tables', 'menu'].includes(p.module) && ['read', 'update'].includes(p.action))
+          .map(p => ({ permissionId: p.id })),
+      },
+    },
   });
 
   const kitchenRole = await prisma.role.upsert({
     where: { tenantId_name: { tenantId: tenant.id, name: 'Kitchen Staff' } },
     update: {},
-    create: { tenantId: tenant.id, name: 'Kitchen Staff', description: 'Kitchen operations' },
+    create: {
+      tenantId: tenant.id,
+      name: 'Kitchen Staff',
+      description: 'Kitchen operations',
+      permissions: {
+        create: permissions
+          .filter(p => ['orders', 'menu'].includes(p.module) && p.action === 'read')
+          .map(p => ({ permissionId: p.id })),
+      },
+    },
   });
   console.log(`  ✅ Created roles: Owner, Manager, Waiter, Kitchen Staff`);
 
@@ -480,6 +507,38 @@ async function main() {
     console.log(`  ✅ Created 4 staff members`);
   } else {
     console.log(`  ⏭️  Staff already exist (${existingStaff})`);
+  }
+
+  // ─── Inventory Items ───
+  const existingInventory = await prisma.inventoryItem.count({ where: { tenantId: tenant.id } });
+  if (existingInventory === 0) {
+    await prisma.inventoryItem.createMany({
+      data: [
+        { tenantId: tenant.id, name: 'Basmati Rice', unit: 'kg', currentStock: 50, minimumStock: 10, unitCost: 80 },
+        { tenantId: tenant.id, name: 'Toor Dal', unit: 'kg', currentStock: 20, minimumStock: 5, unitCost: 120 },
+        { tenantId: tenant.id, name: 'Sunflower Oil', unit: 'litre', currentStock: 30, minimumStock: 10, unitCost: 150 },
+        { tenantId: tenant.id, name: 'Onion', unit: 'kg', currentStock: 25, minimumStock: 5, unitCost: 40 },
+        { tenantId: tenant.id, name: 'Tomato', unit: 'kg', currentStock: 20, minimumStock: 5, unitCost: 50 },
+        { tenantId: tenant.id, name: 'Potato', unit: 'kg', currentStock: 15, minimumStock: 5, unitCost: 35 },
+        { tenantId: tenant.id, name: 'Paneer', unit: 'kg', currentStock: 8, minimumStock: 3, unitCost: 350 },
+        { tenantId: tenant.id, name: 'Chicken (Whole)', unit: 'kg', currentStock: 15, minimumStock: 5, unitCost: 200 },
+        { tenantId: tenant.id, name: 'Mutton', unit: 'kg', currentStock: 8, minimumStock: 3, unitCost: 600 },
+        { tenantId: tenant.id, name: 'Eggs', unit: 'piece', currentStock: 100, minimumStock: 30, unitCost: 6 },
+        { tenantId: tenant.id, name: 'Garam Masala', unit: 'kg', currentStock: 2, minimumStock: 0.5, unitCost: 500 },
+        { tenantId: tenant.id, name: 'Turmeric Powder', unit: 'kg', currentStock: 1, minimumStock: 0.3, unitCost: 200 },
+        { tenantId: tenant.id, name: 'Red Chilli Powder', unit: 'kg', currentStock: 2, minimumStock: 0.5, unitCost: 300 },
+        { tenantId: tenant.id, name: 'Coriander Leaves', unit: 'kg', currentStock: 3, minimumStock: 1, unitCost: 80 },
+        { tenantId: tenant.id, name: 'Mint Leaves', unit: 'kg', currentStock: 2, minimumStock: 0.5, unitCost: 60 },
+        { tenantId: tenant.id, name: 'Ginger', unit: 'kg', currentStock: 3, minimumStock: 1, unitCost: 100 },
+        { tenantId: tenant.id, name: 'Garlic', unit: 'kg', currentStock: 3, minimumStock: 1, unitCost: 80 },
+        { tenantId: tenant.id, name: 'Curd', unit: 'kg', currentStock: 10, minimumStock: 3, unitCost: 60 },
+        { tenantId: tenant.id, name: 'Butter', unit: 'kg', currentStock: 5, minimumStock: 2, unitCost: 400 },
+        { tenantId: tenant.id, name: 'Naan Flour', unit: 'kg', currentStock: 15, minimumStock: 5, unitCost: 45 },
+      ],
+    });
+    console.log(`  ✅ Created 20 inventory items`);
+  } else {
+    console.log(`  ⏭️  Inventory items already exist (${existingInventory})`);
   }
 
   const totalItems = await prisma.menuItem.count({ where: { tenantId: tenant.id } });

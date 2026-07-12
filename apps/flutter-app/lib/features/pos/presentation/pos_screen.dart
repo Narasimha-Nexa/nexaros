@@ -112,6 +112,7 @@ class _POSScreenState extends State<POSScreen> {
           'type': _orderType,
           'items': _cart.map((c) => ({
             'menuItemId': c['menuItemId'],
+            'name': c['name'],
             'quantity': c['quantity'],
             'unitPrice': c['unitPrice'],
           })).toList(),

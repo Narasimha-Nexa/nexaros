@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/network/api_client.dart';
 import '../../pos/presentation/pos_screen.dart';
+import '../../payments/presentation/payment_screen.dart';
 
 class OrderListScreen extends StatefulWidget {
   const OrderListScreen({super.key});
@@ -52,8 +53,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final filters = ['', 'PENDING', 'PREPARING', 'READY', 'COMPLETED'];
-    final filterLabels = {'': 'All', 'PENDING': 'Pending', 'PREPARING': 'Preparing', 'READY': 'Ready', 'COMPLETED': 'Completed'};
+    final filters = ['', 'PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'SERVED', 'COMPLETED', 'CANCELLED'];
+    final filterLabels = {'': 'All', 'PENDING': 'Pending', 'CONFIRMED': 'Confirmed', 'PREPARING': 'Preparing', 'READY': 'Ready', 'SERVED': 'Served', 'COMPLETED': 'Completed', 'CANCELLED': 'Cancelled'};
     return Scaffold(
       appBar: AppBar(title: Text('Orders', style: GoogleFonts.inter(fontWeight: FontWeight.w600))),
       body: Column(
@@ -177,19 +178,26 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 children: [
                   Text('₹${total.toStringAsFixed(2)}', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 15)),
                   const Spacer(),
-                  if (status == 'PENDING' || status == 'CONFIRMED')
+                  if (status == 'PENDING' || status == 'CONFIRMED') ...[
+                    _buildActionButton('KOT', AppColors.warning, () => _printKot(order['id'])),
+                    const SizedBox(width: 8),
                     _buildActionButton('Prepare', AppColors.orderPreparing, () => _updateStatus(order['id'], 'PREPARING')),
+                  ],
                   if (status == 'PREPARING')
                     _buildActionButton('Ready', AppColors.orderReady, () => _updateStatus(order['id'], 'READY')),
                   if (status == 'READY')
                     _buildActionButton('Served', AppColors.orderServed, () => _updateStatus(order['id'], 'SERVED')),
                   if (status == 'SERVED')
-                    _buildActionButton('Pay', AppColors.primary, () => _updateStatus(order['id'], 'COMPLETED')),
+                    _buildActionButton('Pay', AppColors.primary, () {
+                      Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => PaymentScreen(orderId: order['id']),
+                      )).then((_) => _loadOrders());
+                    }),
                   if (status != 'COMPLETED' && status != 'CANCELLED')
                     Padding(
                       padding: const EdgeInsets.only(left: 8),
                       child: TextButton(
-                        onPressed: () => _updateStatus(order['id'], 'CANCELLED'),
+                        onPressed: () => _confirmCancel(order['id']),
                         child: const Text('Cancel', style: TextStyle(color: AppColors.danger, fontSize: 12)),
                       ),
                     ),
@@ -218,6 +226,21 @@ class _OrderListScreenState extends State<OrderListScreen> {
     );
   }
 
+  Future<void> _confirmCancel(String orderId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Order'),
+        content: const Text('Are you sure you want to cancel this order?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Yes, Cancel', style: TextStyle(color: AppColors.danger))),
+        ],
+      ),
+    );
+    if (confirmed == true) _updateStatus(orderId, 'CANCELLED');
+  }
+
   Future<void> _updateStatus(String orderId, String status) async {
     try {
       await _api.updateOrderStatus(orderId, status);
@@ -226,6 +249,23 @@ class _OrderListScreenState extends State<OrderListScreen> {
           SnackBar(content: Text('Order updated to ${_statusLabel(status)}'), backgroundColor: AppColors.success),
         );
         _loadOrders();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString().replaceAll('Exception: ', '')}'), backgroundColor: AppColors.danger),
+        );
+      }
+    }
+  }
+
+  Future<void> _printKot(String orderId) async {
+    try {
+      await _api.printKot(orderId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('KOT sent to kitchen'), backgroundColor: AppColors.success),
+        );
       }
     } catch (e) {
       if (mounted) {

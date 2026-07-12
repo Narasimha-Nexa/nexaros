@@ -5,6 +5,9 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { TablesService } from './tables.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { CreateTableDto } from './dto/create-table.dto';
+import { UpdateTableDto } from './dto/update-table.dto';
+import { UpdateTableStatusDto } from './dto/update-table-status.dto';
 
 @ApiTags('tables')
 @ApiBearerAuth()
@@ -36,20 +39,20 @@ export class TablesController {
   @Post()
   @ApiOperation({ summary: 'Create a table' })
   @ApiQuery({ name: 'branchId', required: true })
-  create(@Query('branchId') branchId: string, @Body() data: any) {
+  create(@Query('branchId') branchId: string, @Body() data: CreateTableDto) {
     return this.tablesService.create(branchId, data);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update table details' })
-  update(@Param('id') id: string, @Body() data: { name?: string; capacity?: number }) {
+  update(@Param('id') id: string, @Body() data: UpdateTableDto) {
     return this.tablesService.update(id, data);
   }
 
   @Patch(':id/status')
   @ApiOperation({ summary: 'Update table status' })
-  updateStatus(@Param('id') id: string, @Body('status') status: string) {
-    return this.tablesService.updateStatus(id, status);
+  updateStatus(@Param('id') id: string, @Body() data: UpdateTableStatusDto) {
+    return this.tablesService.updateStatus(id, data.status);
   }
 
   @Post(':id/qr-code')

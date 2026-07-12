@@ -85,8 +85,8 @@ class _BillPreviewScreenState extends State<BillPreviewScreen> {
                     children: [
                       const Icon(Icons.restaurant, size: 32, color: AppColors.primary),
                       const SizedBox(height: 4),
-                      Text('NexaROS Restaurant', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18)),
-                      Text('Demo Branch', style: GoogleFonts.inter(color: AppColors.gray500, fontSize: 12)),
+                      Text(order['branch']?['tenant']?['name'] ?? 'Restaurant', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18)),
+                      Text(order['branch']?['name'] ?? 'Branch', style: GoogleFonts.inter(color: AppColors.gray500, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -144,8 +144,10 @@ class _BillPreviewScreenState extends State<BillPreviewScreen> {
                 // Totals
                 _billRow('Subtotal', '₹${subtotal.toStringAsFixed(2)}'),
                 const SizedBox(height: 4),
-                _billRow('CGST (2.5%)', '₹${(taxAmount / 2).toStringAsFixed(2)}'),
-                _billRow('SGST (2.5%)', '₹${(taxAmount / 2).toStringAsFixed(2)}'),
+                if (taxAmount > 0) ...[
+                  _billRow('CGST (2.5%)', '₹${(taxAmount / 2).toStringAsFixed(2)}'),
+                  _billRow('SGST (2.5%)', '₹${(taxAmount / 2).toStringAsFixed(2)}'),
+                ],
                 if (discount > 0) ...[
                   const SizedBox(height: 4),
                   _billRow('Discount', '-₹${discount.toStringAsFixed(2)}', color: AppColors.danger),

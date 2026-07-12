@@ -19,6 +19,15 @@ export class SyncService {
     if (data.orders) {
       for (const localOrder of data.orders) {
         try {
+          // Idempotency: skip if localId already synced
+          if (localOrder.localId) {
+            const existing = await this.prisma.order.findFirst({ where: { localId: localOrder.localId } });
+            if (existing) {
+              results.orders.push({ localId: localOrder.localId, serverId: existing.id, orderNumber: existing.orderNumber });
+              continue;
+            }
+          }
+
           // Get next order number
           const lastOrder = await this.prisma.order.findFirst({
             where: { branchId: localOrder.branchId },

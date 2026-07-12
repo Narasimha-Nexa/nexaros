@@ -82,4 +82,9 @@ export class InventoryService {
 
     return items.filter((item) => Number(item.currentStock) <= Number(item.minimumStock));
   }
+
+  async remove(id: string, tenantId: string) {
+    await this.findOne(id, tenantId);
+    return this.prisma.inventoryItem.delete({ where: { id } });
+  }
 }

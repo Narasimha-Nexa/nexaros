@@ -2,8 +2,11 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { Reflector } from '@nestjs/core';
 import { join } from 'path';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { PermissionsGuard } from './common/guards/permissions.guard';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -19,6 +22,13 @@ async function bootstrap() {
 
   // Serve uploaded files statically
   app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads' });
+
+  // Global exception filter
+  app.useGlobalFilters(new AllExceptionsFilter());
+
+  // Global guards
+  const reflector = app.get(Reflector);
+  app.useGlobalGuards(new PermissionsGuard(reflector));
 
   // Global validation pipe
   app.useGlobalPipes(
@@ -47,6 +57,8 @@ async function bootstrap() {
     .addTag('orders', 'Order management')
     .addTag('tables', 'Table management')
     .addTag('inventory', 'Inventory management')
+    .addTag('payments', 'Payment processing')
+    .addTag('invoices', 'Invoice generation')
     .addTag('sync', 'Offline sync endpoints')
     .build();
 

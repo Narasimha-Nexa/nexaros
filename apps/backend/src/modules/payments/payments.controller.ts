@@ -5,6 +5,7 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { PaymentsService } from './payments.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { CreatePaymentDto } from './dto/create-payment.dto';
 
 @ApiTags('payments')
 @ApiBearerAuth()
@@ -17,7 +18,7 @@ export class PaymentsController {
   @ApiOperation({ summary: 'Process payment for an order' })
   createPayment(
     @Param('orderId') orderId: string,
-    @Body() data: { method: string; amount: number; reference?: string },
+    @Body() data: CreatePaymentDto,
   ) {
     return this.paymentsService.createPayment(orderId, data);
   }

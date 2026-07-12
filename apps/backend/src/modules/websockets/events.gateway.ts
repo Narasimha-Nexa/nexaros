@@ -69,12 +69,18 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('join:branch')
-  handleJoinBranch(
+  async handleJoinBranch(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { branchId: string },
   ) {
-    client.join(`branch:${data.branchId}`);
-    console.log(`[WS] Client joined branch room: ${data.branchId}`);
+    // Verify user has access to this branch's tenant
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: data.branchId },
+      select: { tenantId: true },
+    });
+    if (branch && branch.tenantId === client.data.tenantId) {
+      client.join(`branch:${data.branchId}`);
+    }
   }
 
   @SubscribeMessage('leave:branch')

@@ -259,6 +259,27 @@ class _TableGridScreenState extends State<TableGridScreen> {
                   );
                 }).toList(),
               ),
+              const SizedBox(height: 16),
+              // QR Code & Edit buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _generateQrCode(table['id']),
+                      icon: const Icon(Icons.qr_code, size: 18),
+                      label: const Text('QR Code'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _showEditTableDialog(table),
+                      icon: const Icon(Icons.edit, size: 18),
+                      label: const Text('Edit'),
+                    ),
+                  ),
+                ],
+              ),
               if (activeOrders.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 Text('Active Orders (${activeOrders.length})', style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14)),
@@ -297,5 +318,89 @@ class _TableGridScreenState extends State<TableGridScreen> {
         );
       }
     }
+  }
+
+  Future<void> _generateQrCode(String tableId) async {
+    try {
+      await _api.updateTable(tableId, {});
+      final plan = await _api.getFloorPlan();
+      final table = (plan['tables'] as List).firstWhere((t) => t['id'] == tableId, orElse: () => null);
+      final qrUrl = table?['qrCode'];
+      if (mounted && qrUrl != null) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text('Table QR Code', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Scan to order from this table', style: GoogleFonts.inter(fontSize: 12, color: AppColors.gray500)),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: AppColors.gray50, borderRadius: BorderRadius.circular(8)),
+                  child: Text(qrUrl, style: GoogleFonts.inter(fontSize: 10, color: AppColors.primary), textAlign: TextAlign.center),
+                ),
+              ],
+            ),
+            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString().replaceAll('Exception: ', '')}'), backgroundColor: AppColors.danger),
+        );
+      }
+    }
+  }
+
+  void _showEditTableDialog(Map<String, dynamic> table) {
+    final nameController = TextEditingController(text: table['name'] ?? '');
+    final capacityController = TextEditingController(text: '${table['capacity'] ?? 4}');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Edit Table ${table['number']}', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Name (optional)'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: capacityController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Capacity'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameController.text.isNotEmpty ? nameController.text : null;
+              final capacity = int.tryParse(capacityController.text) ?? 4;
+              Navigator.pop(ctx);
+              try {
+                await _api.updateTable(table['id'], {'capacity': capacity});
+                if (name != null) await _api.updateTable(table['id'], {'name': name});
+                _loadFloorPlan();
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: ${e.toString().replaceAll('Exception: ', '')}'), backgroundColor: AppColors.danger),
+                  );
+                }
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
   }
 }

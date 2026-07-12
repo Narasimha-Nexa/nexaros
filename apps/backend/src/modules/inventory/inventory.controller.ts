@@ -1,11 +1,12 @@
 import {
-  Controller, Get, Post, Patch,
+  Controller, Get, Post, Patch, Delete,
   Param, Body, Query, UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { InventoryService } from './inventory.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
+import { CreateInventoryItemDto, UpdateInventoryItemDto, AdjustStockDto } from './dto/inventory.dto';
 
 @ApiTags('inventory')
 @ApiBearerAuth()
@@ -34,7 +35,7 @@ export class InventoryController {
 
   @Post()
   @ApiOperation({ summary: 'Create inventory item' })
-  create(@CurrentTenant() tenantId: string, @Body() data: any) {
+  create(@CurrentTenant() tenantId: string, @Body() data: CreateInventoryItemDto) {
     return this.inventoryService.create(tenantId, data);
   }
 
@@ -43,9 +44,15 @@ export class InventoryController {
   update(
     @Param('id') id: string,
     @CurrentTenant() tenantId: string,
-    @Body() data: any,
+    @Body() data: UpdateInventoryItemDto,
   ) {
     return this.inventoryService.update(id, tenantId, data);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete inventory item' })
+  remove(@Param('id') id: string, @CurrentTenant() tenantId: string) {
+    return this.inventoryService.remove(id, tenantId);
   }
 
   @Post(':id/adjust')
@@ -53,7 +60,7 @@ export class InventoryController {
   adjustStock(
     @Param('id') id: string,
     @CurrentTenant() tenantId: string,
-    @Body() data: { quantity: number; type: string; notes?: string },
+    @Body() data: AdjustStockDto,
   ) {
     return this.inventoryService.adjustStock(id, tenantId, data);
   }

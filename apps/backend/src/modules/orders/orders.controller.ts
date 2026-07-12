@@ -5,6 +5,9 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { CreateOrderDto } from './dto/create-order.dto';
+import { AddItemDto } from './dto/add-item.dto';
+import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 
 @ApiTags('orders')
 @ApiBearerAuth()
@@ -40,13 +43,13 @@ export class OrdersController {
   @Post()
   @ApiOperation({ summary: 'Create a new order' })
   @ApiQuery({ name: 'branchId', required: true })
-  create(@Query('branchId') branchId: string, @Body() data: any) {
+  create(@Query('branchId') branchId: string, @Body() data: CreateOrderDto) {
     return this.ordersService.create(branchId, data);
   }
 
   @Post(':id/items')
   @ApiOperation({ summary: 'Add item to existing order' })
-  addItem(@Param('id') id: string, @Body() data: any) {
+  addItem(@Param('id') id: string, @Body() data: AddItemDto) {
     return this.ordersService.addItem(id, data);
   }
 
@@ -60,10 +63,9 @@ export class OrdersController {
   @ApiOperation({ summary: 'Update order status' })
   updateStatus(
     @Param('id') id: string,
-    @Body('status') status: string,
-    @Body('notes') notes?: string,
+    @Body() data: UpdateOrderStatusDto,
   ) {
-    return this.ordersService.updateStatus(id, status, notes);
+    return this.ordersService.updateStatus(id, data.status, data.notes);
   }
 
   @Post(':id/kot')

@@ -3,10 +3,13 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiClient {
-  static const String _baseUrl = 'http://localhost:4000/api';
+  static const String _baseUrl = String.fromEnvironment('API_URL', defaultValue: 'http://localhost:4000/api');
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   String? _accessToken;
+
+  String get baseUrl => _baseUrl;
+  String? get accessToken => _accessToken;
 
   Future<Map<String, String>> get _headers async {
     if (_accessToken == null) {
@@ -17,8 +20,6 @@ class ApiClient {
       if (_accessToken != null) 'Authorization': 'Bearer $_accessToken',
     };
   }
-
-  String get baseUrl => _baseUrl;
 
   // ─── Auth ───
 
@@ -310,8 +311,22 @@ class ApiClient {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return jsonDecode(response.body);
     }
+    if (response.statusCode == 401 && _accessToken != null) {
+      throw AuthException('Session expired');
+    }
     final body = jsonDecode(response.body);
     throw Exception(body['message'] ?? 'Request failed (${response.statusCode})');
+  }
+
+  Future<dynamic> requestWithRetry(Future<http.Response> Function() request) async {
+    var response = await request();
+    if (response.statusCode == 401) {
+      try {
+        await refreshAccessToken();
+        response = await request();
+      } catch (_) {}
+    }
+    return _handleResponse(response);
   }
 
   Future<void> _storeTokens(String access, String refresh) async {
@@ -324,4 +339,11 @@ class ApiClient {
     final token = await _storage.read(key: 'access_token');
     return token != null;
   }
+}
+
+class AuthException implements Exception {
+  final String message;
+  AuthException(this.message);
+  @override
+  String toString() => message;
 }

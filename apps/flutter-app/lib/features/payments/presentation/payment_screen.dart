@@ -54,9 +54,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
         amount: remaining,
         reference: _referenceController.text.isNotEmpty ? _referenceController.text : null,
       );
+      // Generate invoice after successful payment
+      String? invoiceNumber;
+      try {
+        final invoice = await _api.generateInvoice(result['id']);
+        invoiceNumber = invoice['number'];
+      } catch (_) {}
       if (mounted) {
+        final msg = invoiceNumber != null
+            ? 'Payment processed! Invoice: $invoiceNumber'
+            : 'Payment processed successfully!';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: const Text('Payment processed successfully!'), backgroundColor: AppColors.success),
+          SnackBar(content: Text(msg), backgroundColor: AppColors.success),
         );
         Navigator.pop(context, result);
       }

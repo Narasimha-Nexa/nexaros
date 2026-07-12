@@ -37,6 +37,7 @@ export class InvoicesService {
     const igst = 0;
 
     const lastInvoice = await this.prisma.invoice.findFirst({
+      where: { payment: { branchId: payment.branchId } },
       orderBy: { createdAt: 'desc' },
     });
     const num = lastInvoice ? parseInt(lastInvoice.number.replace('INV-', '')) + 1 : 1;

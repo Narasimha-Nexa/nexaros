@@ -57,7 +57,12 @@ export class OrdersService {
     });
     const orderNumber = (lastOrder?.orderNumber || 0) + 1;
 
-    // Calculate amounts with per-item tax
+    const menuItemIds = (data.items || []).map((i: any) => i.menuItemId).filter(Boolean);
+    const menuItems = menuItemIds.length > 0
+      ? await this.prisma.menuItem.findMany({ where: { id: { in: menuItemIds } }, select: { id: true, taxRate: true } })
+      : [];
+    const taxRateMap = new Map(menuItems.map(m => [m.id, Number(m.taxRate || 5)]));
+
     let subtotal = 0;
     let totalTax = 0;
     const items = data.items || [];
@@ -65,7 +70,7 @@ export class OrdersService {
     for (const item of items) {
       const itemTotal = item.unitPrice * item.quantity;
       subtotal += itemTotal;
-      const taxRate = item.taxRate ?? 5;
+      const taxRate = taxRateMap.get(item.menuItemId) ?? 5;
       totalTax += itemTotal * (taxRate / 100);
     }
 
@@ -96,7 +101,6 @@ export class OrdersService {
             quantity: item.quantity,
             unitPrice: item.unitPrice,
             totalPrice: item.unitPrice * item.quantity,
-            taxRate: item.taxRate ?? 5,
             notes: item.notes,
           })),
         },
@@ -299,12 +303,16 @@ export class OrdersService {
   }
 
   private async recalculateOrder(orderId: string) {
-    const items = await this.prisma.orderItem.findMany({ where: { orderId } });
+    const items = await this.prisma.orderItem.findMany({
+      where: { orderId },
+      include: { menuItem: { select: { taxRate: true } } },
+    });
     let subtotal = 0;
     let totalTax = 0;
     for (const item of items) {
       subtotal += Number(item.totalPrice);
-      totalTax += Number(item.totalPrice) * 0.05;
+      const taxRate = Number(item.menuItem?.taxRate || 5);
+      totalTax += Number(item.totalPrice) * (taxRate / 100);
     }
 
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
