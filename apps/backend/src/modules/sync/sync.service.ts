@@ -1,6 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GatewayService } from '../websockets/gateway.service';
+import { PushSyncDto } from './dto/push-sync.dto';
+
+export interface SyncResult {
+  orders: Array<{ localId?: string; serverId: string; orderNumber?: number }>;
+  payments: Array<{ localId?: string; serverId: string }>;
+  errors: Array<{ type: string; localId?: string; error: string }>;
+}
 
 @Injectable()
 export class SyncService {
@@ -9,15 +16,12 @@ export class SyncService {
     private gateway: GatewayService,
   ) {}
 
-  async pushOfflineData(tenantId: string, data: {
-    orders?: any[];
-    payments?: any[];
-  }) {
-    const results: any = { orders: [], payments: [], errors: [] };
+  async pushOfflineData(tenantId: string, dto: PushSyncDto) {
+    const results: SyncResult = { orders: [], payments: [], errors: [] };
 
     // Process offline orders
-    if (data.orders) {
-      for (const localOrder of data.orders) {
+    if (dto.orders) {
+      for (const localOrder of dto.orders) {
         try {
           // Idempotency: skip if localId already synced
           if (localOrder.localId) {
@@ -30,36 +34,36 @@ export class SyncService {
 
           // Get next order number
           const lastOrder = await this.prisma.order.findFirst({
-            where: { branchId: localOrder.branchId },
+            where: { branchId: localOrder.branchId! },
             orderBy: { orderNumber: 'desc' },
           });
           const orderNumber = (lastOrder?.orderNumber || 0) + 1;
 
           const order = await this.prisma.order.create({
             data: {
-              branchId: localOrder.branchId,
-              tableId: localOrder.tableId,
-              staffId: localOrder.staffId,
+              branchId: localOrder.branchId!,
+              tableId: localOrder.tableId || undefined,
+              staffId: localOrder.staffId || undefined,
               orderNumber,
-              type: localOrder.type || 'DINE_IN',
-              status: localOrder.status || 'PENDING',
-              customerName: localOrder.customerName,
-              customerPhone: localOrder.customerPhone,
-              subtotal: localOrder.subtotal,
+              type: (localOrder.type as any) || 'DINE_IN',
+              status: (localOrder.status as any) || 'PENDING',
+              customerName: localOrder.customerName || undefined,
+              customerPhone: localOrder.customerPhone || undefined,
+              subtotal: localOrder.subtotal || 0,
               taxAmount: localOrder.taxAmount || 0,
               discountAmount: localOrder.discountAmount || 0,
-              totalAmount: localOrder.totalAmount,
-              notes: localOrder.notes,
-              localId: localOrder.localId,
+              totalAmount: localOrder.totalAmount || 0,
+              notes: localOrder.notes || undefined,
+              localId: localOrder.localId || undefined,
               synced: true,
               items: {
-                create: (localOrder.items || []).map((item: any) => ({
-                  menuItemId: item.menuItemId,
-                  name: item.name,
-                  quantity: item.quantity,
-                  unitPrice: item.unitPrice,
-                  totalPrice: item.unitPrice * item.quantity,
-                  notes: item.notes,
+                create: (localOrder.items || []).map((item) => ({
+                  menuItemId: item.menuItemId || '',
+                  name: item.name || '',
+                  quantity: item.quantity || 1,
+                  unitPrice: item.unitPrice || 0,
+                  totalPrice: (item.unitPrice || 0) * (item.quantity || 1),
+                  notes: item.notes || undefined,
                 })),
               },
             },
@@ -72,7 +76,7 @@ export class SyncService {
           });
 
           // Emit real-time event
-          this.gateway.emitToBranch(localOrder.branchId, 'order:created', {
+          this.gateway.emitToBranch(localOrder.branchId!, 'order:created', {
             id: order.id,
             orderNumber: order.orderNumber,
             type: order.type,
@@ -83,23 +87,23 @@ export class SyncService {
           results.errors.push({
             type: 'order',
             localId: localOrder.localId,
-            error: error.message,
+            error: error instanceof Error ? error.message : String(error),
           });
         }
       }
     }
 
     // Process offline payments
-    if (data.payments) {
-      for (const localPayment of data.payments) {
+    if (dto.payments) {
+      for (const localPayment of dto.payments) {
         try {
           const payment = await this.prisma.payment.create({
             data: {
-              orderId: localPayment.orderId,
-              branchId: localPayment.branchId,
-              method: localPayment.method,
-              amount: localPayment.amount,
-              reference: localPayment.reference,
+              orderId: localPayment.orderId!,
+              branchId: localPayment.branchId!,
+              method: (localPayment.method as any) || 'CASH',
+              amount: localPayment.amount || 0,
+              reference: localPayment.reference || undefined,
               status: 'COMPLETED',
             },
           });
@@ -112,7 +116,7 @@ export class SyncService {
           results.errors.push({
             type: 'payment',
             localId: localPayment.localId,
-            error: error.message,
+            error: error instanceof Error ? error.message : String(error),
           });
         }
       }
@@ -145,6 +149,21 @@ export class SyncService {
       menuItems,
       tables,
       syncedAt: new Date().toISOString(),
+    };
+  }
+
+  async getSyncStatus(tenantId: string) {
+    const unsyncedOrders = await this.prisma.order.count({
+      where: {
+        branch: { tenantId },
+        synced: false,
+      },
+    });
+
+    return {
+      tenantId,
+      unsyncedOrders,
+      lastSyncAt: new Date().toISOString(),
     };
   }
 }

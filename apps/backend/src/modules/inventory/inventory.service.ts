@@ -1,5 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CreateInventoryItemDto } from './dto/inventory.dto';
+import { UpdateInventoryItemDto } from './dto/inventory.dto';
+import { AdjustStockDto } from './dto/inventory.dto';
+import { StockMovementType } from '@prisma/client';
 
 @Injectable()
 export class InventoryService {
@@ -32,33 +36,33 @@ export class InventoryService {
     return item;
   }
 
-  async create(tenantId: string, data: any) {
+  async create(tenantId: string, dto: CreateInventoryItemDto) {
     return this.prisma.inventoryItem.create({
-      data: { ...data, tenantId },
+      data: { ...dto, tenantId },
     });
   }
 
-  async update(id: string, tenantId: string, data: any) {
+  async update(id: string, tenantId: string, dto: UpdateInventoryItemDto) {
     await this.findOne(id, tenantId);
     return this.prisma.inventoryItem.update({
       where: { id },
-      data,
+      data: dto,
     });
   }
 
-  async adjustStock(id: string, tenantId: string, data: { quantity: number; type: string; notes?: string }) {
+  async adjustStock(id: string, tenantId: string, dto: AdjustStockDto) {
     const item = await this.findOne(id, tenantId);
 
-    const newStock = data.type === 'PURCHASE' || data.type === 'ADJUSTMENT'
-      ? Number(item.currentStock) + data.quantity
-      : Number(item.currentStock) - data.quantity;
+    const newStock = dto.type === 'PURCHASE' || dto.type === 'ADJUSTMENT'
+      ? Number(item.currentStock) + dto.quantity
+      : Number(item.currentStock) - dto.quantity;
 
     await this.prisma.stockMovement.create({
       data: {
         inventoryItemId: id,
-        type: data.type as any,
-        quantity: data.quantity,
-        notes: data.notes,
+        type: dto.type as StockMovementType,
+        quantity: dto.quantity,
+        notes: dto.notes,
       },
     });
 

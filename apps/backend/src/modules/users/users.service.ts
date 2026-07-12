@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
@@ -45,11 +47,16 @@ export class UsersService {
     return user;
   }
 
-  async create(tenantId: string, data: any) {
-    const hashedPassword = await bcrypt.hash(data.password, 12);
+  async create(tenantId: string, dto: CreateUserDto) {
+    const hashedPassword = await bcrypt.hash(dto.password, 12);
     return this.prisma.user.create({
       data: {
-        ...data,
+        email: dto.email,
+        phone: dto.phone,
+        firstName: dto.firstName,
+        lastName: dto.lastName,
+        avatar: dto.avatar,
+        role: (dto.role as any) || 'STAFF',
         tenantId,
         password: hashedPassword,
       },
@@ -63,14 +70,24 @@ export class UsersService {
     });
   }
 
-  async update(id: string, tenantId: string, data: any) {
+  async update(id: string, tenantId: string, dto: UpdateUserDto) {
     await this.findOne(id, tenantId);
-    if (data.password) {
-      data.password = await bcrypt.hash(data.password, 12);
+
+    const updateData: Record<string, unknown> = {};
+    if (dto.email !== undefined) updateData.email = dto.email;
+    if (dto.phone !== undefined) updateData.phone = dto.phone;
+    if (dto.firstName !== undefined) updateData.firstName = dto.firstName;
+    if (dto.lastName !== undefined) updateData.lastName = dto.lastName;
+    if (dto.avatar !== undefined) updateData.avatar = dto.avatar;
+    if (dto.role !== undefined) updateData.role = dto.role;
+    if (dto.isActive !== undefined) updateData.isActive = dto.isActive;
+    if (dto.password) {
+      updateData.password = await bcrypt.hash(dto.password, 12);
     }
+
     return this.prisma.user.update({
       where: { id },
-      data,
+      data: updateData,
       select: {
         id: true,
         email: true,

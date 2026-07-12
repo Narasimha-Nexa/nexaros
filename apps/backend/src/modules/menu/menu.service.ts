@@ -3,6 +3,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { GatewayService } from '../websockets/gateway.service';
 import { unlink } from 'fs/promises';
 import { join } from 'path';
+import { CreateCategoryDto } from './dto/create-category.dto';
+import { UpdateCategoryDto } from './dto/update-category.dto';
+import { CreateMenuItemDto } from './dto/create-menu-item.dto';
+import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
 
 @Injectable()
 export class MenuService {
@@ -23,17 +27,17 @@ export class MenuService {
     });
   }
 
-  async createCategory(tenantId: string, data: any) {
+  async createCategory(tenantId: string, dto: CreateCategoryDto) {
     const category = await this.prisma.category.create({
-      data: { ...data, tenantId },
+      data: { ...dto, tenantId },
     });
     this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'category', action: 'created' });
     return category;
   }
 
-  async updateCategory(id: string, tenantId: string, data: any) {
+  async updateCategory(id: string, tenantId: string, dto: UpdateCategoryDto) {
     await this.prisma.category.findFirst({ where: { id, tenantId } });
-    const category = await this.prisma.category.update({ where: { id }, data });
+    const category = await this.prisma.category.update({ where: { id }, data: dto });
     this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'category', action: 'updated' });
     return category;
   }
@@ -48,7 +52,7 @@ export class MenuService {
   // ─── Menu Items ───
 
   async findAllItems(tenantId: string, categoryId?: string, search?: string) {
-    const where: any = { tenantId };
+    const where: { tenantId: string; categoryId?: string; OR?: object[] } = { tenantId };
 
     if (categoryId) {
       where.categoryId = categoryId;
@@ -88,8 +92,8 @@ export class MenuService {
     return item;
   }
 
-  async createItem(tenantId: string, data: any) {
-    const { variants, addOns, ...itemData } = data;
+  async createItem(tenantId: string, dto: CreateMenuItemDto) {
+    const { variants, addOns, ...itemData } = dto;
     const item = await this.prisma.menuItem.create({
       data: {
         tenantId,
@@ -103,10 +107,10 @@ export class MenuService {
     return item;
   }
 
-  async updateItem(id: string, tenantId: string, data: any) {
+  async updateItem(id: string, tenantId: string, dto: UpdateMenuItemDto) {
     await this.findOneItem(id, tenantId);
 
-    const { variants, addOns, ...updateData } = data;
+    const { variants, addOns, ...updateData } = dto;
 
     const item = await this.prisma.menuItem.update({
       where: { id },

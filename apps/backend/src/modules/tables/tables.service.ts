@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GatewayService } from '../websockets/gateway.service';
+import { CreateTableDto } from './dto/create-table.dto';
 import { randomBytes } from 'crypto';
 
 @Injectable()
@@ -43,9 +44,9 @@ export class TablesService {
     return table;
   }
 
-  async create(branchId: string, data: any) {
+  async create(branchId: string, dto: CreateTableDto) {
     return this.prisma.restaurantTable.create({
-      data: { ...data, branchId },
+      data: { ...dto, branchId },
     });
   }
 

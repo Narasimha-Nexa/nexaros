@@ -31,4 +31,10 @@ export class InvoicesController {
   getInvoice(@Param('id') id: string) {
     return this.invoicesService.getInvoice(id);
   }
+
+  @Get(':id/pdf')
+  @ApiOperation({ summary: 'Get invoice PDF data (structured for client rendering)' })
+  getInvoicePdf(@Param('id') id: string) {
+    return this.invoicesService.getInvoicePdf(id);
+  }
 }

@@ -3,12 +3,15 @@ import {
   ConflictException,
   UnauthorizedException,
   BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
@@ -220,6 +223,83 @@ export class AuthService {
       where: { token: refreshToken },
     });
     return { message: 'Logged out successfully' };
+  }
+
+  async forgotPassword(dto: ForgotPasswordDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+
+    // Always return success to prevent email enumeration
+    if (!user) {
+      return { message: 'If an account exists, a reset link has been sent.' };
+    }
+
+    const resetToken = await this.jwtService.signAsync(
+      { sub: user.id, type: 'password_reset' },
+      { expiresIn: '1h' },
+    );
+
+    // Store reset token as a refresh token entry with a short expiry
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1);
+
+    await this.prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        token: resetToken,
+        expiresAt,
+      },
+    });
+
+    // In production, send email here. For now, return token for dev.
+    return {
+      message: 'If an account exists, a reset link has been sent.',
+      ...(process.env.NODE_ENV !== 'production' && { resetToken }),
+    };
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    try {
+      const payload = await this.jwtService.verifyAsync(dto.token, {
+        secret: this.configService.get('JWT_REFRESH_SECRET'),
+      });
+
+      if (payload.type !== 'password_reset') {
+        throw new BadRequestException('Invalid reset token');
+      }
+
+      // Check if token exists and is not revoked
+      const storedToken = await this.prisma.refreshToken.findUnique({
+        where: { token: dto.token },
+      });
+
+      if (!storedToken || storedToken.expiresAt < new Date()) {
+        throw new BadRequestException('Reset token expired or invalid');
+      }
+
+      // Delete the reset token
+      await this.prisma.refreshToken.delete({
+        where: { id: storedToken.id },
+      });
+
+      // Hash new password and update
+      const hashedPassword = await bcrypt.hash(dto.newPassword, 12);
+      await this.prisma.user.update({
+        where: { id: payload.sub },
+        data: { password: hashedPassword },
+      });
+
+      // Revoke all existing refresh tokens for this user
+      await this.prisma.refreshToken.deleteMany({
+        where: { userId: payload.sub },
+      });
+
+      return { message: 'Password reset successfully' };
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException('Invalid or expired reset token');
+    }
   }
 
   async getProfile(userId: string) {

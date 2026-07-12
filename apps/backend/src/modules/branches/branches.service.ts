@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CreateBranchDto } from './dto/create-branch.dto';
+import { UpdateBranchDto } from './dto/update-branch.dto';
 
 @Injectable()
 export class BranchesService {
@@ -20,17 +22,17 @@ export class BranchesService {
     return branch;
   }
 
-  async create(tenantId: string, data: any) {
+  async create(tenantId: string, dto: CreateBranchDto) {
     return this.prisma.branch.create({
-      data: { ...data, tenantId },
+      data: { ...dto, tenantId },
     });
   }
 
-  async update(id: string, tenantId: string, data: any) {
+  async update(id: string, tenantId: string, dto: UpdateBranchDto) {
     await this.findOne(id, tenantId);
     return this.prisma.branch.update({
       where: { id },
-      data,
+      data: dto,
     });
   }
 

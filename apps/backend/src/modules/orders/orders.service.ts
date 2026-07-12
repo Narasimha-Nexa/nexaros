@@ -1,6 +1,9 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GatewayService } from '../websockets/gateway.service';
+import { CreateOrderDto } from './dto/create-order.dto';
+import { AddItemDto } from './dto/add-item.dto';
+import { OrderStatus } from '@prisma/client';
 
 @Injectable()
 export class OrdersService {
@@ -13,7 +16,7 @@ export class OrdersService {
     return this.prisma.order.findMany({
       where: {
         branchId,
-        ...(status ? { status: status as any } : {}),
+        ...(status ? { status: status as OrderStatus } : {}),
       },
       include: {
         table: { select: { id: true, number: true, name: true } },
@@ -50,14 +53,14 @@ export class OrdersService {
     return order;
   }
 
-  async create(branchId: string, data: any) {
+  async create(branchId: string, data: CreateOrderDto) {
     const lastOrder = await this.prisma.order.findFirst({
       where: { branchId },
       orderBy: { orderNumber: 'desc' },
     });
     const orderNumber = (lastOrder?.orderNumber || 0) + 1;
 
-    const menuItemIds = (data.items || []).map((i: any) => i.menuItemId).filter(Boolean);
+    const menuItemIds = (data.items || []).map((i) => i.menuItemId).filter(Boolean);
     const menuItems = menuItemIds.length > 0
       ? await this.prisma.menuItem.findMany({ where: { id: { in: menuItemIds } }, select: { id: true, taxRate: true } })
       : [];
@@ -83,7 +86,7 @@ export class OrdersService {
         tableId: data.tableId,
         staffId: data.staffId,
         orderNumber,
-        type: data.type || 'DINE_IN',
+        type: (data.type as any) || 'DINE_IN',
         status: 'PENDING',
         customerName: data.customerName,
         customerPhone: data.customerPhone,
@@ -95,7 +98,7 @@ export class OrdersService {
         notes: data.notes,
         kotPrinted: false,
         items: {
-          create: items.map((item: any) => ({
+          create: items.map((item) => ({
             menuItemId: item.menuItemId,
             name: item.name,
             quantity: item.quantity,
@@ -210,7 +213,7 @@ export class OrdersService {
 
     const updated = await this.prisma.order.update({
       where: { id },
-      data: { status: status as any },
+      data: { status: status as OrderStatus },
       include: {
         table: { select: { id: true, number: true } },
         items: true,
@@ -218,12 +221,12 @@ export class OrdersService {
     });
 
     await this.prisma.orderStatusHistory.create({
-      data: { orderId: id, status: status as any, notes },
+      data: { orderId: id, status: status as OrderStatus, notes },
     });
 
     // Update table status based on order status
     if (order.tableId) {
-      let tableStatus: any;
+      let tableStatus: string | undefined;
       switch (status) {
         case 'READY': tableStatus = 'ORDER_READY'; break;
         case 'SERVED': tableStatus = 'OCCUPIED'; break;
@@ -233,7 +236,7 @@ export class OrdersService {
       if (tableStatus) {
         await this.prisma.restaurantTable.update({
           where: { id: order.tableId },
-          data: { status: tableStatus },
+          data: { status: tableStatus as any },
         });
       }
     }

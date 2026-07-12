@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, IsBoolean, IsInt, IsIn, Min } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsIn, Min } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateInventoryItemDto {
@@ -10,11 +10,6 @@ export class CreateInventoryItemDto {
   @IsString()
   unit: string;
 
-  @ApiPropertyOptional()
-  @IsString()
-  @IsOptional()
-  description?: string;
-
   @ApiProperty()
   @IsNumber()
   @Min(0)
@@ -25,20 +20,19 @@ export class CreateInventoryItemDto {
   @Min(0)
   minimumStock: number;
 
-  @ApiPropertyOptional()
+  @ApiProperty()
   @IsNumber()
-  @IsOptional()
-  maximumStock?: number;
+  costPrice: number;
 
   @ApiPropertyOptional()
   @IsNumber()
   @IsOptional()
-  unitCost?: number;
+  reorderQuantity?: number;
 
   @ApiPropertyOptional()
   @IsString()
   @IsOptional()
-  supplierId?: string;
+  barcode?: string;
 }
 
 export class UpdateInventoryItemDto {
@@ -46,6 +40,11 @@ export class UpdateInventoryItemDto {
   @IsString()
   @IsOptional()
   name?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  unit?: string;
 
   @ApiPropertyOptional()
   @IsNumber()
@@ -56,17 +55,22 @@ export class UpdateInventoryItemDto {
   @ApiPropertyOptional()
   @IsNumber()
   @IsOptional()
-  maximumStock?: number;
+  costPrice?: number;
 
   @ApiPropertyOptional()
   @IsNumber()
   @IsOptional()
-  unitCost?: number;
+  reorderQuantity?: number;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  barcode?: string;
 }
 
 export class AdjustStockDto {
-  @ApiProperty({ enum: ['PURCHASE', 'USAGE', 'WASTE', 'ADJUSTMENT'] })
-  @IsIn(['PURCHASE', 'USAGE', 'WASTE', 'ADJUSTMENT'])
+  @ApiProperty({ enum: ['PURCHASE', 'SALE', 'WASTE', 'ADJUSTMENT', 'TRANSFER'] })
+  @IsIn(['PURCHASE', 'SALE', 'WASTE', 'ADJUSTMENT', 'TRANSFER'])
   type: string;
 
   @ApiProperty()
@@ -81,7 +85,7 @@ export class AdjustStockDto {
   @ApiPropertyOptional()
   @IsNumber()
   @IsOptional()
-  unitCost?: number;
+  costPrice?: number;
 
   @ApiPropertyOptional()
   @IsString()

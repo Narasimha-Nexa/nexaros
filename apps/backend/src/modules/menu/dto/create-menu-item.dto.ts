@@ -40,6 +40,10 @@ export class CreateMenuItemDto {
   @IsString()
   name: string;
 
+  @ApiProperty()
+  @IsString()
+  categoryId: string;
+
   @ApiPropertyOptional()
   @IsString()
   @IsOptional()

@@ -91,6 +91,26 @@ class ApiClient {
     return _handleResponse(response);
   }
 
+  // ─── Password Reset ───
+
+  Future<Map<String, dynamic>> forgotPassword(String email) async {
+    final response = await http.post(
+      Uri.parse('$_baseUrl/auth/forgot-password'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email}),
+    );
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> resetPassword(String token, String newPassword) async {
+    final response = await http.post(
+      Uri.parse('$_baseUrl/auth/reset-password'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'token': token, 'newPassword': newPassword}),
+    );
+    return _handleResponse(response);
+  }
+
   // ─── Menu ───
 
   Future<List<dynamic>> getCategories() async {
@@ -257,6 +277,31 @@ class ApiClient {
     final params = <String, String>{};
     if (branchId != null) params['branchId'] = branchId;
     final uri = Uri.parse('$_baseUrl/invoices').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> getInvoicePdf(String invoiceId) async {
+    final response = await _authedGet('$_baseUrl/invoices/$invoiceId/pdf');
+    return _handleResponse(response);
+  }
+
+  // ─── Sync ───
+
+  Future<Map<String, dynamic>> getSyncStatus() async {
+    final response = await _authedGet('$_baseUrl/sync/status');
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> pushSyncData(Map<String, dynamic> data) async {
+    final response = await _authedPost('$_baseUrl/sync/push', data);
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> pullSyncData({String? lastSyncAt}) async {
+    final params = <String, String>{};
+    if (lastSyncAt != null) params['lastSyncAt'] = lastSyncAt;
+    final uri = Uri.parse('$_baseUrl/sync/pull').replace(queryParameters: params);
     final response = await _authedGet(uri.toString());
     return _handleResponse(response);
   }

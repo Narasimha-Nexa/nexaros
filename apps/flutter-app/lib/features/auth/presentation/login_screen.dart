@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/network/api_client.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../app/shells/mobile_shell.dart';
 import '../../../app/shells/desktop_shell.dart';
@@ -34,8 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final api = ApiClient();
-      final provider = AuthProvider(api);
+      final provider = Provider.of<AuthProvider>(context, listen: false);
       await provider.login(_emailController.text, _passwordController.text);
 
       if (provider.state.status == AuthStatus.authenticated && mounted) {

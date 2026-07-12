@@ -6,6 +6,8 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { RolesService } from './roles.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
+import { CreateRoleDto } from './dto/create-role.dto';
+import { UpdateRoleDto } from './dto/update-role.dto';
 
 @ApiTags('roles')
 @ApiBearerAuth()
@@ -34,8 +36,11 @@ export class RolesController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new role' })
-  create(@CurrentTenant() tenantId: string, @Body() data: any) {
-    return this.rolesService.create(tenantId, data);
+  create(
+    @CurrentTenant() tenantId: string,
+    @Body() dto: CreateRoleDto,
+  ) {
+    return this.rolesService.create(tenantId, dto);
   }
 
   @Patch(':id')
@@ -43,9 +48,9 @@ export class RolesController {
   update(
     @Param('id') id: string,
     @CurrentTenant() tenantId: string,
-    @Body() data: any,
+    @Body() dto: UpdateRoleDto,
   ) {
-    return this.rolesService.update(id, tenantId, data);
+    return this.rolesService.update(id, tenantId, dto);
   }
 
   @Delete(':id')

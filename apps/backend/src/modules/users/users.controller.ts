@@ -6,6 +6,8 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @ApiTags('users')
 @ApiBearerAuth()
@@ -28,8 +30,11 @@ export class UsersController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new user' })
-  create(@CurrentTenant() tenantId: string, @Body() data: any) {
-    return this.usersService.create(tenantId, data);
+  create(
+    @CurrentTenant() tenantId: string,
+    @Body() dto: CreateUserDto,
+  ) {
+    return this.usersService.create(tenantId, dto);
   }
 
   @Patch(':id')
@@ -37,9 +42,9 @@ export class UsersController {
   update(
     @Param('id') id: string,
     @CurrentTenant() tenantId: string,
-    @Body() data: any,
+    @Body() dto: UpdateUserDto,
   ) {
-    return this.usersService.update(id, tenantId, data);
+    return this.usersService.update(id, tenantId, dto);
   }
 
   @Delete(':id')

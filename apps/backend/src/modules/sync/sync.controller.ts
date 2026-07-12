@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { SyncService } from './sync.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
+import { PushSyncDto } from './dto/push-sync.dto';
 
 @ApiTags('sync')
 @ApiBearerAuth()
@@ -15,9 +16,9 @@ export class SyncController {
   @ApiOperation({ summary: 'Push offline data to server' })
   async push(
     @CurrentTenant() tenantId: string,
-    @Body() data: { orders?: any[]; payments?: any[] },
+    @Body() dto: PushSyncDto,
   ) {
-    return this.syncService.pushOfflineData(tenantId, data);
+    return this.syncService.pushOfflineData(tenantId, dto);
   }
 
   @Get('pull')
@@ -27,5 +28,11 @@ export class SyncController {
     @Query('lastSyncAt') lastSyncAt?: string,
   ) {
     return this.syncService.pullLatestData(tenantId, lastSyncAt);
+  }
+
+  @Get('status')
+  @ApiOperation({ summary: 'Get sync status' })
+  async status(@CurrentTenant() tenantId: string) {
+    return this.syncService.getSyncStatus(tenantId);
   }
 }

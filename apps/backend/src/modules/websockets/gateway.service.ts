@@ -5,15 +5,15 @@ import { EventsGateway } from './events.gateway';
 export class GatewayService {
   constructor(private eventsGateway: EventsGateway) {}
 
-  emitToTenant(tenantId: string, event: string, data: any) {
+  emitToTenant(tenantId: string, event: string, data: Record<string, unknown>) {
     this.eventsGateway.server.to(`tenant:${tenantId}`).emit(event, data);
   }
 
-  emitToBranch(branchId: string, event: string, data: any) {
+  emitToBranch(branchId: string, event: string, data: Record<string, unknown>) {
     this.eventsGateway.server.to(`branch:${branchId}`).emit(event, data);
   }
 
-  emitToRoom(room: string, event: string, data: any) {
+  emitToRoom(room: string, event: string, data: Record<string, unknown>) {
     this.eventsGateway.server.to(room).emit(event, data);
   }
 }
