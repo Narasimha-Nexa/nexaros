@@ -14,6 +14,8 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
 import { SyncModule } from './modules/sync/sync.module';
 import { WebsocketsModule } from './modules/websockets/websockets.module';
+import { KitchenModule } from './modules/kitchen/kitchen.module';
+import { StaffModule } from './modules/staff/staff.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -36,6 +38,8 @@ import { HealthController } from './health.controller';
     InvoicesModule,
     SyncModule,
     WebsocketsModule,
+    KitchenModule,
+    StaffModule,
   ],
   controllers: [HealthController],
 })

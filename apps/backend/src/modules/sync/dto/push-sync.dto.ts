@@ -45,6 +45,11 @@ class SyncOrderDto {
   @ApiPropertyOptional()
   @IsString()
   @IsOptional()
+  localUpdatedAt?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
   branchId?: string;
 
   @ApiPropertyOptional()

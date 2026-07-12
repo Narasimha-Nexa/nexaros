@@ -1,27 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/network/api_client.dart';
+import '../../../core/providers/app_state.dart';
+import '../../../core/hardware/receipt_formatter.dart';
 
 class PaymentScreen extends StatefulWidget {
   final String orderId;
-  const PaymentScreen({super.key, required this.orderId});
+  final int orderNumber;
+  final String? tableName;
+  const PaymentScreen({super.key, required this.orderId, this.orderNumber = 0, this.tableName});
 
   @override
   State<PaymentScreen> createState() => _PaymentScreenState();
 }
 
 class _PaymentScreenState extends State<PaymentScreen> {
-  final _api = ApiClient();
+  late final AppState _appState;
   Map<String, dynamic>? _paymentInfo;
   String _selectedMethod = 'CASH';
   bool _isLoading = true;
   bool _isProcessing = false;
+  bool _isOffline = false;
   final _referenceController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    _appState = context.read<AppState>();
     _loadPaymentInfo();
   }
 
@@ -34,10 +40,50 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Future<void> _loadPaymentInfo() async {
     setState(() => _isLoading = true);
     try {
-      final info = await _api.getOrderPayments(widget.orderId);
-      if (mounted) setState(() { _paymentInfo = info; _isLoading = false; });
+      final info = await _appState.api.getOrderPayments(widget.orderId);
+      if (mounted) setState(() { _paymentInfo = info; _isLoading = false; _isOffline = false; });
     } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
+      // Build basic payment info from local data
+      _loadPaymentInfoFromLocal();
+    }
+  }
+
+  Future<void> _loadPaymentInfoFromLocal() async {
+    try {
+      final order = await _appState.api.getOrder(widget.orderId);
+      if (mounted) {
+        setState(() {
+          _paymentInfo = {
+            'totalAmount': order['totalAmount'] ?? 0,
+            'totalPaid': 0,
+            'remaining': order['totalAmount'] ?? 0,
+            'payments': [],
+          };
+          _isLoading = false;
+          _isOffline = true;
+        });
+      }
+    } catch (_) {
+      // Try local payments
+      final localPayments = await _appState.offlinePayments.getPaymentsForOrder(widget.orderId);
+      final totalPaid = localPayments.fold<double>(0, (sum, p) => sum + p.amount);
+      if (mounted) {
+        setState(() {
+          _paymentInfo = {
+            'totalAmount': totalPaid, // Will use stored total
+            'totalPaid': totalPaid,
+            'remaining': 0,
+            'payments': localPayments.map((p) => ({
+              'id': p.id,
+              'method': p.method,
+              'amount': p.amount,
+              'status': p.status,
+            })).toList(),
+          };
+          _isLoading = false;
+          _isOffline = true;
+        });
+      }
     }
   }
 
@@ -48,26 +94,36 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
     setState(() => _isProcessing = true);
     try {
-      final result = await _api.processPayment(
-        widget.orderId,
+      // Use offline-capable payment service
+      final result = await _appState.offlinePayments.recordPayment(
+        orderId: widget.orderId,
+        branchId: '',
         method: _selectedMethod,
         amount: remaining,
         reference: _referenceController.text.isNotEmpty ? _referenceController.text : null,
       );
-      // Generate invoice after successful payment
-      String? invoiceNumber;
-      try {
-        final invoice = await _api.generateInvoice(result['id']);
-        invoiceNumber = invoice['number'];
-      } catch (_) {}
+
+      // Print receipt on successful online payment
+      if (!result.isOffline && _paymentInfo != null) {
+        _printReceipt();
+      }
+
+      // Open cash drawer for cash payments (even when offline — drawer is local)
+      if (_selectedMethod == 'CASH') {
+        _openCashDrawer();
+      }
+
       if (mounted) {
-        final msg = invoiceNumber != null
-            ? 'Payment processed! Invoice: $invoiceNumber'
+        final msg = result.isOffline
+            ? 'Payment saved offline! Will sync when connected.'
             : 'Payment processed successfully!';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg), backgroundColor: AppColors.success),
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: result.isOffline ? Colors.orange : AppColors.success,
+          ),
         );
-        Navigator.pop(context, result);
+        Navigator.pop(context, {'id': result.paymentId, 'offline': result.isOffline});
       }
     } catch (e) {
       if (mounted) {
@@ -79,10 +135,72 @@ class _PaymentScreenState extends State<PaymentScreen> {
     if (mounted) setState(() => _isProcessing = false);
   }
 
+  /// Print receipt after successful payment
+  Future<void> _printReceipt() async {
+    try {
+      final totalAmount = (_paymentInfo!['totalAmount'] as num).toDouble();
+      final receiptData = ReceiptFormatter.buildReceipt(
+        restaurantName: 'NexaROS',
+        branchName: '',
+        gstNumber: null,
+        orderNumber: widget.orderNumber,
+        orderType: 'DINE_IN',
+        tableName: widget.tableName,
+        items: [],
+        subtotal: totalAmount,
+        taxAmount: 0,
+        totalAmount: totalAmount,
+        paymentMethod: _selectedMethod,
+        amountPaid: totalAmount,
+        date: DateTime.now(),
+      );
+
+      final printed = await _appState.printer.printReceipt(receiptData);
+      if (!printed) {
+        debugPrint('Receipt printing failed');
+      }
+    } catch (e) {
+      debugPrint('Receipt printing error: $e');
+    }
+  }
+
+  /// Open cash drawer for cash payments
+  Future<void> _openCashDrawer() async {
+    try {
+      final opened = await _appState.printer.openCashDrawer();
+      if (!opened) {
+        debugPrint('Cash drawer open failed');
+      }
+    } catch (e) {
+      debugPrint('Cash drawer error: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Payment', style: GoogleFonts.inter(fontWeight: FontWeight.w600))),
+      appBar: AppBar(
+        title: Text('Payment', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+        actions: [
+          if (_isOffline)
+            Container(
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.wifi_off, size: 14, color: Colors.orange.shade700),
+                  const SizedBox(width: 4),
+                  Text('Offline', style: GoogleFonts.inter(fontSize: 11, color: Colors.orange.shade700, fontWeight: FontWeight.w500)),
+                ],
+              ),
+            ),
+        ],
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _paymentInfo == null

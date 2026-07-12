@@ -27,6 +27,46 @@ export class SyncService {
           if (localOrder.localId) {
             const existing = await this.prisma.order.findFirst({ where: { localId: localOrder.localId } });
             if (existing) {
+              // Conflict resolution: Last-Write-Wins with Server Timestamp
+              // If the client timestamp is older than the server updatedAt, server wins
+              if (localOrder.localUpdatedAt) {
+                const localTime = new Date(localOrder.localUpdatedAt).getTime();
+                const serverTime = new Date(existing.updatedAt).getTime();
+                if (localTime < serverTime) {
+                  results.errors.push({
+                    type: 'order_conflict',
+                    localId: localOrder.localId,
+                    error: `Server has newer version (server updated: ${existing.updatedAt.toISOString()}). Server data preserved.`,
+                  });
+                  results.orders.push({
+                    localId: localOrder.localId,
+                    serverId: existing.id,
+                    orderNumber: existing.orderNumber,
+                  });
+                  continue;
+                }
+              }
+              // If no conflict or local is newer, accept and update
+              if (existing.status === 'PENDING' || existing.status === 'CONFIRMED') {
+                // Only update if the order is still mutable
+                await this.prisma.order.update({
+                  where: { id: existing.id },
+                  data: {
+                    status: (localOrder.status as any) || existing.status,
+                    customerName: localOrder.customerName || existing.customerName,
+                    customerPhone: localOrder.customerPhone || existing.customerPhone,
+                    subtotal: localOrder.subtotal ?? existing.subtotal,
+                    taxAmount: localOrder.taxAmount ?? existing.taxAmount,
+                    discountAmount: localOrder.discountAmount ?? existing.discountAmount,
+                    totalAmount: localOrder.totalAmount ?? existing.totalAmount,
+                    notes: localOrder.notes ?? existing.notes,
+                    synced: true,
+                  },
+                });
+                results.orders.push({ localId: localOrder.localId, serverId: existing.id, orderNumber: existing.orderNumber });
+                continue;
+              }
+              // Order is immutable (completed/cancelled), skip update
               results.orders.push({ localId: localOrder.localId, serverId: existing.id, orderNumber: existing.orderNumber });
               continue;
             }

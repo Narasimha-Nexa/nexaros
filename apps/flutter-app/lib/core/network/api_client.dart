@@ -306,6 +306,104 @@ class ApiClient {
     return _handleResponse(response);
   }
 
+  // ─── Staff Management ───
+
+  Future<List<dynamic>> getStaff({required String branchId}) async {
+    final response = await _authedGet('$_baseUrl/staff?branchId=$branchId');
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> createStaff(String branchId, Map<String, dynamic> data) async {
+    final response = await _authedPost('$_baseUrl/staff?branchId=$branchId', data);
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> updateStaff(String id, Map<String, dynamic> data) async {
+    final response = await _authedPatch('$_baseUrl/staff/$id', data);
+    return _handleResponse(response);
+  }
+
+  Future<void> deleteStaff(String id) async {
+    final response = await _authedDelete('$_baseUrl/staff/$id');
+    _handleResponse(response);
+  }
+
+  Future<List<dynamic>> getShifts({required String branchId}) async {
+    final response = await _authedGet('$_baseUrl/shifts?branchId=$branchId');
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> createShift(String branchId, Map<String, dynamic> data) async {
+    final response = await _authedPost('$_baseUrl/shifts?branchId=$branchId', data);
+    return _handleResponse(response);
+  }
+
+  Future<void> deleteShift(String id) async {
+    final response = await _authedDelete('$_baseUrl/shifts/$id');
+    _handleResponse(response);
+  }
+
+  Future<List<dynamic>> getSchedule(String branchId, String date) async {
+    final response = await _authedGet('$_baseUrl/schedule?branchId=$branchId&date=$date');
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> assignShift(String staffId, String shiftId, String date) async {
+    final response = await _authedPost('$_baseUrl/schedule/assign?staffId=$staffId&shiftId=$shiftId&date=$date', {});
+    return _handleResponse(response);
+  }
+
+  Future<List<dynamic>> getTodayAttendance({required String branchId}) async {
+    final response = await _authedGet('$_baseUrl/attendance?branchId=$branchId');
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> clockIn(String staffId) async {
+    final response = await _authedPost('$_baseUrl/staff/$staffId/clock-in', {});
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> clockOut(String staffId) async {
+    final response = await _authedPost('$_baseUrl/staff/$staffId/clock-out', {});
+    return _handleResponse(response);
+  }
+
+  Future<List<dynamic>> getAttendanceReport(String staffId, String from, String to) async {
+    final response = await _authedGet('$_baseUrl/staff/$staffId/attendance?from=$from&to=$to');
+    return _handleResponse(response);
+  }
+
+  // ─── Kitchen Display ───
+
+  Future<List<dynamic>> getActiveKitchenOrders({String? branchId}) async {
+    final params = <String, String>{};
+    if (branchId != null) params['branchId'] = branchId;
+    final uri = Uri.parse('$_baseUrl/kitchen/orders').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  Future<List<dynamic>> getCompletedKitchenOrders({String? branchId}) async {
+    final params = <String, String>{};
+    if (branchId != null) params['branchId'] = branchId;
+    final uri = Uri.parse('$_baseUrl/kitchen/orders/completed').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> updateKitchenOrderStatus(String id, String status, {String? branchId}) async {
+    final params = <String, String>{};
+    if (branchId != null) params['branchId'] = branchId;
+    final uri = Uri.parse('$_baseUrl/kitchen/orders/$id/status').replace(queryParameters: params);
+    final response = await _authedPatch(uri.toString(), {'status': status});
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> getKotData(String orderId) async {
+    final response = await _authedGet('$_baseUrl/kitchen/orders/$orderId/kot');
+    return _handleResponse(response);
+  }
+
   // ─── Dashboard / Stats ───
 
   Future<Map<String, dynamic>> getTodayStats() async {

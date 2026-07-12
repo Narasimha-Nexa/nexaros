@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/providers/app_state.dart';
+import '../../../core/sync/offline_order_service.dart';
+import '../../../core/hardware/receipt_formatter.dart';
 import '../../orders/presentation/order_list_screen.dart';
 
 class POSScreen extends StatefulWidget {
@@ -15,6 +19,7 @@ class POSScreen extends StatefulWidget {
 
 class _POSScreenState extends State<POSScreen> {
   final _api = ApiClient();
+  late final AppState _appState;
   List<dynamic> _categories = [];
   List<dynamic> _menuItems = [];
   List<dynamic> _filteredItems = [];
@@ -23,12 +28,15 @@ class _POSScreenState extends State<POSScreen> {
   String _searchQuery = '';
   bool _isLoading = true;
   bool _isCreatingOrder = false;
+  bool _isOffline = false;
   String? _currentOrderId;
+  int? _currentOrderNumber;
   String _orderType = 'DINE_IN';
 
   @override
   void initState() {
     super.initState();
+    _appState = context.read<AppState>();
     _currentOrderId = widget.orderId;
     _loadMenu();
   }
@@ -46,9 +54,36 @@ class _POSScreenState extends State<POSScreen> {
           _menuItems = results[1];
           _filteredItems = _menuItems;
           _isLoading = false;
+          _isOffline = false;
         });
       }
     } catch (e) {
+      // Fallback to local DB when offline
+      _loadMenuFromLocal();
+    }
+  }
+
+  Future<void> _loadMenuFromLocal() async {
+    try {
+      final categories = await _appState.db.getAllCategories('');
+      final items = await _appState.db.getAllMenuItems('');
+      if (mounted) {
+        setState(() {
+          _categories = categories.map((c) => {'id': c.id, 'name': c.name}).toList();
+          _menuItems = items.map((i) => ({
+            'id': i.id,
+            'name': i.name,
+            'price': i.price.toString(),
+            'categoryId': i.categoryId,
+            'isVeg': i.isVeg,
+            'isAvailable': i.isAvailable,
+          })).toList();
+          _filteredItems = _menuItems;
+          _isLoading = false;
+          _isOffline = true;
+        });
+      }
+    } catch (_) {
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -98,7 +133,15 @@ class _POSScreenState extends State<POSScreen> {
     if (_cart.isEmpty) return;
     setState(() => _isCreatingOrder = true);
     try {
-      if (_currentOrderId != null) {
+      final items = _cart.map((c) => OfflineOrderItem(
+        menuItemId: c['menuItemId'],
+        name: c['name'],
+        quantity: c['quantity'],
+        unitPrice: c['unitPrice'],
+      )).toList();
+
+      if (_currentOrderId != null && !_isOffline) {
+        // Online: add items to existing order
         for (final item in _cart) {
           await _api.addItemToOrder(_currentOrderId!, {
             'menuItemId': item['menuItemId'],
@@ -108,22 +151,28 @@ class _POSScreenState extends State<POSScreen> {
           });
         }
       } else {
-        final orderData = {
-          'type': _orderType,
-          'items': _cart.map((c) => ({
-            'menuItemId': c['menuItemId'],
-            'name': c['name'],
-            'quantity': c['quantity'],
-            'unitPrice': c['unitPrice'],
-          })).toList(),
-        };
-        if (widget.tableId != null) orderData['tableId'] = widget.tableId!;
-        final result = await _api.createOrder(orderData);
-        _currentOrderId = result['id'];
+        // Use offline-capable order service
+        final result = await _appState.offlineOrders.createOrder(
+          branchId: '', // Will be filled from auth context
+          tableId: widget.tableId,
+          type: _orderType,
+          items: items,
+        );
+        _currentOrderId = result.orderId;
+        _currentOrderNumber = result.orderNumber;
       }
+
+      // Auto-print KOT after successful order creation
+      if (mounted && _currentOrderId != null) {
+        _printKotForOrder(_currentOrderId!, items);
+      }
+
       if (mounted) {
+        final msg = _isOffline
+            ? 'Order saved offline! #$_currentOrderNumber'
+            : 'Order placed successfully!';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_currentOrderId != null ? 'Order placed successfully!' : 'Order updated!'), backgroundColor: AppColors.success),
+          SnackBar(content: Text(msg), backgroundColor: _isOffline ? Colors.orange : AppColors.success),
         );
         setState(() => _cart.clear());
       }
@@ -137,6 +186,32 @@ class _POSScreenState extends State<POSScreen> {
     if (mounted) setState(() => _isCreatingOrder = false);
   }
 
+  Future<void> _printKotForOrder(String orderId, List<OfflineOrderItem> items) async {
+    try {
+      final kotData = ReceiptFormatter.buildKot(
+        restaurantName: 'NexaROS',
+        tableName: widget.tableId != null ? 'Table ${widget.tableId}' : 'Takeaway',
+        orderNumber: _currentOrderNumber ?? 0,
+        items: items
+            .map((i) => ReceiptItem(
+                  name: i.name,
+                  quantity: i.quantity,
+                  unitPrice: i.unitPrice,
+                  totalPrice: i.unitPrice * i.quantity,
+                ))
+            .toList(),
+        date: DateTime.now(),
+      );
+
+      final printed = await _appState.printer.printKot(kotData);
+      if (!printed) {
+        debugPrint('KOT printing failed - will retry when printer is available');
+      }
+    } catch (e) {
+      debugPrint('KOT printing error: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width > 900;
@@ -144,6 +219,23 @@ class _POSScreenState extends State<POSScreen> {
       appBar: AppBar(
         title: Text('New Order', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
         actions: [
+          if (_isOffline)
+            Container(
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.wifi_off, size: 14, color: Colors.orange.shade700),
+                  const SizedBox(width: 4),
+                  Text('Offline', style: GoogleFonts.inter(fontSize: 11, color: Colors.orange.shade700, fontWeight: FontWeight.w500)),
+                ],
+              ),
+            ),
           if (_currentOrderId != null)
             TextButton.icon(
               onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OrderListScreen())),

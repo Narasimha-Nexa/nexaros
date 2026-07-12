@@ -1,13 +1,55 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import '../../../core/network/api_client.dart';
-import '../../../core/network/socket_service.dart';
+import '../network/api_client.dart';
+import '../network/socket_service.dart';
+import '../network/connectivity_monitor.dart';
+import '../database/local_database.dart';
+import '../sync/offline_sync_service.dart';
+import '../sync/offline_order_service.dart';
+import '../sync/offline_payment_service.dart';
+import '../hardware/printer_service.dart';
 
 class AppState extends ChangeNotifier {
   final ApiClient api = ApiClient();
   final SocketService socket = SocketService();
+  final ConnectivityMonitor connectivityMonitor = ConnectivityMonitor();
+  final LocalDatabase db = LocalDatabase();
+  late final OfflineSyncService sync;
+  late final OfflineOrderService offlineOrders;
+  late final OfflinePaymentService offlinePayments;
+  final PrinterService printer = PrinterService();
+  late final StreamSubscription _connectivitySub;
+
   bool _isConnected = false;
+  bool _isOnline = true;
+  String? _tenantId;
+  String? _branchId;
 
   bool get isConnected => _isConnected;
+  bool get isOnline => _isOnline;
+  String? get tenantId => _tenantId;
+  String? get branchId => _branchId;
+
+  AppState() {
+    sync = OfflineSyncService(db, api);
+    offlineOrders = OfflineOrderService(db, api);
+    offlinePayments = OfflinePaymentService(db, api);
+
+    // Wire ConnectivityMonitor into AppState for UI reactivity
+    _connectivitySub = connectivityMonitor.isConnected.listen((online) {
+      _isOnline = online;
+      notifyListeners();
+    });
+  }
+
+  void setOnlineStatus(bool online) {
+    _isOnline = online;
+    notifyListeners();
+  }
+
+  void setTenantId(String tenantId) {
+    _tenantId = tenantId;
+  }
 
   void onLogin(String branchId) {
     final token = api.accessToken;
@@ -16,6 +58,8 @@ class AppState extends ChangeNotifier {
       socket.joinBranch(branchId);
     }
     _isConnected = true;
+    _branchId = branchId;
+    printer.loadSettings();
     notifyListeners();
   }
 
@@ -31,5 +75,14 @@ class AppState extends ChangeNotifier {
 
   void removeSocketListener(String event) {
     socket.off(event);
+  }
+
+  @override
+  void dispose() {
+    sync.dispose();
+    socket.disconnect();
+    _connectivitySub.cancel();
+    connectivityMonitor.dispose();
+    super.dispose();
   }
 }
