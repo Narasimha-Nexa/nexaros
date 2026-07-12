@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Patch,
+  Controller, Get, Post, Patch, Delete,
   Param, Body, Query, UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
@@ -44,6 +44,18 @@ export class OrdersController {
     return this.ordersService.create(branchId, data);
   }
 
+  @Post(':id/items')
+  @ApiOperation({ summary: 'Add item to existing order' })
+  addItem(@Param('id') id: string, @Body() data: any) {
+    return this.ordersService.addItem(id, data);
+  }
+
+  @Delete(':id/items/:itemId')
+  @ApiOperation({ summary: 'Remove item from order' })
+  removeItem(@Param('id') id: string, @Param('itemId') itemId: string) {
+    return this.ordersService.removeItem(id, itemId);
+  }
+
   @Patch(':id/status')
   @ApiOperation({ summary: 'Update order status' })
   updateStatus(
@@ -52,5 +64,17 @@ export class OrdersController {
     @Body('notes') notes?: string,
   ) {
     return this.ordersService.updateStatus(id, status, notes);
+  }
+
+  @Post(':id/kot')
+  @ApiOperation({ summary: 'Print KOT (Kitchen Order Ticket)' })
+  printKot(@Param('id') id: string) {
+    return this.ordersService.printKot(id);
+  }
+
+  @Post(':id/cancel')
+  @ApiOperation({ summary: 'Cancel an order' })
+  cancel(@Param('id') id: string, @Body('notes') notes?: string) {
+    return this.ordersService.cancel(id, notes);
   }
 }

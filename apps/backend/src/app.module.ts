@@ -10,6 +10,8 @@ import { MenuModule } from './modules/menu/menu.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { TablesModule } from './modules/tables/tables.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
+import { PaymentsModule } from './modules/payments/payments.module';
+import { InvoicesModule } from './modules/invoices/invoices.module';
 import { SyncModule } from './modules/sync/sync.module';
 import { WebsocketsModule } from './modules/websockets/websockets.module';
 import { HealthController } from './health.controller';
@@ -30,6 +32,8 @@ import { HealthController } from './health.controller';
     OrdersModule,
     TablesModule,
     InventoryModule,
+    PaymentsModule,
+    InvoicesModule,
     SyncModule,
     WebsocketsModule,
   ],

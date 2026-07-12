@@ -38,7 +38,7 @@ export class OrdersService {
         staff: { select: { id: true, name: true } },
         items: {
           include: {
-            menuItem: { select: { id: true, name: true, image: true } },
+            menuItem: { select: { id: true, name: true, image: true, isVeg: true } },
             addOns: true,
           },
         },
@@ -51,24 +51,26 @@ export class OrdersService {
   }
 
   async create(branchId: string, data: any) {
-    // Get next order number
     const lastOrder = await this.prisma.order.findFirst({
       where: { branchId },
       orderBy: { orderNumber: 'desc' },
     });
     const orderNumber = (lastOrder?.orderNumber || 0) + 1;
 
-    // Calculate amounts
+    // Calculate amounts with per-item tax
     let subtotal = 0;
+    let totalTax = 0;
     const items = data.items || [];
+
     for (const item of items) {
-      subtotal += item.unitPrice * item.quantity;
+      const itemTotal = item.unitPrice * item.quantity;
+      subtotal += itemTotal;
+      const taxRate = item.taxRate ?? 5;
+      totalTax += itemTotal * (taxRate / 100);
     }
 
-    const taxRate = 0.05; // 5% GST default
-    const taxAmount = subtotal * taxRate;
     const discountAmount = data.discountAmount || 0;
-    const totalAmount = subtotal + taxAmount - discountAmount;
+    const totalAmount = subtotal + totalTax - discountAmount;
 
     const order = await this.prisma.order.create({
       data: {
@@ -82,10 +84,11 @@ export class OrdersService {
         customerPhone: data.customerPhone,
         guestCount: data.guestCount,
         subtotal,
-        taxAmount,
+        taxAmount: totalTax,
         discountAmount,
         totalAmount,
         notes: data.notes,
+        kotPrinted: false,
         items: {
           create: items.map((item: any) => ({
             menuItemId: item.menuItemId,
@@ -93,6 +96,7 @@ export class OrdersService {
             quantity: item.quantity,
             unitPrice: item.unitPrice,
             totalPrice: item.unitPrice * item.quantity,
+            taxRate: item.taxRate ?? 5,
             notes: item.notes,
           })),
         },
@@ -111,6 +115,11 @@ export class OrdersService {
       });
     }
 
+    // Record initial status
+    await this.prisma.orderStatusHistory.create({
+      data: { orderId: order.id, status: 'PENDING', notes: 'Order created' },
+    });
+
     // Emit real-time events
     this.gateway.emitToBranch(branchId, 'order:created', {
       id: order.id,
@@ -126,6 +135,71 @@ export class OrdersService {
     return order;
   }
 
+  async addItem(orderId: string, data: { menuItemId: string; name: string; quantity: number; unitPrice: number; taxRate?: number; notes?: string }) {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.status === 'COMPLETED' || order.status === 'CANCELLED') {
+      throw new BadRequestException('Cannot add items to a completed or cancelled order');
+    }
+
+    const taxRate = data.taxRate ?? 5;
+    const itemTotal = data.unitPrice * data.quantity;
+    const tax = itemTotal * (taxRate / 100);
+
+    const orderItem = await this.prisma.orderItem.create({
+      data: {
+        orderId,
+        menuItemId: data.menuItemId,
+        name: data.name,
+        quantity: data.quantity,
+        unitPrice: data.unitPrice,
+        totalPrice: itemTotal,
+        notes: data.notes,
+      },
+    });
+
+    // Recalculate totals
+    const updatedOrder = await this.recalculateOrder(orderId);
+
+    this.gateway.emitToBranch(order.branchId, 'order:updated', {
+      orderId,
+      orderNumber: updatedOrder.orderNumber,
+      action: 'item_added',
+      item: { name: data.name, quantity: data.quantity },
+      totalAmount: updatedOrder.totalAmount,
+    });
+
+    return { orderItem, order: updatedOrder };
+  }
+
+  async removeItem(orderId: string, itemId: string) {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.status === 'COMPLETED' || order.status === 'CANCELLED') {
+      throw new BadRequestException('Cannot remove items from a completed or cancelled order');
+    }
+
+    const item = await this.prisma.orderItem.findFirst({
+      where: { id: itemId, orderId },
+    });
+    if (!item) throw new NotFoundException('Order item not found');
+
+    await this.prisma.orderItem.delete({ where: { id: itemId } });
+
+    // Recalculate totals
+    const updatedOrder = await this.recalculateOrder(orderId);
+
+    this.gateway.emitToBranch(order.branchId, 'order:updated', {
+      orderId,
+      orderNumber: updatedOrder.orderNumber,
+      action: 'item_removed',
+      item: { name: item.name },
+      totalAmount: updatedOrder.totalAmount,
+    });
+
+    return { removed: true, order: updatedOrder };
+  }
+
   async updateStatus(id: string, status: string, notes?: string) {
     const order = await this.prisma.order.findUnique({ where: { id } });
     if (!order) throw new NotFoundException('Order not found');
@@ -139,13 +213,8 @@ export class OrdersService {
       },
     });
 
-    // Record status history
     await this.prisma.orderStatusHistory.create({
-      data: {
-        orderId: id,
-        status: status as any,
-        notes,
-      },
+      data: { orderId: id, status: status as any, notes },
     });
 
     // Update table status based on order status
@@ -165,7 +234,6 @@ export class OrdersService {
       }
     }
 
-    // Emit real-time events
     this.gateway.emitToBranch(order.branchId, 'order:status-changed', {
       orderId: updated.id,
       orderNumber: updated.orderNumber,
@@ -184,6 +252,40 @@ export class OrdersService {
     return updated;
   }
 
+  async printKot(id: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+      include: {
+        items: { include: { menuItem: { select: { name: true, isVeg: true } } } },
+        table: { select: { number: true, name: true } },
+      },
+    });
+    if (!order) throw new NotFoundException('Order not found');
+
+    // Mark KOT as printed
+    await this.prisma.order.update({
+      where: { id },
+      data: { kotPrinted: true },
+    });
+
+    // Emit KOT event for kitchen display
+    this.gateway.emitToBranch(order.branchId, 'kot:ready', {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      tableNumber: order.table?.number,
+      tableName: order.table?.name,
+      items: order.items.map(i => ({
+        name: i.menuItem?.name || i.name,
+        quantity: i.quantity,
+        isVeg: i.menuItem?.isVeg ?? true,
+        notes: i.notes,
+      })),
+      createdAt: order.createdAt,
+    });
+
+    return { kotPrinted: true, orderId: id };
+  }
+
   async cancel(id: string, notes?: string) {
     return this.updateStatus(id, 'CANCELLED', notes);
   }
@@ -194,5 +296,28 @@ export class OrdersService {
       orderBy: { orderNumber: 'desc' },
     });
     return (lastOrder?.orderNumber || 0) + 1;
+  }
+
+  private async recalculateOrder(orderId: string) {
+    const items = await this.prisma.orderItem.findMany({ where: { orderId } });
+    let subtotal = 0;
+    let totalTax = 0;
+    for (const item of items) {
+      subtotal += Number(item.totalPrice);
+      totalTax += Number(item.totalPrice) * 0.05;
+    }
+
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    const discount = Number(order?.discountAmount || 0);
+    const totalAmount = subtotal + totalTax - discount;
+
+    return this.prisma.order.update({
+      where: { id: orderId },
+      data: { subtotal, taxAmount: totalTax, totalAmount },
+      include: {
+        table: { select: { id: true, number: true } },
+        items: true,
+      },
+    });
   }
 }

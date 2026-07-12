@@ -3,6 +3,9 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/network/api_client.dart';
 import '../../menu/presentation/menu_management_screen.dart';
+import '../../orders/presentation/order_list_screen.dart';
+import '../../tables/presentation/table_grid_screen.dart';
+import '../../pos/presentation/pos_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -93,11 +96,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             _ActionCard(title: 'Menu', icon: Icons.restaurant_menu, onTap: () {
                               Navigator.push(context, MaterialPageRoute(builder: (_) => const MenuManagementScreen()));
                             }),
-                            _ActionCard(title: 'Orders', icon: Icons.receipt, onTap: () {}),
-                            _ActionCard(title: 'Tables', icon: Icons.table_restaurant, onTap: () {}),
-                            _ActionCard(title: 'Kitchen', icon: Icons.kitchen, onTap: () {}),
-                            _ActionCard(title: 'Inventory', icon: Icons.inventory_2, onTap: () {}),
-                            _ActionCard(title: 'Reports', icon: Icons.bar_chart, onTap: () {}),
+                            _ActionCard(title: 'Orders', icon: Icons.receipt, onTap: () {
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderListScreen()));
+                            }),
+                            _ActionCard(title: 'Tables', icon: Icons.table_restaurant, onTap: () {
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => const TableGridScreen()));
+                            }),
+                            _ActionCard(title: 'POS', icon: Icons.point_of_sale, onTap: () {
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => const POSScreen()));
+                            }),
                           ],
                         ),
                       ],

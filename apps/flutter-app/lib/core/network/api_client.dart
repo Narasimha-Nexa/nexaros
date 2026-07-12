@@ -61,7 +61,6 @@ class ApiClient {
   Future<void> refreshAccessToken() async {
     final rt = await _storage.read(key: 'refresh_token');
     if (rt == null) throw Exception('No refresh token');
-
     final response = await http.post(
       Uri.parse('$_baseUrl/auth/refresh'),
       headers: {'Content-Type': 'application/json'},
@@ -134,11 +133,9 @@ class ApiClient {
     final request = http.MultipartRequest('POST', uri);
     final headers = await _headers;
     request.headers['Authorization'] = headers['Authorization'] ?? '';
-
     for (final path in filePaths) {
       request.files.add(await http.MultipartFile.fromPath('images', path));
     }
-
     final streamedResponse = await request.send();
     final response = await http.Response.fromStream(streamedResponse);
     return _handleResponse(response);
@@ -149,24 +146,134 @@ class ApiClient {
     _handleResponse(response);
   }
 
+  // ─── Orders ───
+
+  Future<List<dynamic>> getOrders({String? status, String? branchId, int? limit}) async {
+    final params = <String, String>{};
+    if (status != null) params['status'] = status;
+    if (branchId != null) params['branchId'] = branchId;
+    if (limit != null) params['limit'] = limit.toString();
+    final uri = Uri.parse('$_baseUrl/orders').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> createOrder(Map<String, dynamic> data) async {
+    final response = await _authedPost('$_baseUrl/orders', data);
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> getOrder(String id) async {
+    final response = await _authedGet('$_baseUrl/orders/$id');
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> updateOrderStatus(String id, String status, {String? notes}) async {
+    final data = <String, dynamic>{'status': status};
+    if (notes != null) data['notes'] = notes;
+    final response = await _authedPatch('$_baseUrl/orders/$id/status', data);
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> addItemToOrder(String orderId, Map<String, dynamic> data) async {
+    final response = await _authedPost('$_baseUrl/orders/$orderId/items', data);
+    return _handleResponse(response);
+  }
+
+  Future<void> removeItemFromOrder(String orderId, String itemId) async {
+    final response = await _authedDelete('$_baseUrl/orders/$orderId/items/$itemId');
+    _handleResponse(response);
+  }
+
+  Future<void> printKot(String orderId) async {
+    final response = await _authedPost('$_baseUrl/orders/$orderId/kot', {});
+    _handleResponse(response);
+  }
+
+  Future<void> cancelOrder(String orderId) async {
+    final response = await _authedPost('$_baseUrl/orders/$orderId/cancel', {});
+    _handleResponse(response);
+  }
+
+  // ─── Tables ───
+
+  Future<List<dynamic>> getTables({String? branchId}) async {
+    final params = <String, String>{};
+    if (branchId != null) params['branchId'] = branchId;
+    final uri = Uri.parse('$_baseUrl/tables').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> getTable(String id) async {
+    final response = await _authedGet('$_baseUrl/tables/$id');
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> updateTable(String id, Map<String, dynamic> data) async {
+    final response = await _authedPatch('$_baseUrl/tables/$id', data);
+    return _handleResponse(response);
+  }
+
+  Future<void> updateTableStatus(String id, String status) async {
+    final response = await _authedPatch('$_baseUrl/tables/$id/status', {'status': status});
+    _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> getFloorPlan({String? branchId}) async {
+    final params = <String, String>{};
+    if (branchId != null) params['branchId'] = branchId;
+    final uri = Uri.parse('$_baseUrl/tables/floor-plan').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  // ─── Payments ───
+
+  Future<Map<String, dynamic>> processPayment(String orderId, {required String method, required double amount, String? reference}) async {
+    final data = <String, dynamic>{
+      'method': method,
+      'amount': amount,
+    };
+    if (reference != null) data['reference'] = reference;
+    final response = await _authedPost('$_baseUrl/payments/orders/$orderId', data);
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> getOrderPayments(String orderId) async {
+    final response = await _authedGet('$_baseUrl/payments/orders/$orderId');
+    return _handleResponse(response);
+  }
+
+  // ─── Invoices ───
+
+  Future<Map<String, dynamic>> generateInvoice(String paymentId) async {
+    final response = await _authedPost('$_baseUrl/invoices/payments/$paymentId', {});
+    return _handleResponse(response);
+  }
+
+  Future<List<dynamic>> getInvoices({String? branchId}) async {
+    final params = <String, String>{};
+    if (branchId != null) params['branchId'] = branchId;
+    final uri = Uri.parse('$_baseUrl/invoices').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
   // ─── Dashboard / Stats ───
 
   Future<Map<String, dynamic>> getTodayStats() async {
-    // Aggregate from orders
     final response = await _authedGet('$_baseUrl/orders?limit=100');
     final orders = _handleResponse(response) as List;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-
     final todayOrders = orders.where((o) {
       final created = DateTime.parse(o['createdAt']);
       return created.isAfter(today);
     }).toList();
-
     final totalRevenue = todayOrders.fold<double>(
       0, (sum, o) => sum + (double.tryParse(o['totalAmount'] ?? '0') ?? 0),
     );
-
     return {
       'totalOrders': todayOrders.length,
       'totalRevenue': totalRevenue,

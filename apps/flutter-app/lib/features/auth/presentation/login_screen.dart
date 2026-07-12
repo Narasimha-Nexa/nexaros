@@ -3,7 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/network/api_client.dart';
 import '../../auth/providers/auth_provider.dart';
-import '../../dashboard/presentation/dashboard_screen.dart';
+import '../../../app/shells/mobile_shell.dart';
+import '../../../app/shells/desktop_shell.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -38,10 +39,9 @@ class _LoginScreenState extends State<LoginScreen> {
       await provider.login(_emailController.text, _passwordController.text);
 
       if (provider.state.status == AuthStatus.authenticated && mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const DashboardScreen()),
-        );
+        final width = MediaQuery.of(context).size.width;
+        final shell = width > 900 ? const DesktopShell() : const MobileShell();
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => shell));
       } else if (mounted) {
         setState(() => _error = provider.state.error ?? 'Login failed');
       }
