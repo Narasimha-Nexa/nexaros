@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  nexaros-postgres:
+    image: postgres:16-alpine
+    container_name: nexaros-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nexaros
+      POSTGRES_USER: nexaros
+      POSTGRES_PASSWORD: nexaros_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - nexaros_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexaros -d nexaros"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nexaros-redis:
+    image: redis:7-alpine
+    container_name: nexaros-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - nexaros_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  nexaros_postgres_data:
+  nexaros_redis_data:

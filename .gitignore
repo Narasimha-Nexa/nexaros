@@ -1,0 +1,60 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Flutter
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+.dart_tool/
+*.iml
+.idea/
+.android/
+.ios/
+.macos/
+.linux/
+.windows/
+web/
+
+# Docker
+docker/data/
+
+# Prisma
+apps/backend/prisma/migrations/**/migration_lock.toml
+
+# Misc
+*.tgz
+.cache/
