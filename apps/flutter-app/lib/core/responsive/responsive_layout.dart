@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 enum DeviceType { mobile, tablet, desktop, largeDesktop, tv }
 
 class AppBreakpoints {

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../features/dashboard/presentation/dashboard_screen.dart';
+import '../../features/dashboard/presentation/dashboard_screen.dart';
 
 class DesktopShell extends StatelessWidget {
   const DesktopShell({super.key});

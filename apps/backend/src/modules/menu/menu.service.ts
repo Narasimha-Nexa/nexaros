@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GatewayService } from '../websockets/gateway.service';
+import { unlink } from 'fs/promises';
+import { join } from 'path';
 
 @Injectable()
 export class MenuService {
@@ -45,16 +47,28 @@ export class MenuService {
 
   // ─── Menu Items ───
 
-  async findAllItems(tenantId: string, categoryId?: string) {
+  async findAllItems(tenantId: string, categoryId?: string, search?: string) {
+    const where: any = { tenantId };
+
+    if (categoryId) {
+      where.categoryId = categoryId;
+    }
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { tags: { has: search } },
+      ];
+    }
+
     return this.prisma.menuItem.findMany({
-      where: {
-        tenantId,
-        ...(categoryId ? { categoryId } : {}),
-      },
+      where,
       include: {
         category: { select: { id: true, name: true } },
         variants: true,
         addOns: true,
+        images: { orderBy: { sortOrder: 'asc' } },
       },
       orderBy: { sortOrder: 'asc' },
     });
@@ -67,6 +81,7 @@ export class MenuService {
         category: { select: { id: true, name: true } },
         variants: true,
         addOns: true,
+        images: { orderBy: { sortOrder: 'asc' } },
       },
     });
     if (!item) throw new NotFoundException('Menu item not found');
@@ -74,31 +89,15 @@ export class MenuService {
   }
 
   async createItem(tenantId: string, data: any) {
+    const { variants, addOns, ...itemData } = data;
     const item = await this.prisma.menuItem.create({
       data: {
         tenantId,
-        categoryId: data.categoryId,
-        name: data.name,
-        description: data.description,
-        price: data.price,
-        costPrice: data.costPrice,
-        sku: data.sku,
-        barcode: data.barcode,
-        image: data.image,
-        isVeg: data.isVeg || false,
-        isAvailable: data.isAvailable ?? true,
-        prepTimeMin: data.prepTimeMin,
-        sortOrder: data.sortOrder || 0,
-        taxRate: data.taxRate || 0,
-        tags: data.tags || [],
-        variants: data.variants
-          ? { create: data.variants }
-          : undefined,
-        addOns: data.addOns
-          ? { create: data.addOns }
-          : undefined,
+        ...itemData,
+        variants: variants ? { create: variants } : undefined,
+        addOns: addOns ? { create: addOns } : undefined,
       },
-      include: { variants: true, addOns: true },
+      include: { variants: true, addOns: true, images: true },
     });
     this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'item', action: 'created' });
     return item;
@@ -112,7 +111,7 @@ export class MenuService {
     const item = await this.prisma.menuItem.update({
       where: { id },
       data: updateData,
-      include: { variants: true, addOns: true },
+      include: { variants: true, addOns: true, images: true },
     });
 
     this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'item', action: 'updated' });
@@ -130,9 +129,78 @@ export class MenuService {
   }
 
   async removeItem(id: string, tenantId: string) {
-    await this.findOneItem(id, tenantId);
+    const item = await this.findOneItem(id, tenantId);
+
+    // Delete image files from disk
+    for (const img of item.images) {
+      try {
+        const filePath = join(process.cwd(), 'uploads', 'menu-items', img.url.split('/').pop()!);
+        await unlink(filePath);
+      } catch {}
+    }
+
     await this.prisma.menuItem.delete({ where: { id } });
     this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'item', action: 'deleted' });
     return { message: 'Menu item deleted' };
+  }
+
+  // ─── Images ───
+
+  async uploadImages(itemId: string, tenantId: string, files: Express.Multer.File[]) {
+    // Verify item exists and belongs to tenant
+    await this.findOneItem(itemId, tenantId);
+
+    const createdImages = await Promise.all(
+      files.map((file, index) =>
+        this.prisma.menuItemImage.create({
+          data: {
+            menuItemId: itemId,
+            url: `/uploads/menu-items/${file.filename}`,
+            sortOrder: index,
+            isPrimary: index === 0,
+          },
+        }),
+      ),
+    );
+
+    this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'item', action: 'images_uploaded' });
+    return createdImages;
+  }
+
+  async deleteImage(itemId: string, imageId: string, tenantId: string) {
+    await this.findOneItem(itemId, tenantId);
+
+    const image = await this.prisma.menuItemImage.findFirst({
+      where: { id: imageId, menuItemId: itemId },
+    });
+    if (!image) throw new NotFoundException('Image not found');
+
+    // Delete file from disk
+    try {
+      const filePath = join(process.cwd(), 'uploads', 'menu-items', image.url.split('/').pop()!);
+      await unlink(filePath);
+    } catch {}
+
+    await this.prisma.menuItemImage.delete({ where: { id: imageId } });
+    this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'item', action: 'image_deleted' });
+    return { message: 'Image deleted' };
+  }
+
+  async setPrimaryImage(itemId: string, imageId: string, tenantId: string) {
+    await this.findOneItem(itemId, tenantId);
+
+    // Reset all images to non-primary, then set the target
+    await this.prisma.menuItemImage.updateMany({
+      where: { menuItemId: itemId },
+      data: { isPrimary: false },
+    });
+
+    const image = await this.prisma.menuItemImage.update({
+      where: { id: imageId },
+      data: { isPrimary: true },
+    });
+
+    this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'item', action: 'primary_changed' });
+    return image;
   }
 }

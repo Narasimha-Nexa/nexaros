@@ -163,7 +163,7 @@ class LocalDatabase extends _$LocalDatabase {
     return into(localSyncQueue).insert(entry);
   }
 
-  Future<List<LocalSyncQueue>> getPendingSync() {
+  Future<List<LocalSyncQueueData>> getPendingSync() {
     return (select(localSyncQueue)
           ..where((t) => t.synced.equals(false))
           ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))

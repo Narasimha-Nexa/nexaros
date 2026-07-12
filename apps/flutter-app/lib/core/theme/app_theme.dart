@@ -67,7 +67,7 @@ class AppTheme {
         elevation: 0,
         shadowColor: AppColors.gray200,
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: AppColors.white,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -96,7 +96,7 @@ class AppTheme {
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: AppColors.white,
-          minimumHeight: 40,
+          minimumSize: const Size(0, 40),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(6),
           ),

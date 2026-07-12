@@ -226,6 +226,7 @@ model MenuItem {
 
   variants      MenuItemVariant[]
   addOns        MenuItemAddOn[]
+  images        MenuItemImage[]
   orderItems    OrderItem[]
   inventoryItems InventoryItem[]
 
@@ -233,6 +234,19 @@ model MenuItem {
   @@index([categoryId])
   @@index([barcode])
   @@map("menu_items")
+}
+
+model MenuItemImage {
+  id         String   @id @default(cuid())
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  url        String
+  sortOrder  Int      @default(0)
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([menuItemId])
+  @@map("menu_item_images")
 }
 
 model MenuItemVariant {
