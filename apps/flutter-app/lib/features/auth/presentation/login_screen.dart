@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/providers/app_state.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../app/shells/mobile_shell.dart';
 import '../../../app/shells/desktop_shell.dart';
@@ -38,6 +39,17 @@ class _LoginScreenState extends State<LoginScreen> {
       await provider.login(_emailController.text, _passwordController.text);
 
       if (provider.state.status == AuthStatus.authenticated && mounted) {
+        // Fetch first branch and set it on AppState
+        try {
+          final appState = context.read<AppState>();
+          final branches = await appState.api.getBranches();
+          if (branches.isNotEmpty) {
+            final branchId = branches.first['id'] as String;
+            appState.onLogin(branchId);
+            appState.api.setBranchId(branchId);
+          }
+        } catch (_) {}
+
         final width = MediaQuery.of(context).size.width;
         final shell = width > 900 ? const DesktopShell() : const MobileShell();
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => shell));

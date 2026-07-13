@@ -18,7 +18,7 @@ export default function MarketingPage() {
             <a href="#about" className="text-sm text-gray-600 hover:text-gray-900">About</a>
           </div>
           <a
-            href="http://localhost:3001"
+            href={process.env.NEXT_PUBLIC_CUSTOMER_URL || '/'}
             className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
           >
             Order Now

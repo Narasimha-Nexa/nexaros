@@ -106,8 +106,22 @@ export class SyncService {
                   notes: item.notes || undefined,
                 })),
               },
+              statusHistory: {
+                create: {
+                  status: (localOrder.status as any) || 'PENDING',
+                  notes: 'Synced from offline device',
+                },
+              },
             },
           });
+
+          // Update table status if order has a table
+          if (order.tableId) {
+            await this.prisma.restaurantTable.update({
+              where: { id: order.tableId },
+              data: { status: 'OCCUPIED' as any },
+            });
+          }
 
           results.orders.push({
             localId: localOrder.localId,

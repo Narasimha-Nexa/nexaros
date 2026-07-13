@@ -87,12 +87,19 @@ export class KitchenService {
       },
     });
 
-    // Update table status when order is ready or served
+    // Update table status based on order status
     if (updated.tableId) {
-      if (status === 'READY') {
+      let tableStatus: string | undefined;
+      switch (status) {
+        case 'READY': tableStatus = 'ORDER_READY'; break;
+        case 'SERVED': tableStatus = 'OCCUPIED'; break;
+        case 'COMPLETED': tableStatus = 'BILLING'; break;
+        case 'CANCELLED': tableStatus = 'FREE'; break;
+      }
+      if (tableStatus) {
         await this.prisma.restaurantTable.update({
           where: { id: updated.tableId },
-          data: { status: 'ORDER_READY' as any },
+          data: { status: tableStatus as any },
         });
       }
     }
@@ -145,58 +152,90 @@ export class KitchenService {
   }
 
   /**
-   * Auto-deduct inventory items when an order moves to PREPARING or SERVED.
-   * Uses the MenuItem <-> InventoryItem many-to-many relation to find
-   * which stock items are consumed by each order item.
+   * Auto-deduct inventory items when an order moves to PREPARING.
+   * Uses the RecipeItem model to get per-unit consumption quantities.
+   * Falls back to implicit many-to-many if no recipe items defined.
    */
   private async _deductInventoryForOrder(order: any) {
     for (const item of order.items) {
       const menuItemId = item.menuItem?.id || item.menuItemId;
       if (!menuItemId) continue;
 
-      // Find inventory items linked to this menu item
-      const inventoryLinks = await this.prisma.menuItem.findUnique({
-        where: { id: menuItemId },
-        include: {
-          inventoryItems: { select: { id: true, name: true, unit: true, currentStock: true } },
-        },
+      // First try RecipeItem (explicit recipe with quantities per unit)
+      const recipeItems = await this.prisma.recipeItem.findMany({
+        where: { menuItemId },
+        include: { inventoryItem: { select: { id: true, name: true, unit: true, currentStock: true } } },
       });
 
-      if (!inventoryLinks?.inventoryItems?.length) continue;
+      if (recipeItems.length > 0) {
+        for (const recipe of recipeItems) {
+          const deductQty = Number(recipe.quantity) * item.quantity;
+          const newStock = Math.max(Number(recipe.inventoryItem.currentStock) - deductQty, 0);
 
-      // Deduct the ordered quantity from each linked inventory item
-      // We deduct proportionally across linked items
-      const linkedItems = inventoryLinks.inventoryItems;
-      const quantityPerItem = item.quantity / linkedItems.length;
+          await this.prisma.inventoryItem.update({
+            where: { id: recipe.inventoryItemId },
+            data: { currentStock: newStock },
+          });
 
-      for (const invItem of linkedItems) {
-        const deductQty = Math.max(quantityPerItem, 0);
-        const newStock = Math.max(Number(invItem.currentStock) - deductQty, 0);
+          await this.prisma.stockMovement.create({
+            data: {
+              inventoryItemId: recipe.inventoryItemId,
+              type: 'SALE',
+              quantity: deductQty,
+              reference: order.orderNumber?.toString() ?? order.id.substring(0, 8),
+              notes: `Order #${order.orderNumber} - ${item.name || menuItemId.substring(0, 8)}`,
+            },
+          });
 
-        await this.prisma.inventoryItem.update({
-          where: { id: invItem.id },
-          data: { currentStock: newStock },
-        });
-
-        await this.prisma.stockMovement.create({
-          data: {
-            inventoryItemId: invItem.id,
-            type: 'SALE',
-            quantity: -deductQty,
-            reference: order.orderNumber?.toString() ?? order.id.substring(0, 8),
-            notes: `Order #${order.orderNumber} - ${item.name || menuItemId.substring(0, 8)}`,
+          if (newStock <= 0) {
+            this.gateway.emitToBranch(order.branchId, 'inventory:low', {
+              itemId: recipe.inventoryItemId,
+              itemName: recipe.inventoryItem.name,
+              currentStock: newStock,
+              unit: recipe.inventoryItem.unit,
+              orderNumber: order.orderNumber,
+            });
+          }
+        }
+      } else {
+        // Fallback: use implicit many-to-many (1 unit consumed per inventory item)
+        const inventoryLinks = await this.prisma.menuItem.findUnique({
+          where: { id: menuItemId },
+          include: {
+            inventoryItems: { select: { id: true, name: true, unit: true, currentStock: true } },
           },
         });
 
-        // Check if stock is now low and emit alert
-        if (newStock <= 0) {
-          this.gateway.emitToBranch(order.branchId, 'inventory:low', {
-            itemId: invItem.id,
-            itemName: invItem.name,
-            currentStock: newStock,
-            unit: invItem.unit,
-            orderNumber: order.orderNumber,
+        if (!inventoryLinks?.inventoryItems?.length) continue;
+
+        for (const invItem of inventoryLinks.inventoryItems) {
+          const deductQty = item.quantity;
+          const newStock = Math.max(Number(invItem.currentStock) - deductQty, 0);
+
+          await this.prisma.inventoryItem.update({
+            where: { id: invItem.id },
+            data: { currentStock: newStock },
           });
+
+          await this.prisma.stockMovement.create({
+            data: {
+              inventoryItemId: invItem.id,
+              type: 'SALE',
+              quantity: deductQty,
+              reference: order.orderNumber?.toString() ?? order.id.substring(0, 8),
+              notes: `Order #${order.orderNumber} - ${item.name || menuItemId.substring(0, 8)}`,
+            },
+          });
+
+          if (newStock <= 0) {
+            this.gateway.emitToBranch(order.branchId, 'inventory:low', {
+              itemId: invItem.id,
+              itemName: invItem.name,
+              currentStock: newStock,
+              unit: invItem.unit,
+              orderNumber: order.orderNumber,
+            });
+          }
         }
       }
     }

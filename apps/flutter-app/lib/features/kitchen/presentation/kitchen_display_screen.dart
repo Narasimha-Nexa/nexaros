@@ -22,7 +22,7 @@ class KitchenDisplayScreen extends StatefulWidget {
 
 class _KitchenDisplayScreenState extends State<KitchenDisplayScreen>
     with WidgetsBindingObserver {
-  final _api = ApiClient();
+  late final ApiClient _api;
   List<Map<String, dynamic>> _orders = [];
   bool _isLoading = true;
   Timer? _timer; // 1-second tick for order timers
@@ -36,8 +36,8 @@ class _KitchenDisplayScreenState extends State<KitchenDisplayScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // Read branchId from AppState
     final appState = context.read<AppState>();
+    _api = appState.api;
     _loadOrders(branchId: appState.branchId);
 
     _startTimer();

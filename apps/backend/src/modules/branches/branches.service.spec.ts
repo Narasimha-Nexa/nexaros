@@ -26,6 +26,13 @@ describe('BranchesService', () => {
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      count: jest.fn().mockResolvedValue(0),
+    },
+    tenant: {
+      findUnique: jest.fn().mockResolvedValue({
+        id: 'tenant-1',
+        subscriptions: [{ plan: { features: { maxBranches: 10 } } }],
+      }),
     },
   };
 

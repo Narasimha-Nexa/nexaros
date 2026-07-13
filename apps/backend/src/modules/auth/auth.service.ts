@@ -43,10 +43,17 @@ export class AuthService {
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-|-$/g, '');
 
+      // Check slug uniqueness — append random suffix if collision
+      let finalSlug = slug;
+      const existingSlug = await tx.tenant.findUnique({ where: { slug } });
+      if (existingSlug) {
+        finalSlug = `${slug}-${Date.now().toString(36)}`;
+      }
+
       const tenant = await tx.tenant.create({
         data: {
           name: dto.restaurantName,
-          slug,
+          slug: finalSlug,
           phone: dto.phone,
           email: dto.email,
         },

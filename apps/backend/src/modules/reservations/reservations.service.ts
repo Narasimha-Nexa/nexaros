@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GatewayService } from '../websockets/gateway.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
@@ -54,6 +54,22 @@ export class ReservationsService {
   }
 
   async create(tenantId: string, dto: CreateReservationDto) {
+    // Check for overlapping reservations on the same table, date, and time
+    if (dto.tableId) {
+      const overlapping = await this.prisma.reservation.findFirst({
+        where: {
+          tenantId,
+          tableId: dto.tableId,
+          date: new Date(dto.date),
+          time: dto.time,
+          status: { notIn: ['CANCELLED', 'NO_SHOW'] as any },
+        },
+      });
+      if (overlapping) {
+        throw new BadRequestException('This table already has a reservation at this date and time');
+      }
+    }
+
     const reservation = await this.prisma.reservation.create({
       data: {
         tenantId,

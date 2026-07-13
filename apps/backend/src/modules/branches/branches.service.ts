@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateBranchDto } from './dto/create-branch.dto';
 import { UpdateBranchDto } from './dto/update-branch.dto';
@@ -23,6 +23,21 @@ export class BranchesService {
   }
 
   async create(tenantId: string, dto: CreateBranchDto) {
+    // Check plan limits
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      include: { subscriptions: { where: { status: 'ACTIVE' }, include: { plan: true } } },
+    });
+    const activeSub = tenant?.subscriptions?.[0];
+    if (activeSub?.plan?.maxBranches) {
+      const currentCount = await this.prisma.branch.count({ where: { tenantId, isActive: true } });
+      if (currentCount >= activeSub.plan.maxBranches) {
+        throw new BadRequestException(
+          `Branch limit reached (${activeSub.plan.maxBranches}). Upgrade your plan to add more branches.`,
+        );
+      }
+    }
+
     return this.prisma.branch.create({
       data: { ...dto, tenantId },
     });

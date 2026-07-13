@@ -241,6 +241,7 @@ describe('AuthService', () => {
         create: jest
           .fn()
           .mockResolvedValue({ id: 'tenant-2', name: "Jane's Kitchen", slug: 'jane-s-kitchen' }),
+        findUnique: jest.fn().mockResolvedValue(null),
       },
       user: {
         create: jest.fn().mockImplementation(({ data }) =>

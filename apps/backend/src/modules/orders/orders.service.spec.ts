@@ -348,6 +348,7 @@ describe('OrdersService', () => {
     });
 
     it('should emit order:ready when status is READY', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue({ ...mockOrder, status: 'PREPARING' });
       mockPrisma.order.update.mockResolvedValue({
         ...mockOrder,
         status: 'READY',

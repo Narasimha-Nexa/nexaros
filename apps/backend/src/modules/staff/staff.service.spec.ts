@@ -45,7 +45,22 @@ describe('StaffService', () => {
       findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
-      count: jest.fn(),
+      count: jest.fn().mockResolvedValue(0),
+    },
+    branch: {
+      findUnique: jest.fn().mockResolvedValue({
+        id: 'branch-1',
+        tenantId: 'tenant-1',
+        tenant: {
+          subscriptions: [{ plan: { features: { maxStaff: 50 } } }],
+        },
+      }),
+    },
+    tenant: {
+      findUnique: jest.fn().mockResolvedValue({
+        id: 'tenant-1',
+        subscriptions: [{ plan: { features: { maxStaff: 50 } } }],
+      }),
     },
     shift: {
       findMany: jest.fn(),

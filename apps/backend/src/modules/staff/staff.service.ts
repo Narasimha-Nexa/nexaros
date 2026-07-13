@@ -46,6 +46,26 @@ export class StaffService {
   }
 
   async createStaff(branchId: string, dto: CreateStaffDto) {
+    // Check plan limits
+    const staffBranch = await this.prisma.branch.findUnique({ where: { id: branchId } });
+    if (staffBranch) {
+      const tenant = await this.prisma.tenant.findUnique({
+        where: { id: staffBranch.tenantId },
+        include: { subscriptions: { where: { status: 'ACTIVE' }, include: { plan: true } } },
+      });
+      const activeSub = tenant?.subscriptions?.[0];
+      if (activeSub?.plan?.maxStaff) {
+        const currentCount = await this.prisma.staff.count({
+          where: { branch: { tenantId: staffBranch.tenantId }, isActive: true },
+        });
+        if (currentCount >= activeSub.plan.maxStaff) {
+          throw new BadRequestException(
+            `Staff limit reached (${activeSub.plan.maxStaff}). Upgrade your plan to add more staff.`,
+          );
+        }
+      }
+    }
+
     return this.prisma.staff.create({
       data: { branchId, ...dto },
       include: {

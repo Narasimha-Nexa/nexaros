@@ -68,6 +68,9 @@ describe('KitchenService', () => {
     menuItem: {
       findUnique: jest.fn(),
     },
+    recipeItem: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     inventoryItem: { update: jest.fn() },
     stockMovement: { create: jest.fn() },
   };

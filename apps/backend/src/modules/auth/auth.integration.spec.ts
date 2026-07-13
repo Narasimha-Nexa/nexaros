@@ -144,7 +144,10 @@ describe('Auth Flow (Integration)', () => {
       mockPrisma.user.findUnique.mockResolvedValue(null);
       mockPrisma.$transaction.mockImplementation(async (cb: any) =>
         cb({
-          tenant: { create: jest.fn().mockResolvedValue({ id: 'tenant-1', name: 'Test Kitchen', slug: 'test-kitchen' }) },
+          tenant: {
+            create: jest.fn().mockResolvedValue({ id: 'tenant-1', name: 'Test Kitchen', slug: 'test-kitchen' }),
+            findUnique: jest.fn().mockResolvedValue(null),
+          },
           user: { create: jest.fn().mockResolvedValue(mockUser) },
           permission: { upsert: jest.fn().mockResolvedValue({ id: 'perm-1' }) },
           role: { create: jest.fn().mockResolvedValue({ id: 'role-1', name: 'Owner' }) },

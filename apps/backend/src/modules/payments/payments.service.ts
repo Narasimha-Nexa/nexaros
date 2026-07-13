@@ -42,16 +42,24 @@ export class PaymentsService {
 
     const newTotalPaid = alreadyPaid + data.amount;
     if (newTotalPaid >= Number(order.totalAmount) - 0.01) {
-      await this.prisma.order.update({
-        where: { id: orderId },
-        data: { status: 'COMPLETED' },
-      });
-
-      if (order.tableId) {
-        await this.prisma.restaurantTable.update({
-          where: { id: order.tableId },
-          data: { status: 'FREE' },
+      // Only auto-complete if order is in a completable state
+      const completableStatuses = ['READY', 'ORDER_READY', 'SERVED', 'BILLING'];
+      if (completableStatuses.includes(order.status)) {
+        await this.prisma.order.update({
+          where: { id: orderId },
+          data: { status: 'COMPLETED' },
         });
+
+        await this.prisma.orderStatusHistory.create({
+          data: { orderId, status: 'COMPLETED', notes: 'Auto-completed: fully paid' },
+        });
+
+        if (order.tableId) {
+          await this.prisma.restaurantTable.update({
+            where: { id: order.tableId },
+            data: { status: 'FREE' },
+          });
+        }
       }
     }
 
@@ -111,6 +119,15 @@ export class PaymentsService {
     const updated = await this.prisma.payment.update({
       where: { id: paymentId },
       data: { status: 'REFUNDED' },
+    });
+
+    // Record refund in order status history
+    await this.prisma.orderStatusHistory.create({
+      data: {
+        orderId: payment.orderId,
+        status: payment.order.status,
+        notes: `Payment refunded: ₹${payment.amount} via ${payment.method}`,
+      },
     });
 
     this.gateway.emitToBranch(payment.branchId, 'payment:refunded', {

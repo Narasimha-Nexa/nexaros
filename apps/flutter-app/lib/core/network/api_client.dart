@@ -9,10 +9,16 @@ class ApiClient {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   String? _accessToken;
+  String? _branchId;
 
   String get baseUrl => _baseUrl;
   String get socketUrl => serverUrl;
   String? get accessToken => _accessToken;
+  String? get branchId => _branchId;
+
+  void setBranchId(String branchId) {
+    _branchId = branchId;
+  }
 
   Future<Map<String, String>> get _headers async {
     _accessToken ??= await _storage.read(key: 'access_token');
@@ -66,7 +72,7 @@ class ApiClient {
     final response = await http.post(
       Uri.parse('$_baseUrl/auth/refresh'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'token': rt}),
+      body: jsonEncode({'refreshToken': rt}),
     );
     final data = _handleResponse(response);
     await _storeTokens(data['accessToken'], data['refreshToken']);
@@ -176,9 +182,10 @@ class ApiClient {
   // ─── Orders ───
 
   Future<List<dynamic>> getOrders({String? status, String? branchId, int? limit, int? page}) async {
+    final effectiveBranchId = branchId ?? _branchId;
     final params = <String, String>{};
     if (status != null) params['status'] = status;
-    if (branchId != null) params['branchId'] = branchId;
+    if (effectiveBranchId != null) params['branchId'] = effectiveBranchId;
     if (limit != null) params['limit'] = limit.toString();
     if (page != null) params['page'] = page.toString();
     final uri = Uri.parse('$_baseUrl/orders').replace(queryParameters: params);
@@ -190,7 +197,9 @@ class ApiClient {
   }
 
   Future<Map<String, dynamic>> createOrder(Map<String, dynamic> data) async {
-    final response = await _authedPost('$_baseUrl/orders', data);
+    final branchId = data['branchId'] as String? ?? '';
+    final uri = Uri.parse('$_baseUrl/orders').replace(queryParameters: {'branchId': branchId});
+    final response = await _authedPost(uri.toString(), data);
     return _handleResponse(response);
   }
 
@@ -543,7 +552,8 @@ class ApiClient {
   // ─── Dashboard / Stats ───
 
   Future<Map<String, dynamic>> getTodayStats() async {
-    final response = await _authedGet('$_baseUrl/orders?limit=100');
+    final branchParam = _branchId != null ? '?branchId=$_branchId' : '';
+    final response = await _authedGet('$_baseUrl/orders?limit=100$branchParam');
     final orders = _handleResponse(response) as List;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);

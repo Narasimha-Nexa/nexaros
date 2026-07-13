@@ -222,6 +222,19 @@ export class OrdersService {
     const order = await this.prisma.order.findUnique({ where: { id } });
     if (!order) throw new NotFoundException('Order not found');
 
+    // Validate status transitions
+    const validTransitions: Record<string, string[]> = {
+      PENDING: ['CONFIRMED', 'PREPARING', 'CANCELLED'],
+      CONFIRMED: ['PREPARING', 'CANCELLED'],
+      PREPARING: ['READY'],
+      READY: ['SERVED', 'COMPLETED'],
+      SERVED: ['COMPLETED'],
+    };
+    const allowed = validTransitions[order.status] || [];
+    if (!allowed.includes(status)) {
+      throw new BadRequestException(`Cannot transition from ${order.status} to ${status}`);
+    }
+
     const updated = await this.prisma.order.update({
       where: { id },
       data: { status: status as OrderStatus },

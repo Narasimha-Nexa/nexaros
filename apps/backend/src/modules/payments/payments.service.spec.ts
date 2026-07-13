@@ -56,6 +56,7 @@ describe('PaymentsService', () => {
       update: jest.fn(),
     },
     restaurantTable: { update: jest.fn() },
+    orderStatusHistory: { create: jest.fn() },
   };
 
   const mockGateway = { emitToBranch: jest.fn() };
@@ -78,7 +79,7 @@ describe('PaymentsService', () => {
 
   describe('createPayment', () => {
     beforeEach(() => {
-      mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
+      mockPrisma.order.findUnique.mockResolvedValue({ ...mockOrder, status: 'READY' });
       mockPrisma.payment.findMany.mockResolvedValue([]);
     });
 

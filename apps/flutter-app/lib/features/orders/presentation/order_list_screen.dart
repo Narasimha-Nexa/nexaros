@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/providers/app_state.dart';
 import '../../../core/network/api_client.dart';
 import '../../pos/presentation/pos_screen.dart';
 import '../../payments/presentation/payment_screen.dart';
@@ -13,7 +15,7 @@ class OrderListScreen extends StatefulWidget {
 }
 
 class _OrderListScreenState extends State<OrderListScreen> {
-  final _api = ApiClient();
+  late final ApiClient _api;
   List<dynamic> _orders = [];
   bool _isLoading = true;
   String _statusFilter = '';
@@ -21,6 +23,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
   @override
   void initState() {
     super.initState();
+    _api = context.read<AppState>().api;
     _loadOrders();
   }
 
