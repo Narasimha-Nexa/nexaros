@@ -8,6 +8,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { AddItemDto } from './dto/add-item.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+import { PaginationDto, paginate } from '../../common/dto/pagination.dto';
 
 @ApiTags('orders')
 @ApiBearerAuth()
@@ -23,8 +24,10 @@ export class OrdersController {
   findAll(
     @Query('branchId') branchId: string,
     @Query('status') status?: string,
+    @Query() pagination?: PaginationDto,
   ) {
-    return this.ordersService.findAll(branchId, status);
+    const { skip, take } = paginate(pagination?.page, pagination?.limit);
+    return this.ordersService.findAll(branchId, status, skip, take);
   }
 
   @Get('next-number')

@@ -12,6 +12,11 @@ import '../../features/settings/presentation/printer_settings_screen.dart';
 import '../../features/kitchen/presentation/kitchen_display_screen.dart';
 import '../../features/staff/presentation/staff_management_screen.dart';
 import '../../features/staff/presentation/attendance_screen.dart';
+import '../../features/staff/presentation/shift_schedule_screen.dart';
+import '../../features/inventory/presentation/inventory_management_screen.dart';
+import '../../features/inventory/presentation/supplier_management_screen.dart';
+import '../../features/inventory/presentation/purchase_order_screen.dart';
+import '../../features/reservations/presentation/reservation_screen.dart';
 
 class DesktopShell extends StatefulWidget {
   const DesktopShell({super.key});
@@ -32,17 +37,27 @@ class _DesktopShellState extends State<DesktopShell> {
     const KitchenDisplayScreen(),
     const StaffManagementScreen(),
     const AttendanceScreen(),
+    const ShiftScheduleScreen(),
+    const InventoryManagementScreen(),
+    const SupplierManagementScreen(),
+    const PurchaseOrderScreen(),
+    const ReservationScreen(),
   ];
 
-  final _navItems = const [
-    _NavItem(Icons.dashboard, 'Dashboard'),
-    _NavItem(Icons.receipt_long, 'Orders'),
-    _NavItem(Icons.restaurant_menu, 'Menu'),
-    _NavItem(Icons.table_restaurant, 'Tables'),
-    _NavItem(Icons.point_of_sale, 'POS'),
-    _NavItem(Icons.precision_manufacturing, 'Kitchen'),
-    _NavItem(Icons.people, 'Staff'),
-    _NavItem(Icons.badge, 'Attendance'),
+  final _navItems = [
+    const _NavItem(Icons.dashboard, 'Dashboard'),
+    const _NavItem(Icons.receipt_long, 'Orders'),
+    const _NavItem(Icons.restaurant_menu, 'Menu'),
+    const _NavItem(Icons.table_restaurant, 'Tables'),
+    const _NavItem(Icons.point_of_sale, 'POS'),
+    const _NavItem(Icons.precision_manufacturing, 'Kitchen'),
+    const _NavItem(Icons.people, 'Staff'),
+    const _NavItem(Icons.badge, 'Attendance'),
+    const _NavItem(Icons.calendar_month, 'Shifts'),
+    const _NavItem(Icons.inventory_2, 'Inventory'),
+    const _NavItem(Icons.local_shipping, 'Suppliers'),
+    const _NavItem(Icons.receipt, 'Purchases'),
+    const _NavItem(Icons.event, 'Reservations'),
   ];
 
   int get _pageCount => _pages.length;

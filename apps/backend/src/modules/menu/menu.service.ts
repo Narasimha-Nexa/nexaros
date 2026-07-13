@@ -43,7 +43,15 @@ export class MenuService {
   }
 
   async removeCategory(id: string, tenantId: string) {
-    await this.prisma.category.findFirst({ where: { id, tenantId } });
+    const category = await this.prisma.category.findFirst({ where: { id, tenantId } });
+    if (!category) throw new NotFoundException('Category not found');
+
+    // Check if category has menu items
+    const itemCount = await this.prisma.menuItem.count({ where: { categoryId: id } });
+    if (itemCount > 0) {
+      throw new Error(`Cannot delete category with ${itemCount} menu item(s). Move or delete items first.`);
+    }
+
     await this.prisma.category.delete({ where: { id } });
     this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'category', action: 'deleted' });
     return { message: 'Category deleted' };
@@ -51,7 +59,7 @@ export class MenuService {
 
   // ─── Menu Items ───
 
-  async findAllItems(tenantId: string, categoryId?: string, search?: string) {
+  async findAllItems(tenantId: string, categoryId?: string, search?: string, skip = 0, take = 50) {
     const where: { tenantId: string; categoryId?: string; OR?: object[] } = { tenantId };
 
     if (categoryId) {
@@ -66,16 +74,22 @@ export class MenuService {
       ];
     }
 
-    return this.prisma.menuItem.findMany({
-      where,
-      include: {
-        category: { select: { id: true, name: true } },
-        variants: true,
-        addOns: true,
-        images: { orderBy: { sortOrder: 'asc' } },
-      },
-      orderBy: { sortOrder: 'asc' },
-    });
+    const [items, total] = await Promise.all([
+      this.prisma.menuItem.findMany({
+        where,
+        skip,
+        take,
+        include: {
+          category: { select: { id: true, name: true } },
+          variants: true,
+          addOns: true,
+          images: { orderBy: { sortOrder: 'asc' } },
+        },
+        orderBy: { sortOrder: 'asc' },
+      }),
+      this.prisma.menuItem.count({ where }),
+    ]);
+    return { items, total, skip, take };
   }
 
   async findOneItem(id: string, tenantId: string) {
@@ -111,6 +125,78 @@ export class MenuService {
     await this.findOneItem(id, tenantId);
 
     const { variants, addOns, ...updateData } = dto;
+
+    // Handle variants: sync by deleting removed ones and creating/updating provided ones
+    const variantOps: Promise<any>[] = [];
+    if (variants !== undefined) {
+      // Delete existing variants not in the update list
+      const existingVariants = await this.prisma.menuItemVariant.findMany({
+        where: { menuItemId: id },
+        select: { id: true },
+      });
+      const incomingIds = variants.filter((v: any) => v.id).map((v: any) => v.id);
+      const toDelete = existingVariants.filter((v) => !incomingIds.includes(v.id));
+      if (toDelete.length > 0) {
+        variantOps.push(
+          this.prisma.menuItemVariant.deleteMany({
+            where: { id: { in: toDelete.map((v) => v.id) } },
+          }),
+        );
+      }
+      // Create new or update existing variants
+      for (const v of variants) {
+        if ((v as any).id) {
+          variantOps.push(
+            this.prisma.menuItemVariant.update({
+              where: { id: (v as any).id },
+              data: { name: v.name, price: v.price, ...(v.isActive !== undefined && { isActive: v.isActive }) },
+            }),
+          );
+        } else {
+          variantOps.push(
+            this.prisma.menuItemVariant.create({
+              data: { menuItemId: id, name: v.name, price: v.price, ...(v.isActive !== undefined && { isActive: v.isActive }) },
+            }),
+          );
+        }
+      }
+    }
+
+    // Handle addOns: sync by deleting removed ones and creating/updating provided ones
+    const addOnOps: Promise<any>[] = [];
+    if (addOns !== undefined) {
+      const existingAddOns = await this.prisma.menuItemAddOn.findMany({
+        where: { menuItemId: id },
+        select: { id: true },
+      });
+      const incomingIds = addOns.filter((a: any) => a.id).map((a: any) => a.id);
+      const toDelete = existingAddOns.filter((a) => !incomingIds.includes(a.id));
+      if (toDelete.length > 0) {
+        addOnOps.push(
+          this.prisma.menuItemAddOn.deleteMany({
+            where: { id: { in: toDelete.map((a) => a.id) } },
+          }),
+        );
+      }
+      for (const a of addOns) {
+        if ((a as any).id) {
+          addOnOps.push(
+            this.prisma.menuItemAddOn.update({
+              where: { id: (a as any).id },
+              data: { name: a.name, price: a.price, ...(a.isActive !== undefined && { isActive: a.isActive }) },
+            }),
+          );
+        } else {
+          addOnOps.push(
+            this.prisma.menuItemAddOn.create({
+              data: { menuItemId: id, name: a.name, price: a.price, ...(a.isActive !== undefined && { isActive: a.isActive }) },
+            }),
+          );
+        }
+      }
+    }
+
+    await Promise.all([...variantOps, ...addOnOps]);
 
     const item = await this.prisma.menuItem.update({
       where: { id },

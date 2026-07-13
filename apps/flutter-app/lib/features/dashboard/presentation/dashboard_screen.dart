@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/utils/date_utils.dart' as app_date_utils;
 import '../../menu/presentation/menu_management_screen.dart';
 import '../../orders/presentation/order_list_screen.dart';
 import '../../tables/presentation/table_grid_screen.dart';
 import '../../pos/presentation/pos_screen.dart';
+import '../../reports/presentation/report_charts.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -17,6 +20,8 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   final _api = ApiClient();
   Map<String, dynamic>? _stats;
+  Map<String, dynamic>? _dailySales;
+  Map<String, dynamic>? _itemPerformance;
   bool _isLoading = true;
   String? _error;
 
@@ -28,8 +33,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _loadStats() async {
     try {
-      final stats = await _api.getTodayStats();
-      if (mounted) setState(() { _stats = stats; _isLoading = false; });
+      final today = app_date_utils.DateUtils.toApiDate(DateTime.now());
+      final results = await Future.wait([
+        _api.getTodayStats(),
+        _api.getReport('daily-sales', today, today),
+        _api.getReport('items', today, today),
+      ]);
+      if (mounted) {
+        setState(() {
+          _stats = results[0];
+          _dailySales = results[1];
+          _itemPerformance = results[2];
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() { _error = e.toString(); _isLoading = false; });
     }
@@ -76,12 +93,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           crossAxisSpacing: 12,
                           childAspectRatio: 1.4,
                           children: [
-                            _StatCard(title: 'Total Orders', value: '${_stats?['totalOrders'] ?? 0}', icon: Icons.receipt_long, color: Colors.blue),
-                            _StatCard(title: 'Revenue', value: '₹${(_stats?['totalRevenue'] ?? 0).toStringAsFixed(0)}', icon: Icons.currency_rupee, color: Colors.green),
-                            _StatCard(title: 'Avg Order', value: '₹${(_stats?['avgOrderValue'] ?? 0).toStringAsFixed(0)}', icon: Icons.analytics, color: Colors.orange),
-                            _StatCard(title: 'Pending', value: '${_stats?['pendingOrders'] ?? 0}', icon: Icons.pending_actions, color: Colors.red),
+                            StatCard(title: 'Total Orders', value: '${_stats?['totalOrders'] ?? 0}', icon: Icons.receipt_long, color: Colors.blue),
+                            StatCard(title: 'Revenue', value: '₹${(_stats?['totalRevenue'] ?? 0).toStringAsFixed(0)}', icon: Icons.currency_rupee, color: Colors.green),
+                            StatCard(title: 'Avg Order', value: '₹${(_stats?['avgOrderValue'] ?? 0).toStringAsFixed(0)}', icon: Icons.analytics, color: Colors.orange),
+                            StatCard(title: 'Pending', value: '${_stats?['pendingOrders'] ?? 0}', icon: Icons.pending_actions, color: Colors.red),
                           ],
                         ),
+                        // Revenue chart
+                        if (_dailySales != null) ...[
+                          const SizedBox(height: 24),
+                          Text('Revenue Today', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 12),
+                          Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: SizedBox(
+                                height: 180,
+                                child: RevenueLineChart(
+                                  data: ChartData.fromDailySales(
+                                    (_dailySales!['daily'] as List<dynamic>?) ?? [],
+                                  ),
+                                  lineColor: AppColors.success,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+
+                        // Top selling items
+                        if (_itemPerformance != null) ...[
+                          const SizedBox(height: 24),
+                          Text('Top Selling Items', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 12),
+                          Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: CategoryBarChart(
+                                items: ChartData.fromItemPerformance(
+                                  (_itemPerformance!['topSelling'] as List<dynamic>?) ?? [],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+
                         const SizedBox(height: 24),
                         Text('Quick Actions', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 12),
@@ -93,16 +148,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           crossAxisSpacing: 12,
                           childAspectRatio: 2.2,
                           children: [
-                            _ActionCard(title: 'Menu', icon: Icons.restaurant_menu, onTap: () {
+                            ActionCard(title: 'Menu', icon: Icons.restaurant_menu, onTap: () {
                               Navigator.push(context, MaterialPageRoute(builder: (_) => const MenuManagementScreen()));
                             }),
-                            _ActionCard(title: 'Orders', icon: Icons.receipt, onTap: () {
+                            ActionCard(title: 'Orders', icon: Icons.receipt, onTap: () {
                               Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderListScreen()));
                             }),
-                            _ActionCard(title: 'Tables', icon: Icons.table_restaurant, onTap: () {
+                            ActionCard(title: 'Tables', icon: Icons.table_restaurant, onTap: () {
                               Navigator.push(context, MaterialPageRoute(builder: (_) => const TableGridScreen()));
                             }),
-                            _ActionCard(title: 'POS', icon: Icons.point_of_sale, onTap: () {
+                            ActionCard(title: 'POS', icon: Icons.point_of_sale, onTap: () {
                               Navigator.push(context, MaterialPageRoute(builder: (_) => const POSScreen()));
                             }),
                           ],
@@ -115,13 +170,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-class _StatCard extends StatelessWidget {
+class StatCard extends StatelessWidget {
   final String title;
   final String value;
   final IconData icon;
   final Color color;
 
-  const _StatCard({required this.title, required this.value, required this.icon, required this.color});
+  const StatCard({super.key, required this.title, required this.value, required this.icon, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -145,12 +200,12 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _ActionCard extends StatelessWidget {
+class ActionCard extends StatelessWidget {
   final String title;
   final IconData icon;
   final VoidCallback onTap;
 
-  const _ActionCard({required this.title, required this.icon, required this.onTap});
+  const ActionCard({super.key, required this.title, required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {

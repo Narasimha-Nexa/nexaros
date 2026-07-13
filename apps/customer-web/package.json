@@ -1,0 +1,29 @@
+{
+  "name": "@nexaros/customer-web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3001",
+    "build": "next build",
+    "start": "next start --port 3001",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "^15.4.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "next-pwa": "^5.6.0",
+    "socket.io-client": "^4.8.1",
+    "js-cookie": "^3.0.5",
+    "react-hot-toast": "^2.5.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "typescript": "^5.8.3",
+    "tailwindcss": "^4.1.5",
+    "@tailwindcss/postcss": "^4.1.5",
+    "postcss": "^8.5.3"
+  }
+}

@@ -9,6 +9,7 @@ import { CreateStaffDto } from './dto/create-staff.dto';
 import { UpdateStaffDto } from './dto/update-staff.dto';
 import { CreateShiftDto } from './dto/create-shift.dto';
 import { UpdateShiftDto } from './dto/update-shift.dto';
+import { PaginationDto, paginate } from '../../common/dto/pagination.dto';
 
 @ApiTags('staff')
 @ApiBearerAuth()
@@ -21,8 +22,9 @@ export class StaffController {
 
   @Get('staff')
   @ApiOperation({ summary: 'List staff by branch' })
-  findAllStaff(@Query('branchId') branchId: string) {
-    return this.staffService.findAllStaff(branchId);
+  findAllStaff(@Query('branchId') branchId: string, @Query() pagination?: PaginationDto) {
+    const { skip, take } = paginate(pagination?.page, pagination?.limit);
+    return this.staffService.findAllStaff(branchId, skip, take);
   }
 
   @Get('staff/:id')

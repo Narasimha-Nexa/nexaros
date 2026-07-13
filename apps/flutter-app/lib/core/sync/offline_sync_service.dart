@@ -21,7 +21,7 @@ class OfflineSyncService {
   OfflineSyncService(this._db, this._api) {
     _connectivity.onConnectivityChanged.listen((result) {
       final wasOnline = _isOnline;
-      _isOnline = result != ConnectivityResult.none;
+      _isOnline = !result.contains(ConnectivityResult.none);
       if (!wasOnline && _isOnline) {
         _triggerSync();
       }

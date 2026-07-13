@@ -1,10 +1,18 @@
 version: '3.8'
 
+networks:
+  nexaros-network:
+    driver: bridge
+
 services:
+  # ─── Infrastructure ───
+
   nexaros-postgres:
     image: postgres:16-alpine
     container_name: nexaros-postgres
     restart: unless-stopped
+    networks:
+      - nexaros-network
     environment:
       POSTGRES_DB: nexaros
       POSTGRES_USER: nexaros
@@ -23,6 +31,8 @@ services:
     image: redis:7-alpine
     container_name: nexaros-redis
     restart: unless-stopped
+    networks:
+      - nexaros-network
     ports:
       - "6379:6379"
     volumes:
@@ -32,6 +42,73 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # ─── Backend API ───
+
+  nexaros-backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    container_name: nexaros-backend
+    restart: unless-stopped
+    networks:
+      - nexaros-network
+    depends_on:
+      nexaros-postgres:
+        condition: service_healthy
+      nexaros-redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://nexaros:nexaros_dev@nexaros-postgres:5432/nexaros?schema=public
+      JWT_SECRET: nexaros-prod-jwt-secret-change-in-production-64chars!!
+      JWT_REFRESH_SECRET: nexaros-prod-refresh-secret-change-in-production!!
+      JWT_EXPIRATION: 15m
+      JWT_REFRESH_EXPIRATION: 7d
+      PORT: 4000
+      APP_URL: http://nexaros-backend:4000
+      NODE_ENV: production
+      CORS_ORIGIN: http://localhost:3000,http://localhost:3001,http://localhost:3002,http://nexaros-customer:3001,http://nexaros-marketing:3002
+      REDIS_HOST: nexaros-redis
+      REDIS_PORT: 6379
+    ports:
+      - "4000:4000"
+
+  # ─── Customer Web ───
+
+  nexaros-customer:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.customer
+      args:
+        NEXT_PUBLIC_API_URL: http://nexaros-backend:4000/api
+        NEXT_PUBLIC_SOCKET_URL: http://nexaros-backend:4000
+    container_name: nexaros-customer
+    restart: unless-stopped
+    networks:
+      - nexaros-network
+    depends_on:
+      - nexaros-backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://nexaros-backend:4000/api
+      NEXT_PUBLIC_SOCKET_URL: http://nexaros-backend:4000
+    ports:
+      - "3001:3001"
+
+  # ─── Marketing Web ───
+
+  nexaros-marketing:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.marketing
+      args:
+        NEXT_PUBLIC_API_URL: http://nexaros-backend:4000/api
+        NEXT_PUBLIC_SITE_URL: http://nexaros-marketing:3002
+    container_name: nexaros-marketing
+    restart: unless-stopped
+    networks:
+      - nexaros-network
+    ports:
+      - "3002:3002"
 
 volumes:
   nexaros_postgres_data:

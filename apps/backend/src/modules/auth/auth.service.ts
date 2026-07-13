@@ -357,7 +357,21 @@ export class AuthService {
   private async storeRefreshToken(userId: string, token: string) {
     const expiresIn = this.configService.get('JWT_REFRESH_EXPIRATION', '7d');
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    // Parse the duration string (e.g., '7d', '24h', '60m')
+    const match = expiresIn.match(/^(\d+)([dhm])$/);
+    if (match) {
+      const value = parseInt(match[1], 10);
+      const unit = match[2];
+      switch (unit) {
+        case 'd': expiresAt.setDate(expiresAt.getDate() + value); break;
+        case 'h': expiresAt.setHours(expiresAt.getHours() + value); break;
+        case 'm': expiresAt.setMinutes(expiresAt.getMinutes() + value); break;
+      }
+    } else {
+      // Fallback: assume days
+      expiresAt.setDate(expiresAt.getDate() + 7);
+    }
 
     await this.prisma.refreshToken.create({
       data: {

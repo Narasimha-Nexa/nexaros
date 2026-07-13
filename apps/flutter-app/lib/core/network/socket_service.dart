@@ -1,7 +1,7 @@
-import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:socket_io_client/socket_io_client.dart';
 
 class SocketService {
-  IO.Socket? _socket;
+  Socket? _socket;
   String? _baseUrl;
   String? _token;
   int _reconnectAttempts = 0;
@@ -14,12 +14,14 @@ class SocketService {
     _doConnect();
   }
 
+  final List<String> _rooms = [];
+
   void _doConnect() {
     if (_baseUrl == null || _token == null) return;
 
-    _socket = IO.io(
+    _socket = io(
       _baseUrl!,
-      IO.OptionBuilder()
+      OptionBuilder()
           .setTransports(['websocket'])
           .enableAutoConnect()
           .enableReconnection()
@@ -31,6 +33,10 @@ class SocketService {
 
     _socket!.onConnect((_) {
       _reconnectAttempts = 0;
+      // Re-join all previously joined rooms after reconnect
+      for (final room in _rooms) {
+        _socket?.emit('join:branch', {'branchId': room});
+      }
     });
 
     _socket!.onDisconnect((_) {
@@ -50,6 +56,9 @@ class SocketService {
   }
 
   void joinBranch(String branchId) {
+    if (!_rooms.contains(branchId)) {
+      _rooms.add(branchId);
+    }
     _socket?.emit('join:branch', {'branchId': branchId});
   }
 
@@ -65,6 +74,7 @@ class SocketService {
 
   void disconnect() {
     _reconnectAttempts = _maxReconnectAttempts;
+    _rooms.clear();
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;

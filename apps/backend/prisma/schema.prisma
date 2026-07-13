@@ -229,6 +229,7 @@ model MenuItem {
   images        MenuItemImage[]
   orderItems    OrderItem[]
   inventoryItems InventoryItem[]
+  recipeItems   RecipeItem[]
 
   @@index([tenantId])
   @@index([categoryId])
@@ -484,6 +485,7 @@ model InventoryItem {
   stockMovements StockMovement[]
   purchaseItems  PurchaseItem[]
   menuItems      MenuItem[]
+  recipeItems    RecipeItem[]
 
   @@index([tenantId])
   @@index([barcode])
@@ -710,6 +712,25 @@ enum SubscriptionStatus {
   PAUSED
   CANCELLED
   EXPIRED
+}
+
+// ─────────────────────────────────────────────
+// RECIPE ITEMS (inventory consumption tracking)
+// ─────────────────────────────────────────────
+
+model RecipeItem {
+  id              String        @id @default(cuid())
+  menuItemId      String
+  menuItem        MenuItem      @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  quantity        Decimal       @db.Decimal(10, 2)
+  unit            String        @default("g")
+
+  @@unique([menuItemId, inventoryItemId])
+  @@index([menuItemId])
+  @@index([inventoryItemId])
+  @@map("recipe_items")
 }
 
 // ─────────────────────────────────────────────

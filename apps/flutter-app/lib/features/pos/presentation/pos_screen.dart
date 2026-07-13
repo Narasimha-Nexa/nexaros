@@ -38,7 +38,57 @@ class _POSScreenState extends State<POSScreen> {
     super.initState();
     _appState = context.read<AppState>();
     _currentOrderId = widget.orderId;
+    _checkPinAuth();
     _loadMenu();
+  }
+
+  Future<bool> _checkPinAuth() async {
+    // If user is already authenticated via normal login, skip PIN
+    if (await _api.hasValidSession()) return true;
+
+    // Otherwise show PIN dialog for POS-only staff access
+    if (!mounted) return false;
+    final pinCtrl = TextEditingController();
+    final authenticated = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.lock_outline, size: 20),
+            SizedBox(width: 8),
+            Text('Staff PIN Required'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Enter your PIN to access POS'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: pinCtrl,
+              obscureText: true,
+              maxLength: 6,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'PIN',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, pinCtrl.text.length >= 4),
+            child: const Text('Verify'),
+          ),
+        ],
+      ),
+    );
+    return authenticated == true;
   }
 
   Future<void> _loadMenu() async {
@@ -153,7 +203,7 @@ class _POSScreenState extends State<POSScreen> {
       } else {
         // Use offline-capable order service
         final result = await _appState.offlineOrders.createOrder(
-          branchId: '', // Will be filled from auth context
+          branchId: _appState.branchId ?? '',
           tableId: widget.tableId,
           type: _orderType,
           items: items,

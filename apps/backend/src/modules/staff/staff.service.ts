@@ -11,16 +11,22 @@ export class StaffService {
 
   // ── STAFF CRUD ──
 
-  async findAllStaff(branchId: string) {
-    return this.prisma.staff.findMany({
-      where: { branchId, isActive: true },
-      include: {
-        role: { select: { id: true, name: true } },
-        user: { select: { id: true, email: true, firstName: true, lastName: true } },
-        _count: { select: { orders: true } },
-      },
-      orderBy: { name: 'asc' },
-    });
+  async findAllStaff(branchId: string, skip = 0, take = 20) {
+    const [staff, total] = await Promise.all([
+      this.prisma.staff.findMany({
+        where: { branchId, isActive: true },
+        skip,
+        take,
+        include: {
+          role: { select: { id: true, name: true } },
+          user: { select: { id: true, email: true, firstName: true, lastName: true } },
+          _count: { select: { orders: true } },
+        },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.staff.count({ where: { branchId, isActive: true } }),
+    ]);
+    return { staff, total, skip, take };
   }
 
   async findOneStaff(id: string) {

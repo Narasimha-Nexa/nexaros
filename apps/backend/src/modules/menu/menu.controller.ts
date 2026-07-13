@@ -13,6 +13,7 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 import { CreateMenuItemDto } from './dto/create-menu-item.dto';
 import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
 import { menuImageMulterOptions } from '../../common/multer/multer.config';
+import { PaginationDto, paginate } from '../../common/dto/pagination.dto';
 
 @ApiTags('menu')
 @ApiBearerAuth()
@@ -64,8 +65,10 @@ export class MenuController {
     @CurrentTenant() tenantId: string,
     @Query('categoryId') categoryId?: string,
     @Query('search') search?: string,
+    @Query() pagination?: PaginationDto,
   ) {
-    return this.menuService.findAllItems(tenantId, categoryId, search);
+    const { skip, take } = paginate(pagination?.page, pagination?.limit);
+    return this.menuService.findAllItems(tenantId, categoryId, search, skip, take);
   }
 
   @Get('items/:id')

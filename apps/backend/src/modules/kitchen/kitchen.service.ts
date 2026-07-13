@@ -69,9 +69,15 @@ export class KitchenService {
       data: { status: status as any },
       include: {
         table: { select: { id: true, number: true, name: true } },
-        items: { include: { menuItem: { select: { name: true, isVeg: true } } } },
+        items: { include: { menuItem: { select: { name: true, isVeg: true, id: true } } } },
       },
     });
+
+    // Auto-deduct inventory when order moves to PREPARING (first time items enter production)
+    // We only deduct once at PREPARING to avoid double-deduction when order later transitions to SERVED
+    if (status === 'PREPARING') {
+      await this._deductInventoryForOrder(updated);
+    }
 
     await this.prisma.orderStatusHistory.create({
       data: {
@@ -136,5 +142,63 @@ export class KitchenService {
     });
     if (!order) throw new NotFoundException('Order not found');
     return order;
+  }
+
+  /**
+   * Auto-deduct inventory items when an order moves to PREPARING or SERVED.
+   * Uses the MenuItem <-> InventoryItem many-to-many relation to find
+   * which stock items are consumed by each order item.
+   */
+  private async _deductInventoryForOrder(order: any) {
+    for (const item of order.items) {
+      const menuItemId = item.menuItem?.id || item.menuItemId;
+      if (!menuItemId) continue;
+
+      // Find inventory items linked to this menu item
+      const inventoryLinks = await this.prisma.menuItem.findUnique({
+        where: { id: menuItemId },
+        include: {
+          inventoryItems: { select: { id: true, name: true, unit: true, currentStock: true } },
+        },
+      });
+
+      if (!inventoryLinks?.inventoryItems?.length) continue;
+
+      // Deduct the ordered quantity from each linked inventory item
+      // We deduct proportionally across linked items
+      const linkedItems = inventoryLinks.inventoryItems;
+      const quantityPerItem = item.quantity / linkedItems.length;
+
+      for (const invItem of linkedItems) {
+        const deductQty = Math.max(quantityPerItem, 0);
+        const newStock = Math.max(Number(invItem.currentStock) - deductQty, 0);
+
+        await this.prisma.inventoryItem.update({
+          where: { id: invItem.id },
+          data: { currentStock: newStock },
+        });
+
+        await this.prisma.stockMovement.create({
+          data: {
+            inventoryItemId: invItem.id,
+            type: 'SALE',
+            quantity: -deductQty,
+            reference: order.orderNumber?.toString() ?? order.id.substring(0, 8),
+            notes: `Order #${order.orderNumber} - ${item.name || menuItemId.substring(0, 8)}`,
+          },
+        });
+
+        // Check if stock is now low and emit alert
+        if (newStock <= 0) {
+          this.gateway.emitToBranch(order.branchId, 'inventory:low', {
+            itemId: invItem.id,
+            itemName: invItem.name,
+            currentStock: newStock,
+            unit: invItem.unit,
+            orderNumber: order.orderNumber,
+          });
+        }
+      }
+    }
   }
 }

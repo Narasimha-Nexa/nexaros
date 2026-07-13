@@ -10,10 +10,10 @@ class ConnectivityMonitor {
   ConnectivityMonitor() {
     _controller = StreamController<bool>.broadcast();
     _subscription = _connectivity.onConnectivityChanged.listen((result) {
-      _controller.add(result != ConnectivityResult.none);
+      _controller.add(!result.contains(ConnectivityResult.none));
     });
     _connectivity.checkConnectivity().then((result) {
-      _controller.add(result != ConnectivityResult.none);
+      _controller.add(!result.contains(ConnectivityResult.none));
     });
   }
 

@@ -4,17 +4,18 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiClient {
   static const String _baseUrl = String.fromEnvironment('API_URL', defaultValue: 'http://localhost:4000/api');
+  /// Root server URL (without /api path) for WebSocket connections
+  static const String serverUrl = String.fromEnvironment('SERVER_URL', defaultValue: 'http://localhost:4000');
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   String? _accessToken;
 
   String get baseUrl => _baseUrl;
+  String get socketUrl => serverUrl;
   String? get accessToken => _accessToken;
 
   Future<Map<String, String>> get _headers async {
-    if (_accessToken == null) {
-      _accessToken = await _storage.read(key: 'access_token');
-    }
+    _accessToken ??= await _storage.read(key: 'access_token');
     return {
       'Content-Type': 'application/json',
       if (_accessToken != null) 'Authorization': 'Bearer $_accessToken',
@@ -118,13 +119,18 @@ class ApiClient {
     return _handleResponse(response);
   }
 
-  Future<List<dynamic>> getMenuItems({String? categoryId, String? search}) async {
+  Future<List<dynamic>> getMenuItems({String? categoryId, String? search, int? page, int? limit}) async {
     final params = <String, String>{};
     if (categoryId != null) params['categoryId'] = categoryId;
     if (search != null) params['search'] = search;
+    if (page != null) params['page'] = page.toString();
+    if (limit != null) params['limit'] = limit.toString();
     final uri = Uri.parse('$_baseUrl/menu/items').replace(queryParameters: params);
     final response = await _authedGet(uri.toString());
-    return _handleResponse(response);
+    final data = _handleResponse(response);
+    // Paginated response: { items: [...], total, skip, take }
+    if (data is Map && data.containsKey('items')) return List<dynamic>.from(data['items']);
+    return List<dynamic>.from(data);
   }
 
   Future<Map<String, dynamic>> createMenuItem(Map<String, dynamic> data) async {
@@ -169,14 +175,18 @@ class ApiClient {
 
   // ─── Orders ───
 
-  Future<List<dynamic>> getOrders({String? status, String? branchId, int? limit}) async {
+  Future<List<dynamic>> getOrders({String? status, String? branchId, int? limit, int? page}) async {
     final params = <String, String>{};
     if (status != null) params['status'] = status;
     if (branchId != null) params['branchId'] = branchId;
     if (limit != null) params['limit'] = limit.toString();
+    if (page != null) params['page'] = page.toString();
     final uri = Uri.parse('$_baseUrl/orders').replace(queryParameters: params);
     final response = await _authedGet(uri.toString());
-    return _handleResponse(response);
+    final data = _handleResponse(response);
+    // Paginated response: { orders: [...], total, skip, take }
+    if (data is Map && data.containsKey('orders')) return List<dynamic>.from(data['orders']);
+    return List<dynamic>.from(data);
   }
 
   Future<Map<String, dynamic>> createOrder(Map<String, dynamic> data) async {
@@ -306,11 +316,100 @@ class ApiClient {
     return _handleResponse(response);
   }
 
+  // ─── Inventory ───
+
+  Future<List<dynamic>> getInventoryItems() async {
+    final response = await _authedGet('$_baseUrl/inventory');
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> createInventoryItem(Map<String, dynamic> data) async {
+    final response = await _authedPost('$_baseUrl/inventory', data);
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> updateInventoryItem(String id, Map<String, dynamic> data) async {
+    final response = await _authedPatch('$_baseUrl/inventory/$id', data);
+    return _handleResponse(response);
+  }
+
+  Future<void> deleteInventoryItem(String id) async {
+    final response = await _authedDelete('$_baseUrl/inventory/$id');
+    _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> adjustStock(String id, Map<String, dynamic> data) async {
+    final response = await _authedPost('$_baseUrl/inventory/$id/adjust', data);
+    return _handleResponse(response);
+  }
+
+  Future<List<dynamic>> getLowStock() async {
+    final response = await _authedGet('$_baseUrl/inventory/low-stock');
+    return _handleResponse(response);
+  }
+
+  // ─── Suppliers ───
+
+  Future<List<dynamic>> getSuppliers() async {
+    final response = await _authedGet('$_baseUrl/suppliers');
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> createSupplier(Map<String, dynamic> data) async {
+    final response = await _authedPost('$_baseUrl/suppliers', data);
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> updateSupplier(String id, Map<String, dynamic> data) async {
+    final response = await _authedPatch('$_baseUrl/suppliers/$id', data);
+    return _handleResponse(response);
+  }
+
+  Future<void> deleteSupplier(String id) async {
+    final response = await _authedDelete('$_baseUrl/suppliers/$id');
+    _handleResponse(response);
+  }
+
+  // ─── Purchases ───
+
+  Future<List<dynamic>> getPurchases() async {
+    final response = await _authedGet('$_baseUrl/purchases');
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> createPurchase(Map<String, dynamic> data) async {
+    final response = await _authedPost('$_baseUrl/purchases', data);
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> updatePurchaseStatus(String id, String status) async {
+    final response = await _authedPatch('$_baseUrl/purchases/$id/status', {'status': status});
+    return _handleResponse(response);
+  }
+
+  Future<void> deletePurchase(String id) async {
+    final response = await _authedDelete('$_baseUrl/purchases/$id');
+    _handleResponse(response);
+  }
+
+  // ─── Roles ───
+
+  Future<List<dynamic>> getRoles() async {
+    final response = await _authedGet('$_baseUrl/roles');
+    return _handleResponse(response);
+  }
+
   // ─── Staff Management ───
 
-  Future<List<dynamic>> getStaff({required String branchId}) async {
-    final response = await _authedGet('$_baseUrl/staff?branchId=$branchId');
-    return _handleResponse(response);
+  Future<List<dynamic>> getStaff({required String branchId, int? page, int? limit}) async {
+    final params = 'branchId=$branchId';
+    final pageParam = page != null ? '&page=$page' : '';
+    final limitParam = limit != null ? '&limit=$limit' : '';
+    final response = await _authedGet('$_baseUrl/staff?$params$pageParam$limitParam');
+    final data = _handleResponse(response);
+    // Paginated response: { staff: [...], total, skip, take }
+    if (data is Map && data.containsKey('staff')) return List<dynamic>.from(data['staff']);
+    return List<dynamic>.from(data);
   }
 
   Future<Map<String, dynamic>> createStaff(String branchId, Map<String, dynamic> data) async {
@@ -404,6 +503,43 @@ class ApiClient {
     return _handleResponse(response);
   }
 
+  // ─── Reservations ───
+
+  Future<List<dynamic>> getReservations({String? date, String? status, String? branchId}) async {
+    final params = <String, String>{};
+    if (date != null) params['date'] = date;
+    if (status != null) params['status'] = status;
+    if (branchId != null) params['branchId'] = branchId;
+    final uri = Uri.parse('$_baseUrl/reservations').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  Future<List<dynamic>> getTodayReservations() async {
+    final response = await _authedGet('$_baseUrl/reservations/today');
+    return _handleResponse(response);
+  }
+
+  Future<List<dynamic>> getUpcomingReservations({int limit = 10}) async {
+    final response = await _authedGet('$_baseUrl/reservations/upcoming?limit=$limit');
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> createReservation(Map<String, dynamic> data) async {
+    final response = await _authedPost('$_baseUrl/reservations', data);
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> updateReservation(String id, Map<String, dynamic> data) async {
+    final response = await _authedPatch('$_baseUrl/reservations/$id', data);
+    return _handleResponse(response);
+  }
+
+  Future<void> deleteReservation(String id) async {
+    final response = await _authedDelete('$_baseUrl/reservations/$id');
+    _handleResponse(response);
+  }
+
   // ─── Dashboard / Stats ───
 
   Future<Map<String, dynamic>> getTodayStats() async {
@@ -426,6 +562,29 @@ class ApiClient {
       'preparingOrders': todayOrders.where((o) => o['status'] == 'PREPARING').length,
       'completedOrders': todayOrders.where((o) => o['status'] == 'COMPLETED').length,
     };
+  }
+
+  // ─── Reports ───
+
+  Future<dynamic> getReport(String type, String startDate, String endDate, {String? branchId}) async {
+    final params = <String, String>{
+      'startDate': startDate,
+      'endDate': endDate,
+    };
+    if (branchId != null) params['branchId'] = branchId;
+    final uri = Uri.parse('$_baseUrl/reports/$type').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> exportReport(String type, String format, String startDate, String endDate) async {
+    final uri = Uri.parse('$_baseUrl/reports/export/$type').replace(queryParameters: {
+      'format': format,
+      'startDate': startDate,
+      'endDate': endDate,
+    });
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
   }
 
   // ─── HTTP Helpers ───

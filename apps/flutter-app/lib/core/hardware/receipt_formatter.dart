@@ -86,8 +86,7 @@ class ReceiptFormatter {
 
     for (final item in items) {
       final qty = item.quantity.toString().padLeft(2, ' ');
-      builder
-        ..text('$qty x ${item.name}', bold: true);
+      builder.text('$qty x ${item.name}', bold: true);
       if (item.notes != null && item.notes!.isNotEmpty) {
         builder.text('  Note: ${item.notes}');
       }

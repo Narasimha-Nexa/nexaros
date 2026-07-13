@@ -4,15 +4,20 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { Reflector } from '@nestjs/core';
 import { join } from 'path';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { PermissionsGuard } from './common/guards/permissions.guard';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // Global prefix
   app.setGlobalPrefix('api');
+
+  // Cookie parser (needed by CsrfMiddleware)
+  app.use(cookieParser());
 
   // CORS
   app.enableCors({
@@ -25,6 +30,9 @@ async function bootstrap() {
 
   // Global exception filter
   app.useGlobalFilters(new AllExceptionsFilter());
+
+  // Global interceptors
+  app.useGlobalInterceptors(new LoggingInterceptor());
 
   // Global guards
   const reflector = app.get(Reflector);

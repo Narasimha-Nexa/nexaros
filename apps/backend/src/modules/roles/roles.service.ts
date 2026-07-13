@@ -48,13 +48,25 @@ export class RolesService {
   }
 
   async update(id: string, tenantId: string, dto: UpdateRoleDto) {
-    await this.findOne(id, tenantId);
+    const role = await this.findOne(id, tenantId);
+
+    // If permissionIds provided, replace all role permissions
+    if (dto.permissionIds !== undefined) {
+      await this.prisma.rolePermission.deleteMany({ where: { roleId: id } });
+      if (dto.permissionIds.length > 0) {
+        await this.prisma.rolePermission.createMany({
+          data: dto.permissionIds.map((pid) => ({ roleId: id, permissionId: pid })),
+        });
+      }
+    }
+
     return this.prisma.role.update({
       where: { id },
       data: {
-        name: dto.name,
-        description: dto.description,
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.description !== undefined && { description: dto.description }),
       },
+      include: { permissions: { include: { permission: true } } },
     });
   }
 

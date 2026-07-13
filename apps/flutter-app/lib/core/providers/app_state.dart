@@ -54,7 +54,7 @@ class AppState extends ChangeNotifier {
   void onLogin(String branchId) {
     final token = api.accessToken;
     if (token != null) {
-      socket.connect(api.baseUrl, token);
+      socket.connect(api.socketUrl, token);
       socket.joinBranch(branchId);
     }
     _isConnected = true;

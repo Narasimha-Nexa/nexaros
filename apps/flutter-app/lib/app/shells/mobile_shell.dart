@@ -8,9 +8,7 @@ import '../../features/menu/presentation/menu_management_screen.dart';
 import '../../features/tables/presentation/table_grid_screen.dart';
 import '../../features/pos/presentation/pos_screen.dart';
 import '../../features/settings/presentation/printer_settings_screen.dart';
-import '../../features/kitchen/presentation/kitchen_display_screen.dart';
-import '../../features/staff/presentation/staff_management_screen.dart';
-import '../../features/staff/presentation/attendance_screen.dart';
+import '../../features/more/presentation/more_grid_screen.dart';
 
 class MobileShell extends StatefulWidget {
   const MobileShell({super.key});
@@ -28,9 +26,7 @@ class _MobileShellState extends State<MobileShell> {
     const MenuManagementScreen(),
     const TableGridScreen(),
     const POSScreen(),
-    const KitchenDisplayScreen(),
-    const StaffManagementScreen(),
-    const AttendanceScreen(),
+    const MoreGridScreen(),
   ];
 
   @override
@@ -54,9 +50,7 @@ class _MobileShellState extends State<MobileShell> {
           const NavigationDestination(icon: Icon(Icons.restaurant_menu), label: 'Menu'),
           const NavigationDestination(icon: Icon(Icons.table_restaurant), label: 'Tables'),
           const NavigationDestination(icon: Icon(Icons.point_of_sale), label: 'POS'),
-          const NavigationDestination(icon: Icon(Icons.precision_manufacturing), label: 'Kitchen'),
-          const NavigationDestination(icon: Icon(Icons.people), label: 'Staff'),
-          const NavigationDestination(icon: Icon(Icons.badge), label: 'Attendance'),
+          const NavigationDestination(icon: Icon(Icons.apps), label: 'More'),
         ],
       ),
       floatingActionButton: FloatingActionButton.small(

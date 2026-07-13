@@ -12,25 +12,36 @@ export class OrdersService {
     private gateway: GatewayService,
   ) {}
 
-  async findAll(branchId: string, status?: string) {
-    return this.prisma.order.findMany({
-      where: {
-        branchId,
-        ...(status ? { status: status as OrderStatus } : {}),
-      },
-      include: {
-        table: { select: { id: true, number: true, name: true } },
-        staff: { select: { id: true, name: true } },
-        items: {
-          include: {
-            menuItem: { select: { id: true, name: true, image: true } },
-            addOns: true,
-          },
+  async findAll(branchId: string, status?: string, skip = 0, take = 20) {
+    const [orders, total] = await Promise.all([
+      this.prisma.order.findMany({
+        where: {
+          branchId,
+          ...(status ? { status: status as OrderStatus } : {}),
         },
-        payments: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        skip,
+        take,
+        include: {
+          table: { select: { id: true, number: true, name: true } },
+          staff: { select: { id: true, name: true } },
+          items: {
+            include: {
+              menuItem: { select: { id: true, name: true, image: true } },
+              addOns: true,
+            },
+          },
+          payments: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.order.count({
+        where: {
+          branchId,
+          ...(status ? { status: status as OrderStatus } : {}),
+        },
+      }),
+    ]);
+    return { orders, total, skip, take };
   }
 
   async findOne(id: string) {
