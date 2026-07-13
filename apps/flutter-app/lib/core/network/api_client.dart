@@ -118,6 +118,13 @@ class ApiClient {
     return _handleResponse(response);
   }
 
+  // ─── Branches ───
+
+  Future<List<dynamic>> getBranches() async {
+    final response = await _authedGet('$_baseUrl/branches');
+    return _handleResponse(response);
+  }
+
   // ─── Menu ───
 
   Future<List<dynamic>> getCategories() async {

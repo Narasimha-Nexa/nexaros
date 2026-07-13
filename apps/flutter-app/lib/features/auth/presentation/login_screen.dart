@@ -50,6 +50,7 @@ class _LoginScreenState extends State<LoginScreen> {
           }
         } catch (_) {}
 
+        if (!mounted) return;
         final width = MediaQuery.of(context).size.width;
         final shell = width > 900 ? const DesktopShell() : const MobileShell();
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => shell));
