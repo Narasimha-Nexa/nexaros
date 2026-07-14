@@ -1003,6 +1003,7 @@ model AdminAuditLog {
   oldData     Json?
   newData     Json?
   ipAddress   String?
+  readAt      DateTime?
   createdAt   DateTime  @default(now())
 
   @@index([adminUserId, createdAt])
@@ -1094,6 +1095,53 @@ enum SenderType {
   CUSTOMER
   SUPPORT
   SYSTEM
+}
+
+// ─────────────────────────────────────────────
+// TENANT WEBSITE CMS CONFIG
+// ─────────────────────────────────────────────
+
+model TenantWebsiteConfig {
+  id        String   @id @default(cuid())
+  tenantId  String   @unique
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // ── Global Settings ──
+  restaurantName String  @default("")
+  tagline        String?
+  logo           String?
+  favicon        String?
+  phone          String?
+  email          String?
+  address        String?
+  mapUrl         String?
+  whatsappNumber String?
+  currency       String  @default("INR")
+  timezone       String  @default("Asia/Kolkata")
+
+  // ── Branding ──
+  primaryColor   String @default("#2563eb")
+  secondaryColor String @default("#171717")
+  accentColor    String @default("#f59e0b")
+  fontHeading    String @default("Playfair Display")
+  fontBody       String @default("Inter")
+  borderRadius   String @default("xl")
+  containerWidth String @default("max-w-7xl")
+
+  // ── JSON Configs ──
+  features      Json @default("{}")  // Feature toggles, widget configs
+  seo           Json @default("{}")  // Meta titles, descriptions, OG, Twitter
+  openingHours  Json @default("{}")  // Per-day opening hours
+  socialLinks   Json @default("{}")  // Instagram, Facebook, Twitter, YouTube
+  analytics     Json @default("{}")  // GA4, Meta Pixel, GTM
+  legalPages    Json @default("{}")  // Privacy, Terms, Refund, Cancellation, Cookie
+  homeSections  Json @default("[]")  // Ordered array of home page section configs
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@map("tenant_website_configs")
 }
 
 // ─────────────────────────────────────────────

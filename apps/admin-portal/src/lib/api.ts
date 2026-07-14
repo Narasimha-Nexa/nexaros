@@ -222,6 +222,30 @@ class AdminApiClient {
     return this.request('/admin/auth/sessions');
   }
 
+  // Notifications
+  async getNotifications(limit = 50, unreadOnly = false) {
+    return this.request('/admin/notifications', {
+      params: { limit: String(limit), unreadOnly: String(unreadOnly) },
+    });
+  }
+
+  async getUnreadNotificationCount() {
+    return this.request('/admin/notifications/unread-count');
+  }
+
+  async markNotificationRead(id: string) {
+    return this.request(`/admin/notifications/${id}/read`, { method: 'POST' });
+  }
+
+  async markAllNotificationsRead() {
+    return this.request('/admin/notifications/read-all', { method: 'POST' });
+  }
+
+  // Database
+  async getDatabaseStats() {
+    return this.request('/admin/database/stats');
+  }
+
   // Platform Settings
   async getSettings() {
     return this.request('/platform/settings');

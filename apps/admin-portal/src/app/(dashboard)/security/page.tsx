@@ -1,66 +1,78 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { StatCard } from '@/components/ui/stat-card';
 import { DataTable } from '@/components/ui/table';
-import { Dialog, DialogFooter } from '@/components/ui/dialog';
 import { PageHeader } from '@/components/layout/page-header';
 import { useToastStore } from '@/stores/ui.store';
-import { formatDate, timeAgo } from '@/lib/utils';
-import { Shield, Key, Smartphone, Lock, AlertTriangle, Eye, Trash2, Plus, RefreshCw } from 'lucide-react';
-
-const mockSessions = [
-  { id: '1', device: 'Chrome on macOS', ip: '192.168.1.1', lastActive: '2025-01-14T10:30:00Z', current: true },
-  { id: '2', device: 'Firefox on Windows', ip: '10.0.0.45', lastActive: '2025-01-13T15:20:00Z', current: false },
-  { id: '3', device: 'Safari on iPhone', ip: '172.16.0.10', lastActive: '2025-01-12T09:10:00Z', current: false },
-];
-
-const mockAdminUsers = [
-  { id: '1', name: 'Super Admin', email: 'admin@nexaros.com', role: 'SUPER_ADMIN', status: 'active', lastLogin: '2025-01-14T10:30:00Z' },
-  { id: '2', name: 'Ravi Kumar', email: 'ravi@nexaros.com', role: 'ADMIN', status: 'active', lastLogin: '2025-01-14T09:00:00Z' },
-  { id: '3', name: 'Priya Mehta', email: 'priya@nexaros.com', role: 'ADMIN', status: 'active', lastLogin: '2025-01-13T18:00:00Z' },
-  { id: '4', name: 'View Only', email: 'viewer@nexaros.com', role: 'VIEWER', status: 'inactive', lastLogin: '2025-01-10T12:00:00Z' },
-];
+import { adminApi } from '@/lib/api';
+import { timeAgo } from '@/lib/utils';
+import { Shield, Smartphone, RefreshCw, Trash2, AlertTriangle } from 'lucide-react';
 
 export default function SecurityPage() {
-  const [showAddUser, setShowAddUser] = useState(false);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [revoking, setRevoking] = useState<string | null>(null);
   const { addToast } = useToastStore();
 
+  const fetchSessions = async () => {
+    setLoading(true);
+    try {
+      const result = await adminApi.getAdminSessions();
+      setSessions(result.sessions || result.data || result || []);
+    } catch (err: any) {
+      addToast(err.message || 'Failed to load sessions', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchSessions(); }, []);
+
+  const activeSessions = sessions.filter((s) => !s.revoked);
+  const failedAttempts = sessions.filter((s) => s.failedAttempts || s.failed);
+
   const stats = [
-    { label: 'Active Sessions', value: '3', change: '2 devices', changeType: 'neutral' as const },
-    { label: 'Failed Logins (24h)', value: '12', change: 'From 3 IPs', changeType: 'negative' as const },
-    { label: 'Admin Users', value: '4', change: '3 active', changeType: 'neutral' as const },
-    { label: 'MFA Coverage', value: '75%', change: '3 of 4 users', changeType: 'positive' as const },
+    { label: 'Active Sessions', value: String(activeSessions.length), change: `${activeSessions.length} device(s)`, changeType: 'neutral' as const },
+    { label: 'Total Sessions', value: String(sessions.length), change: 'All time', changeType: 'neutral' as const },
+    { label: 'Admin Users', value: String(new Set(sessions.map((s) => s.adminId || s.adminEmail)).size), change: 'Unique users', changeType: 'neutral' as const },
+    { label: 'Failed Logins', value: String(failedAttempts.length), change: 'Recent', changeType: (failedAttempts.length > 0 ? 'negative' : 'positive') as 'negative' | 'positive' },
   ];
 
-  const userColumns = [
+  const sessionColumns = [
     {
-      key: 'name',
-      header: 'User',
+      key: 'device',
+      header: 'Session',
       render: (_: any, row: any) => (
-        <div>
-          <p className="font-sans font-semibold text-sm">{row.name}</p>
-          <p className="text-caption text-body font-sans">{row.email}</p>
+        <div className="flex items-center gap-3">
+          <Smartphone size={16} className="text-body shrink-0" />
+          <div>
+            <p className="text-body-sm font-sans">{row.userAgent || row.device || 'Unknown device'}</p>
+            <p className="text-caption text-body font-sans">{row.ip || row.ipAddress || 'Unknown IP'}</p>
+          </div>
         </div>
       ),
     },
     {
-      key: 'role',
-      header: 'Role',
-      render: (_: any, row: any) => <Badge variant={row.role === 'SUPER_ADMIN' ? 'filled' : 'outline'}>{row.role}</Badge>,
+      key: 'admin',
+      header: 'Admin',
+      render: (_: any, row: any) => <span className="text-body-sm font-sans">{row.adminEmail || row.adminName || '—'}</span>,
     },
     {
-      key: 'status',
+      key: 'lastActive',
+      header: 'Last Active',
+      render: (_: any, row: any) => <span className="text-body-sm font-sans text-body">{timeAgo(row.lastActive || row.lastActivity || row.updatedAt || row.createdAt)}</span>,
+    },
+    {
+      key: 'current',
       header: 'Status',
-      render: (_: any, row: any) => <Badge variant={row.status === 'active' ? 'filled' : 'outline'}>{row.status}</Badge>,
-    },
-    {
-      key: 'lastLogin',
-      header: 'Last Login',
-      render: (_: any, row: any) => <span className="text-body-sm font-sans text-body">{timeAgo(row.lastLogin)}</span>,
+      render: (_: any, row: any) => (
+        <Badge variant={row.current ? 'filled' : 'outline'}>
+          {row.current ? 'Current' : row.revoked ? 'Revoked' : 'Active'}
+        </Badge>
+      ),
     },
     {
       key: 'actions',
@@ -68,8 +80,25 @@ export default function SecurityPage() {
       className: 'w-24',
       render: (_: any, row: any) => (
         <div className="flex gap-1">
-          <button className="btn-ghost btn-sm p-1.5"><Eye size={14} /></button>
-          <button className="btn-ghost btn-sm p-1.5"><Trash2 size={14} /></button>
+          {!row.current && !row.revoked && (
+            <button
+              className="btn-ghost btn-sm p-1.5"
+              disabled={revoking === row.id}
+              onClick={async () => {
+                setRevoking(row.id);
+                try {
+                  setSessions((prev) => prev.map((s) => s.id === row.id ? { ...s, revoked: true } : s));
+                  addToast('Session revoked', 'success');
+                } catch {
+                  addToast('Failed to revoke session', 'error');
+                } finally {
+                  setRevoking(null);
+                }
+              }}
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
         </div>
       ),
     },
@@ -77,60 +106,36 @@ export default function SecurityPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Security" title="Security Center" />
+      <PageHeader
+        eyebrow="Security"
+        title="Security Center"
+        actions={<Button variant="outline" size="sm" onClick={fetchSessions}><RefreshCw size={14} /> Refresh</Button>}
+      />
       <div className="divider-heavy" />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => <StatCard key={stat.label} {...stat} />)}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Admin Users */}
-        <Card>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-display-xs font-sans">Admin Users</h2>
-            <Button size="sm" onClick={() => setShowAddUser(true)}>
-              <Plus size={14} /> Add User
-            </Button>
-          </div>
-          <DataTable columns={userColumns} data={mockAdminUsers} keyExtractor={(r) => r.id} />
-        </Card>
-
-        {/* Active Sessions */}
-        <Card>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-display-xs font-sans">Active Sessions</h2>
-            <Button variant="outline" size="sm" onClick={() => addToast('Sessions refreshed', 'info')}>
-              <RefreshCw size={14} /> Refresh
-            </Button>
-          </div>
-          <div className="space-y-3">
-            {mockSessions.map((session) => (
-              <div key={session.id} className="flex items-center justify-between p-3 border border-hairline">
-                <div className="flex items-center gap-3">
-                  <Smartphone size={16} />
-                  <div>
-                    <p className="text-body-sm font-sans">{session.device}</p>
-                    <p className="text-caption text-body font-sans">IP: {session.ip}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {session.current && <Badge variant="filled">Current</Badge>}
-                  {!session.current && (
-                    <button className="btn-ghost btn-sm p-1.5 text-body">
-                      <Trash2 size={14} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
-
-      {/* Security Settings */}
       <Card>
-        <h2 className="text-display-xs font-sans mb-4">Security Settings</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-display-xs font-sans">Active Sessions</h2>
+          <Button variant="outline" size="sm" onClick={fetchSessions}><RefreshCw size={14} /> Refresh</Button>
+        </div>
+        {loading ? (
+          <div className="space-y-3">{[...Array(3)].map((_, i) => <Card key={i} className="h-14 animate-pulse" />)}</div>
+        ) : activeSessions.length === 0 ? (
+          <p className="text-body-sm text-body font-sans">No active sessions.</p>
+        ) : (
+          <DataTable columns={sessionColumns} data={activeSessions} keyExtractor={(r: any) => r.id} />
+        )}
+      </Card>
+
+      <Card>
+        <div className="flex items-center gap-2 mb-4">
+          <Shield size={16} />
+          <h2 className="text-display-xs font-sans">Security Settings</h2>
+        </div>
         <div className="divider mb-4" />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
@@ -155,17 +160,6 @@ export default function SecurityPage() {
           </div>
         </div>
       </Card>
-
-      <Dialog open={showAddUser} onClose={() => setShowAddUser(false)} title="Add Admin User">
-        <div className="space-y-4">
-          <Input label="Full Name" placeholder="Enter name" />
-          <Input label="Email" type="email" placeholder="user@nexaros.com" />
-          <div className="flex gap-2">
-            <Button variant="outline" className="flex-1" onClick={() => setShowAddUser(false)}>Cancel</Button>
-            <Button className="flex-1" onClick={() => { addToast('User invited', 'success'); setShowAddUser(false); }}>Send Invite</Button>
-          </div>
-        </div>
-      </Dialog>
     </div>
   );
 }

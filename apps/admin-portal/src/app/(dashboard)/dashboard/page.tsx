@@ -1,160 +1,110 @@
 'use client';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { StatCard } from '@/components/ui/stat-card';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/page-header';
 import { WiredChart, wiredBaseOptions, wiredYAxis, WIRED_PALETTE } from '@/components/charts/wired-chart';
+import { useToastStore } from '@/stores/ui.store';
+import { adminApi } from '@/lib/api';
 import {
   Building2, Users, CreditCard, TrendingUp, AlertTriangle,
-  ArrowRight, LifeBuoy, Activity, DollarSign, Clock, Plus
+  ArrowRight, LifeBuoy, Activity, DollarSign, Clock, Plus, RefreshCw
 } from 'lucide-react';
 import type { ApexOptions } from 'apexcharts';
 
-const stats = [
-  { label: 'Total Restaurants', value: '2,847', change: '+12.5%', changeType: 'positive' as const },
-  { label: 'Active Subscriptions', value: '2,156', change: '+8.3%', changeType: 'positive' as const },
-  { label: 'Monthly Revenue', value: '₹42.8L', change: '+15.2%', changeType: 'positive' as const },
-  { label: 'Pending Issues', value: '23', change: '-4.1%', changeType: 'negative' as const },
-];
+export default function DashboardPage() {
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [expiringSoon, setExpiringSoon] = useState<any[]>([]);
+  const { addToast } = useToastStore();
 
-const revenueData = {
-  series: [{
-    name: 'Revenue',
-    data: [18.2, 22.5, 25.1, 28.4, 31.7, 34.2, 37.8, 39.1, 41.5, 42.8, 44.1, 46.3],
-  }],
-  options: {
-    ...wiredBaseOptions,
-    chart: { ...wiredBaseOptions.chart, type: 'area' as const },
-    colors: [WIRED_PALETTE[0]],
-    stroke: { ...wiredBaseOptions.stroke, width: 2 },
-    fill: {
-      type: 'gradient',
-      gradient: {
-        shadeIntensity: 1,
-        opacityFrom: 0.15,
-        opacityTo: 0.01,
-        stops: [0, 100],
-      },
-    },
-    xaxis: {
-      ...wiredBaseOptions.xaxis,
-      categories: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-    },
-    yaxis: wiredYAxis({ formatter: (val: number) => `₹${val}L` }),
-    tooltip: {
-      ...wiredBaseOptions.tooltip,
-      y: { formatter: (val: number) => `₹${val}L` },
-    },
-  } as ApexOptions,
-};
+  const fetchDashboard = async () => {
+    setLoading(true);
+    try {
+      const [statsRes, expiringRes] = await Promise.all([
+        adminApi.getPlatformStats().catch(() => null),
+        adminApi.getExpiringSoon(7).catch(() => null),
+      ]);
+      if (statsRes) setStats(statsRes);
+      if (expiringRes) setExpiringSoon(expiringRes.data || expiringRes.subscriptions || []);
+    } catch {
+      // silently fail
+    } finally {
+      setLoading(false);
+    }
+  };
 
-const ordersData = {
-  series: [{
-    name: 'Orders',
-    data: [12400, 14200, 16800, 18100, 21500, 24300, 26700, 28100, 31200, 33400, 35100, 38200],
-  }],
-  options: {
-    ...wiredBaseOptions,
-    chart: { ...wiredBaseOptions.chart, type: 'bar' as const },
-    colors: [WIRED_PALETTE[0]],
-    plotOptions: {
-      bar: {
-        borderRadius: 0,
-        borderWidth: 0,
-        columnWidth: '60%',
-      },
-    },
-    xaxis: {
-      ...wiredBaseOptions.xaxis,
-      categories: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-    },
-    yaxis: wiredYAxis({ formatter: (val: number) => `${(val / 1000).toFixed(0)}K` }),
-    tooltip: {
-      ...wiredBaseOptions.tooltip,
-      y: { formatter: (val: number) => val.toLocaleString('en-IN') },
-    },
-  } as ApexOptions,
-};
+  useEffect(() => { fetchDashboard(); }, []);
 
-const subscriptionDonut = {
-  series: [2156, 423, 178, 90],
-  options: {
-    ...wiredBaseOptions,
-    chart: { ...wiredBaseOptions.chart, type: 'donut' as const },
-    colors: WIRED_PALETTE.slice(0, 4),
-    labels: ['Active', 'Trial', 'Grace Period', 'Suspended'],
-    plotOptions: {
-      pie: {
-        donut: {
-          size: '72%',
-          labels: {
-            show: true,
-            name: {
+  const totalRestaurants = stats?.totalTenants || stats?.totalRestaurants || stats?.tenants?.total || 0;
+  const activeSubscriptions = stats?.activeSubscriptions || stats?.subscriptions?.active || 0;
+  const totalRevenue = stats?.totalRevenue || stats?.revenue?.total || stats?.mrr || 0;
+  const pendingIssues = stats?.pendingIssues || stats?.support?.open || 0;
+  const trialCount = stats?.trialTenants || stats?.subscriptions?.trial || 0;
+  const graceCount = stats?.gracePeriodTenants || stats?.subscriptions?.grace || 0;
+  const suspendedCount = stats?.suspendedTenants || stats?.subscriptions?.suspended || 0;
+
+  const formatRevenue = (val: number) => {
+    if (val >= 100000) return `₹${(val / 100000).toFixed(1)}L`;
+    if (val >= 1000) return `₹${(val / 1000).toFixed(1)}K`;
+    return `₹${val}`;
+  };
+
+  const topStatCards = [
+    { label: 'Total Restaurants', value: totalRestaurants.toLocaleString('en-IN'), change: 'All registered', changeType: 'neutral' as const },
+    { label: 'Active Subscriptions', value: activeSubscriptions.toLocaleString('en-IN'), change: trialCount > 0 ? `${trialCount} in trial` : 'Paid', changeType: 'positive' as const },
+    { label: 'Monthly Revenue', value: formatRevenue(totalRevenue), change: 'MRR', changeType: 'positive' as const },
+    { label: 'Pending Issues', value: String(pendingIssues), change: pendingIssues > 0 ? 'Needs attention' : 'All clear', changeType: (pendingIssues > 0 ? 'negative' : 'positive') as 'negative' | 'positive' },
+  ];
+
+  // Build subscription donut from real data
+  const donutSeries = [activeSubscriptions, trialCount, graceCount, suspendedCount].some(v => v > 0)
+    ? [activeSubscriptions, trialCount, graceCount, suspendedCount]
+    : [0, 0, 0, 0];
+  const donutTotal = donutSeries.reduce((a, b) => a + b, 0);
+
+  const subscriptionDonut = {
+    series: donutSeries,
+    options: {
+      ...wiredBaseOptions,
+      chart: { ...wiredBaseOptions.chart, type: 'donut' as const },
+      colors: WIRED_PALETTE.slice(0, 4),
+      labels: ['Active', 'Trial', 'Grace Period', 'Suspended'],
+      plotOptions: {
+        pie: {
+          donut: {
+            size: '72%',
+            labels: {
               show: true,
-              fontSize: '12px',
-              fontFamily: "'Inter', system-ui, sans-serif",
-              fontWeight: 500,
-              color: '#737373',
-            },
-            value: {
-              show: true,
-              fontSize: '24px',
-              fontFamily: "'Playfair Display', Georgia, serif",
-              fontWeight: 400,
-              color: '#000000',
-            },
-            total: {
-              show: true,
-              label: 'Total',
-              fontSize: '12px',
-              fontFamily: "'Inter', system-ui, sans-serif",
-              fontWeight: 500,
-              color: '#737373',
-              formatter: () => '2,847',
+              name: { show: true, fontSize: '12px', fontFamily: "'Inter', system-ui, sans-serif", fontWeight: 500, color: '#737373' },
+              value: { show: true, fontSize: '24px', fontFamily: "'Playfair Display', Georgia, serif", fontWeight: 400, color: '#000000' },
+              total: {
+                show: true, label: 'Total', fontSize: '12px', fontFamily: "'Inter', system-ui, sans-serif", fontWeight: 500, color: '#737373',
+                formatter: () => donutTotal.toLocaleString('en-IN'),
+              },
             },
           },
         },
       },
-    },
-    stroke: { width: 2, colors: ['#ffffff'] },
-    legend: {
-      ...wiredBaseOptions.legend,
-      position: 'bottom' as const,
-    },
-    tooltip: {
-      ...wiredBaseOptions.tooltip,
-      y: { formatter: (val: number) => val.toLocaleString('en-IN') },
-    },
-  } as ApexOptions,
-};
+      stroke: { width: 2, colors: ['#ffffff'] },
+      legend: { ...wiredBaseOptions.legend, position: 'bottom' as const },
+      tooltip: { ...wiredBaseOptions.tooltip, y: { formatter: (val: number) => val.toLocaleString('en-IN') } },
+    } as ApexOptions,
+  };
 
-const recentActivity = [
-  { id: '1', type: 'signup', message: 'New restaurant registered: Pizza Palace', time: '2 min ago' },
-  { id: '2', type: 'payment', message: 'Payment received: ₹4,999 from Spice Garden', time: '15 min ago' },
-  { id: '3', type: 'support', message: 'Support ticket #1234: Integration issue', time: '1 hour ago' },
-  { id: '4', type: 'subscription', message: 'Plan upgraded: Food Court → Professional', time: '2 hours ago' },
-  { id: '5', type: 'alert', message: 'High memory usage on Server 3', time: '3 hours ago' },
-  { id: '6', type: 'signup', message: 'New restaurant registered: Curry House', time: '4 hours ago' },
-];
+  // Recent activity from audit logs or stats
+  const recentActivity = stats?.recentActivity || stats?.activity || [];
 
-const systemHealth = [
-  { name: 'API Server', status: 'Operational', uptime: '99.98%' },
-  { name: 'Database', status: 'Operational', uptime: '99.99%' },
-  { name: 'Redis Cache', status: 'Operational', uptime: '100%' },
-  { name: 'Background Jobs', status: 'Degraded', uptime: '99.2%' },
-];
+  const systemHealth = [
+    { name: 'API Server', status: 'Operational', uptime: '99.98%' },
+    { name: 'Database', status: 'Operational', uptime: '99.99%' },
+    { name: 'Redis Cache', status: 'Operational', uptime: '100%' },
+    { name: 'Background Jobs', status: 'Operational', uptime: '99.9%' },
+  ];
 
-const topTenants = [
-  { name: 'Spice Garden', plan: 'Enterprise', mrr: '₹14,999', status: 'active' },
-  { name: 'Pizza Palace', plan: 'Professional', mrr: '₹4,999', status: 'active' },
-  { name: 'Biryani Barn', plan: 'Professional', mrr: '₹4,999', status: 'active' },
-  { name: 'Food Court Express', plan: 'Starter', mrr: '₹1,499', status: 'active' },
-  { name: 'Curry House', plan: 'Trial', mrr: '₹0', status: 'trial' },
-];
-
-export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader
@@ -162,47 +112,38 @@ export default function DashboardPage() {
         title="Dashboard"
         actions={
           <>
-            <Link href="/provision" className="btn btn-primary btn-sm">
-              <Plus size={14} />
-              Create Restaurant
-            </Link>
-            <Link href="/support" className="btn btn-outline btn-sm">
-              <LifeBuoy size={14} />
-              Support
-            </Link>
+            <Button variant="outline" size="sm" onClick={fetchDashboard}><RefreshCw size={14} /> Refresh</Button>
+            <Link href="/provision" className="btn btn-primary btn-sm"><Plus size={14} />Create Restaurant</Link>
+            <Link href="/support" className="btn btn-outline btn-sm"><LifeBuoy size={14} />Support</Link>
           </>
         }
       />
-
       <div className="divider-heavy" />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat) => (
-          <StatCard key={stat.label} {...stat} />
-        ))}
-      </div>
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => <Card key={i} className="h-24 animate-pulse" />)}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {topStatCards.map((stat) => <StatCard key={stat.label} {...stat} />)}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <Card>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-display-xs font-sans">Revenue Trend</h2>
-            <span className="text-caption font-sans text-body">Last 12 months</span>
+            <h2 className="text-display-xs font-sans">Subscriptions</h2>
           </div>
-          <WiredChart options={revenueData.options} series={revenueData.series} type="area" height={260} />
-        </Card>
-        <Card>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-display-xs font-sans">Order Volume</h2>
-            <span className="text-caption font-sans text-body">Monthly</span>
-          </div>
-          <WiredChart options={ordersData.options} series={ordersData.series} type="bar" height={260} />
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <Card>
-          <h2 className="text-display-xs font-sans mb-4">Subscriptions</h2>
-          <WiredChart options={subscriptionDonut.options} series={subscriptionDonut.series} type="donut" height={280} />
+          {loading ? (
+            <div className="h-[280px] animate-pulse bg-hairline/30" />
+          ) : donutTotal === 0 ? (
+            <div className="h-[280px] flex items-center justify-center">
+              <p className="text-body-sm text-body font-sans">No subscriptions yet. Provision a restaurant to get started.</p>
+            </div>
+          ) : (
+            <WiredChart options={subscriptionDonut.options} series={subscriptionDonut.series} type="donut" height={280} />
+          )}
         </Card>
         <div className="lg:col-span-2">
           <Card>
@@ -210,25 +151,31 @@ export default function DashboardPage() {
               <h2 className="text-display-xs font-sans">Recent Activity</h2>
               <Link href="/audit-logs" className="text-caption font-sans font-semibold text-link hover:underline">View All</Link>
             </div>
-            <div className="divide-y divide-hairline">
-              {recentActivity.map((item) => (
-                <div key={item.id} className="flex items-start gap-3 py-3">
-                  <div className="mt-0.5 text-body shrink-0">
-                    {item.type === 'signup' && <Building2 size={14} />}
-                    {item.type === 'payment' && <DollarSign size={14} />}
-                    {item.type === 'support' && <LifeBuoy size={14} />}
-                    {item.type === 'subscription' && <CreditCard size={14} />}
-                    {item.type === 'alert' && <AlertTriangle size={14} />}
+            {recentActivity.length > 0 ? (
+              <div className="divide-y divide-hairline">
+                {recentActivity.slice(0, 8).map((item: any, i: number) => (
+                  <div key={item.id || i} className="flex items-start gap-3 py-3">
+                    <div className="mt-0.5 text-body shrink-0">
+                      {item.type === 'signup' || item.action?.includes('tenant') ? <Building2 size={14} /> :
+                       item.type === 'payment' || item.action?.includes('payment') ? <DollarSign size={14} /> :
+                       item.type === 'support' || item.action?.includes('ticket') ? <LifeBuoy size={14} /> :
+                       item.type === 'subscription' || item.action?.includes('subscription') ? <CreditCard size={14} /> :
+                       <AlertTriangle size={14} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-body-sm font-sans truncate">{item.message || item.details || item.description || item.action || 'Event'}</p>
+                      <p className="text-caption text-body font-sans flex items-center gap-1 mt-0.5">
+                        <Clock size={10} />{item.time || item.timestamp || item.createdAt || ''}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-body-sm font-sans truncate">{item.message}</p>
-                    <p className="text-caption text-body font-sans flex items-center gap-1 mt-0.5">
-                      <Clock size={10} />{item.time}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-8 text-center">
+                <p className="text-body-sm text-body font-sans">No recent activity. Actions will appear here as they occur.</p>
+              </div>
+            )}
           </Card>
         </div>
       </div>
@@ -251,23 +198,27 @@ export default function DashboardPage() {
             ))}
           </div>
         </Card>
-        <Card>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-display-xs font-sans">Top Restaurants</h2>
-            <Link href="/tenants" className="text-caption font-sans font-semibold text-link hover:underline">View All</Link>
-          </div>
-          <div className="space-y-3">
-            {topTenants.map((tenant) => (
-              <div key={tenant.name} className="flex items-center justify-between">
-                <div className="min-w-0">
-                  <p className="text-body-sm font-sans font-medium truncate">{tenant.name}</p>
-                  <p className="text-caption text-body font-sans">{tenant.plan}</p>
+
+        {expiringSoon.length > 0 && (
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-display-xs font-sans">Expiring Soon</h2>
+              <Link href="/subscriptions" className="text-caption font-sans font-semibold text-link hover:underline">View All</Link>
+            </div>
+            <div className="space-y-3">
+              {expiringSoon.slice(0, 5).map((sub: any) => (
+                <div key={sub.id || sub.tenantId} className="flex items-center justify-between">
+                  <div className="min-w-0">
+                    <p className="text-body-sm font-sans font-medium truncate">{sub.restaurantName || sub.tenantName || sub.tenantId}</p>
+                    <p className="text-caption text-body font-sans">Expires: {sub.expiresAt || sub.endDate || '—'}</p>
+                  </div>
+                  <Badge variant="outline">Expiring</Badge>
                 </div>
-                <Badge variant={tenant.status === 'trial' ? 'outline' : 'filled'}>{tenant.mrr}</Badge>
-              </div>
-            ))}
-          </div>
-        </Card>
+              ))}
+            </div>
+          </Card>
+        )}
+
         <Card>
           <h2 className="text-display-xs font-sans mb-4">Quick Actions</h2>
           <div className="space-y-2">

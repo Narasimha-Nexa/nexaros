@@ -94,4 +94,44 @@ export class AdminController {
   async getAuditLogs(@Query('page') page?: number, @Query('limit') limit?: number) {
     return this.adminService.getAuditLogs(page || 1, limit || 50);
   }
+
+  @Get('notifications')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get admin notifications' })
+  async getNotifications(@Query('limit') limit?: string, @Query('unreadOnly') unreadOnly?: string) {
+    return this.adminService.getNotifications(limit ? parseInt(limit) : 50, unreadOnly === 'true');
+  }
+
+  @Get('notifications/unread-count')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get unread notification count' })
+  async getUnreadCount() {
+    return this.adminService.getUnreadNotificationCount();
+  }
+
+  @Post('notifications/:id/read')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Mark notification as read' })
+  async markRead(@Query('id') id?: string) {
+    return this.adminService.markNotificationRead(id!);
+  }
+
+  @Post('notifications/read-all')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Mark all notifications as read' })
+  async markAllRead() {
+    return this.adminService.markAllNotificationsRead();
+  }
+
+  @Get('database/stats')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get database stats' })
+  async getDatabaseStats() {
+    return this.adminService.getDatabaseStats();
+  }
 }

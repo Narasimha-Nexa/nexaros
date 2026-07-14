@@ -100,6 +100,108 @@ export class AdminService {
     return { logs, total, page, pages: Math.ceil(total / limit) };
   }
 
+  async getNotifications(limit = 50, unreadOnly = false) {
+    const where: any = {};
+    if (unreadOnly) where.readAt = null;
+
+    const [notifications, total, unreadCount] = await Promise.all([
+      this.prisma.adminAuditLog.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        where,
+        select: {
+          id: true,
+          action: true,
+          entity: true,
+          entityId: true,
+          newData: true,
+          ipAddress: true,
+          createdAt: true,
+          readAt: true,
+          adminUser: { select: { name: true, email: true } },
+        },
+      }),
+      this.prisma.adminAuditLog.count({ where }),
+      this.prisma.adminAuditLog.count({ where: { readAt: null } }),
+    ]);
+
+    return { notifications, total, unreadCount };
+  }
+
+  async getUnreadNotificationCount() {
+    const count = await this.prisma.adminAuditLog.count({ where: { readAt: null } });
+    return { unreadCount: count };
+  }
+
+  async markNotificationRead(id: string) {
+    await this.prisma.adminAuditLog.update({
+      where: { id },
+      data: { readAt: new Date() },
+    });
+    return { read: true };
+  }
+
+  async markAllNotificationsRead() {
+    await this.prisma.adminAuditLog.updateMany({
+      where: { readAt: null },
+      data: { readAt: new Date() },
+    });
+    return { read: true };
+  }
+
+  async getDatabaseStats() {
+    const tableNames = [
+      'tenants', 'branches', 'users', 'roles', 'permissions', 'staff',
+      'categories', 'menu_items', 'restaurant_tables', 'orders', 'order_items',
+      'order_status_history', 'payments', 'invoices', 'inventory_items',
+      'stock_movements', 'suppliers', 'purchases', 'purchase_items',
+      'reservations', 'shifts', 'staff_shifts', 'attendance',
+      'audit_logs', 'platform_plans', 'plan_entitlements', 'subscriptions',
+      'feature_flags', 'tenant_feature_flags', 'coupons', 'coupon_usage',
+      'payment_promises', 'subscription_payments', 'subscription_invoices',
+      'admin_users', 'admin_sessions', 'admin_audit_logs', 'demo_requests',
+      'support_tickets', 'ticket_messages', 'platform_settings',
+    ];
+
+    const counts = await Promise.all(
+      tableNames.map(async (table) => {
+        try {
+          const result = await this.prisma.$queryRawUnsafe(`SELECT COUNT(*)::int as count FROM "${table}"`);
+          return { name: table, rows: (result as any)[0]?.count || 0 };
+        } catch {
+          return { name: table, rows: 0 };
+        }
+      }),
+    );
+
+    const totalRows = counts.reduce((sum, t) => sum + t.rows, 0);
+    const totalTables = tableNames.length;
+
+    let dbSize = '0 MB';
+    try {
+      const sizeResult = await this.prisma.$queryRawUnsafe(
+        `SELECT pg_size_pretty(pg_database_size(current_database())) as size`,
+      );
+      dbSize = (sizeResult as any)[0]?.size || '0 MB';
+    } catch {}
+
+    let activeConnections = 0;
+    try {
+      const connResult = await this.prisma.$queryRawUnsafe(
+        `SELECT COUNT(*)::int as count FROM pg_stat_activity WHERE state = 'active'`,
+      );
+      activeConnections = (connResult as any)[0]?.count || 0;
+    } catch {}
+
+    return {
+      tables: counts.sort((a, b) => b.rows - a.rows),
+      totalTables,
+      totalRows,
+      dbSize,
+      activeConnections,
+    };
+  }
+
   async logAction(adminUserId: string, action: string, entity: string, entityId?: string, oldData?: any, newData?: any, ip?: string) {
     return this.prisma.adminAuditLog.create({
       data: { adminUserId, action, entity, entityId, oldData, newData, ipAddress: ip },

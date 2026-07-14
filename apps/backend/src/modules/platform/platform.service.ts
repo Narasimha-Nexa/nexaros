@@ -44,6 +44,10 @@ export class PlatformService {
       totalSubscriptions,
       activeSubscriptions,
       trialSubscriptions,
+      graceSubscriptions,
+      suspendedSubscriptions,
+      pendingSupportTickets,
+      recentAuditLogs,
     ] = await Promise.all([
       this.prisma.tenant.count(),
       this.prisma.tenant.count({ where: { isActive: true } }),
@@ -53,18 +57,55 @@ export class PlatformService {
       this.prisma.subscription.count(),
       this.prisma.subscription.count({ where: { status: 'ACTIVE' } }),
       this.prisma.subscription.count({ where: { status: 'TRIAL' } }),
+      this.prisma.subscription.count({ where: { status: 'GRACE_PERIOD' } }),
+      this.prisma.subscription.count({ where: { status: { in: ['SUSPENDED', 'RESTRICTED'] } } }),
+      this.prisma.supportTicket.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS'] } } }),
+      this.prisma.adminAuditLog.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        select: {
+          id: true,
+          action: true,
+          entity: true,
+          entityId: true,
+          newData: true,
+          createdAt: true,
+          adminUser: { select: { name: true, email: true } },
+        },
+      }),
     ]);
+
+    let totalRevenue = 0;
+    try {
+      const revenueResult = await this.prisma.$queryRawUnsafe(
+        `SELECT COALESCE(SUM(amount), 0)::int as total FROM subscription_payments WHERE status = 'COMPLETED'`,
+      );
+      totalRevenue = (revenueResult as any)[0]?.total || 0;
+    } catch {}
 
     return {
       tenants: { total: totalTenants, active: activeTenants },
       users: totalUsers,
       menuItems: totalMenuItems,
       orders: totalOrders,
+      totalRevenue,
+      pendingIssues: pendingSupportTickets,
       subscriptions: {
         total: totalSubscriptions,
         active: activeSubscriptions,
         trial: trialSubscriptions,
+        grace: graceSubscriptions,
+        suspended: suspendedSubscriptions,
       },
+      recentActivity: recentAuditLogs.map((log: any) => ({
+        id: log.id,
+        action: log.action,
+        entity: log.entity,
+        entityId: log.entityId,
+        details: log.newData,
+        timestamp: log.createdAt,
+        actor: log.adminUser?.name || log.adminUser?.email || 'System',
+      })),
     };
   }
 }
