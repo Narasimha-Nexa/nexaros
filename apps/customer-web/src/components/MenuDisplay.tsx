@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import type { MenuCategory, MenuItem } from '@/lib/api';
+import Image from 'next/image';
+import type { MenuCategory, MenuItem } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 const API_HOST = API_BASE_URL.replace(/\/api\/?$/, '');
@@ -18,7 +19,7 @@ export default function MenuDisplay({ categories, tenantName, currency, onAddToC
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [expandedDescriptions, setExpandedDescriptions] = useState<Record<string, boolean>>({});
 
-  const activeItems = categories.find((c) => c.id === activeCategory)?.items || [];
+  const activeItems = categories.find((c) => c.id === activeCategory)?.items ?? [];
 
   const handleQtyChange = (itemId: string, delta: number) => {
     setQuantities((prev) => {
@@ -52,7 +53,7 @@ export default function MenuDisplay({ categories, tenantName, currency, onAddToC
               }`}
             >
               {cat.name}
-              <span className="ml-1.5 text-xs opacity-70">({cat.items.length})</span>
+              <span className="ml-1.5 text-xs opacity-70">({cat.items?.length || 0})</span>
             </button>
           ))}
         </div>
@@ -71,13 +72,13 @@ export default function MenuDisplay({ categories, tenantName, currency, onAddToC
               className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex gap-4 transition-all hover:shadow-md"
             >
               {/* Item image */}
-              {item.image && (
-                <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-gray-50">
-                  <img
+              {item.image && (                  <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-gray-50 relative">
+                  <Image
                     src={item.image.startsWith('http') ? item.image : `${API_HOST}${item.image}`}
                     alt={item.name}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
+                    fill
+                    className="object-cover"
+                    sizes="80px"
                   />
                 </div>
               )}

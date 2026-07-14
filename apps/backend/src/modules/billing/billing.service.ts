@@ -117,6 +117,9 @@ export class BillingService {
     const plan = await this.prisma.platformPlan.findUnique({ where: { id: planId } });
     if (!plan) throw new NotFoundException('Plan not found');
 
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
     let amount = Number(plan.price);
     let discount = 0;
 
@@ -137,7 +140,8 @@ export class BillingService {
       amount: finalAmount,
       currency: 'INR',
       planSlug: plan.slug,
-      customerEmail: '',
+      customerEmail: tenant.email || '',
+      customerPhone: tenant.phone || undefined,
     });
 
     return {
@@ -145,8 +149,91 @@ export class BillingService {
       amount: finalAmount,
       originalAmount: amount,
       discount,
+      currency: 'INR',
+      planId: plan.id,
       planSlug: plan.slug,
+      tenantId,
     };
+  }
+
+  async verifyAndActivatePayment(
+    razorpayOrderId: string,
+    razorpayPaymentId: string,
+    razorpaySignature: string,
+    tenantId: string,
+    planId: string,
+    couponCode?: string,
+  ) {
+    const result = await this.paymentGateway.verifyPayment(
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature,
+    );
+
+    if (!result.success) {
+      throw new BadRequestException(`Payment verification failed: ${result.error}`);
+    }
+
+    const plan = await this.prisma.platformPlan.findUnique({ where: { id: planId } });
+    if (!plan) throw new NotFoundException('Plan not found');
+
+    const subscription = await this.prisma.subscription.findFirst({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const now = new Date();
+    const periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    if (subscription) {
+      await this.prisma.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          status: 'ACTIVE',
+          planId: plan.id,
+          currentPeriodStart: now,
+          currentPeriodEnd: periodEnd,
+          nextBillingDate: periodEnd,
+          lastPaymentAt: now,
+          trialEndsAt: subscription.trialEndsAt || now,
+          graceStartedAt: null,
+          hasPromise: false,
+        },
+      });
+
+      await this.prisma.subscriptionPayment.create({
+        data: {
+          subscriptionId: subscription.id,
+          amount: Number(plan.price),
+          method: 'ONLINE',
+          reference: razorpayPaymentId,
+          status: 'COMPLETED',
+        },
+      });
+    }
+
+    this.logger.log(`Payment verified & activated: ${razorpayPaymentId} for tenant ${tenantId}`);
+    return { success: true, subscriptionStatus: 'ACTIVE' };
+  }
+
+  async handleWebhook(signature: string, payload: any) {
+    this.logger.log(`Razorpay webhook received: ${payload?.event || 'unknown'}`);
+
+    if (payload?.event === 'payment.captured') {
+      const payment = payload.payload?.payment?.entity;
+      if (payment?.order_id) {
+        this.logger.log(`Webhook: Payment captured — ${payment.id} for order ${payment.order_id}`);
+      }
+    }
+
+    if (payload?.event === 'payment.failed') {
+      const payment = payload.payload?.payment?.entity;
+      if (payment) {
+        this.logger.warn(`Webhook: Payment failed — ${payment.id}`);
+      }
+    }
+
+    return { ok: true };
   }
 
   async createPaymentPromise(tenantId: string, reason: string, expectedDate: string) {

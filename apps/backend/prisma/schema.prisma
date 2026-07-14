@@ -45,6 +45,7 @@ model Tenant {
   couponUsages  CouponUsage[]
   paymentPromises PaymentPromise[]
   supportTickets  SupportTicket[]
+  websiteConfig  TenantWebsiteConfig?
 
   @@map("tenants")
 }

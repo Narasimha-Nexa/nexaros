@@ -15,6 +15,6 @@ export interface SubscriptionPaymentData {
 
 export abstract class PaymentGateway {
   abstract createOrder(data: SubscriptionPaymentData): Promise<PaymentResult>;
-  abstract verifyPayment(transactionId: string, signature: string): Promise<PaymentResult>;
+  abstract verifyPayment(orderId: string, paymentId: string, signature: string): Promise<PaymentResult>;
   abstract refund(transactionId: string, amount: number): Promise<PaymentResult>;
 }

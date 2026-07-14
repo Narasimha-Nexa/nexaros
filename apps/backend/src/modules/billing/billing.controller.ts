@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards, Headers, HttpCode } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { BillingService } from './billing.service';
 import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
@@ -30,6 +30,38 @@ export class BillingController {
     @Body() body: { tenantId: string; planId: string; couponCode?: string },
   ) {
     return this.billingService.createCheckout(body.tenantId, body.planId, body.couponCode);
+  }
+
+  @Post('verify')
+  @ApiOperation({ summary: 'Verify Razorpay payment' })
+  async verifyPayment(
+    @Body() body: {
+      razorpayOrderId: string;
+      razorpayPaymentId: string;
+      razorpaySignature: string;
+      tenantId: string;
+      planId: string;
+      couponCode?: string;
+    },
+  ) {
+    return this.billingService.verifyAndActivatePayment(
+      body.razorpayOrderId,
+      body.razorpayPaymentId,
+      body.razorpaySignature,
+      body.tenantId,
+      body.planId,
+      body.couponCode,
+    );
+  }
+
+  @Post('webhook')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Razorpay webhook handler' })
+  async handleWebhook(
+    @Headers('x-razorpay-signature') signature: string,
+    @Body() body: any,
+  ) {
+    return this.billingService.handleWebhook(signature, body);
   }
 
   @Post('payment-promise')
