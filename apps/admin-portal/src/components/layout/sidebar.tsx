@@ -28,9 +28,12 @@ const navSections: { title?: string; items: NavItem[] }[] = [
     items: [
       { label: 'Create Restaurant', href: '/provision', icon: <PlusCircle size={18} /> },
       { label: 'Tenants', href: '/tenants', icon: <Building2 size={18} /> },
+      { label: 'Staff', href: '/staff', icon: <Users size={18} /> },
       { label: 'Subscriptions', href: '/subscriptions', icon: <CreditCard size={18} /> },
       { label: 'Plans', href: '/plans', icon: <Tag size={18} /> },
+      { label: 'Features', href: '/features', icon: <Webhook size={18} /> },
       { label: 'Coupons', href: '/coupons', icon: <Tag size={18} /> },
+      { label: 'Reports', href: '/reports', icon: <BarChart3 size={18} /> },
       { label: 'Demo Requests', href: '/demo-requests', icon: <MessageSquare size={18} /> },
     ],
   },
