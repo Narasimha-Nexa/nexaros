@@ -47,6 +47,9 @@ dependencies:
   # Audio
   audioplayers: ^6.1.0
 
+  # Payment
+  razorpay_flutter: ^1.4.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

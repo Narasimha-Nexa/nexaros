@@ -13,7 +13,7 @@ import { PageHeader } from '@/components/layout/page-header';
 import { useToastStore } from '@/stores/ui.store';
 import { adminApi } from '@/lib/api';
 import { formatDate, formatCurrency } from '@/lib/utils';
-import { CreditCard, RefreshCw, ArrowUpDown, Eye } from 'lucide-react';
+import { CreditCard, RefreshCw, ArrowUpDown, Eye, CheckCircle, Clock, Ban } from 'lucide-react';
 import type { Subscription } from '@/types';
 
 export default function SubscriptionsPage() {
@@ -24,7 +24,54 @@ export default function SubscriptionsPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [selected, setSelected] = useState<any>(null);
+  const [transitioning, setTransitioning] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentRef, setPaymentRef] = useState('');
   const { addToast } = useToastStore();
+
+  const handleTransition = async (tenantId: string, status: string) => {
+    setTransitioning(true);
+    try {
+      await adminApi.request('/billing/transition', {
+        method: 'POST',
+        body: JSON.stringify({ tenantId, status, reason: `Admin manual transition to ${status}` }),
+      });
+      addToast(`Subscription transitioned to ${status}`, 'success');
+      fetchSubscriptions();
+      setSelected(null);
+    } catch (err: any) {
+      addToast(err.message || 'Failed to transition', 'error');
+    }
+    setTransitioning(false);
+  };
+
+  const handleRecordPayment = async (tenantId: string) => {
+    if (!paymentAmount || parseFloat(paymentAmount) <= 0) {
+      addToast('Enter a valid amount', 'error');
+      return;
+    }
+    setTransitioning(true);
+    try {
+      await adminApi.request('/billing/transition', {
+        method: 'POST',
+        body: JSON.stringify({
+          tenantId,
+          status: 'ACTIVE',
+          reason: `Admin recorded manual payment of ₹${paymentAmount}`,
+          paymentRef: paymentRef || undefined,
+          amount: parseFloat(paymentAmount),
+        }),
+      });
+      addToast(`Payment of ₹${paymentAmount} recorded and subscription activated`, 'success');
+      setPaymentAmount('');
+      setPaymentRef('');
+      fetchSubscriptions();
+      setSelected(null);
+    } catch (err: any) {
+      addToast(err.message || 'Failed to record payment', 'error');
+    }
+    setTransitioning(false);
+  };
 
   const fetchSubscriptions = async () => {
     setLoading(true);
@@ -146,7 +193,7 @@ export default function SubscriptionsPage() {
         </>
       )}
 
-      <Dialog open={!!selected} onClose={() => setSelected(null)} title="Subscription Details" size="lg">
+      <Dialog open={!!selected} onClose={() => { setSelected(null); setPaymentAmount(''); setPaymentRef(''); }} title="Subscription Details" size="lg">
         {selected && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -157,6 +204,41 @@ export default function SubscriptionsPage() {
               <div><p className="label">Start Date</p><p className="text-body-sm font-sans">{selected.startDate ? formatDate(selected.startDate) : '—'}</p></div>
               <div><p className="label">End Date</p><p className="text-body-sm font-sans">{selected.endDate ? formatDate(selected.endDate) : '—'}</p></div>
             </div>
+
+            {/* Quick Actions */}
+            <div className="border-t border-hairline pt-4">
+              <p className="label mb-2">Quick Actions</p>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={() => handleTransition(selected.tenantId || selected.tenant?.id, 'ACTIVE')} disabled={transitioning || selected.status === 'ACTIVE'}>
+                  <CheckCircle size={14} /> Activate
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => handleTransition(selected.tenantId || selected.tenant?.id, 'PAYMENT_PENDING')} disabled={transitioning || selected.status === 'PAYMENT_PENDING'}>
+                  <Clock size={14} /> Mark Pending
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => handleTransition(selected.tenantId || selected.tenant?.id, 'SUSPENDED')} disabled={transitioning || selected.status === 'SUSPENDED'}>
+                  <Ban size={14} /> Suspend
+                </Button>
+              </div>
+            </div>
+
+            {/* Manual Payment Recording */}
+            <div className="border-t border-hairline pt-4">
+              <p className="label mb-2">Record Manual Payment</p>
+              <p className="text-xs text-body mb-3">For cash, cheque, bank transfer, or UPI payments received outside Razorpay</p>
+              <div className="grid grid-cols-2 gap-3">
+                <Input type="number" placeholder="Amount (₹)" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} className="text-sm" />
+                <Input type="text" placeholder="Reference / Transaction ID" value={paymentRef} onChange={(e) => setPaymentRef(e.target.value)} className="text-sm" />
+              </div>
+              <Button
+                size="sm"
+                onClick={() => handleRecordPayment(selected.tenantId || selected.tenant?.id)}
+                disabled={transitioning || !paymentAmount}
+                className="mt-3"
+              >
+                <CreditCard size={14} /> Record Payment & Activate
+              </Button>
+            </div>
+
             <DialogFooter>
               <Button variant="outline" onClick={() => setSelected(null)}>Close</Button>
             </DialogFooter>

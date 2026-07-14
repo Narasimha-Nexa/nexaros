@@ -3,15 +3,14 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { trackOrder } from '@/lib/api';
-import type { OrderTracking } from '@/lib/api';
+import type { Order } from '@/types';
 
-const STATUS_STEPS = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'SERVED', 'COMPLETED'];
+const STATUS_STEPS: string[] = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'COMPLETED'];
 const STATUS_LABELS: Record<string, string> = {
   PENDING: 'Order Placed',
   CONFIRMED: 'Order Confirmed',
   PREPARING: 'Being Prepared',
   READY: 'Ready to Serve',
-  SERVED: 'Served',
   COMPLETED: 'Completed',
 };
 const STATUS_ICONS: Record<string, string> = {
@@ -19,7 +18,6 @@ const STATUS_ICONS: Record<string, string> = {
   CONFIRMED: '✅',
   PREPARING: '👨‍🍳',
   READY: '🍽️',
-  SERVED: '✨',
   COMPLETED: '✔️',
 };
 const STATUS_COLORS: Record<string, string> = {
@@ -27,7 +25,6 @@ const STATUS_COLORS: Record<string, string> = {
   CONFIRMED: 'bg-blue-500',
   PREPARING: 'bg-orange-500',
   READY: 'bg-green-500',
-  SERVED: 'bg-teal-500',
   COMPLETED: 'bg-gray-400',
 };
 
@@ -36,7 +33,7 @@ export default function OrderTrackingPage() {
   const orderId = params.orderId as string;
   const slug = params.slug as string;
 
-  const [order, setOrder] = useState<OrderTracking | null>(null);
+  const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -58,7 +55,7 @@ export default function OrderTrackingPage() {
   if (!order) return null;
 
   const currentStep = STATUS_STEPS.indexOf(order.status);
-  const isCompleted = order.status === 'COMPLETED' || order.status === 'SERVED';
+  const isCompleted = order.status === 'COMPLETED' || order.status === 'DELIVERED';
 
   return (
     <div className="min-h-screen bg-gray-50">

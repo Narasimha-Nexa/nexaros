@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { getTenantMenu, scanTableQr, createOrder } from '@/lib/api';
-import type { TenantInfo, MenuCategory, MenuItem } from '@/lib/api';
+import type { TenantInfo, MenuCategory, MenuItem } from '@/types';
 import MenuDisplay from '@/components/MenuDisplay';
 
 interface CartItem { item: MenuItem; quantity: number; }

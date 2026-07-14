@@ -1,12 +1,30 @@
 import type { NextConfig } from 'next';
 
+// App routes that should NOT be intercepted by the restaurant rewrite
+const APP_ROUTES = [
+  'menu', 'about', 'cart', 'checkout', 'login', 'signup', 'offers',
+  'gallery', 'events', 'blog', 'contact', 'faq', 'orders', 'track-order',
+  'order-success', 'payment', 'forgot-password', 'reservations', 'profile',
+  'privacy-policy', 'terms', 'refund-policy', 'cancellation-policy',
+  'cookie-policy', 'not-found',
+];
+
 const nextConfig: NextConfig = {
   output: 'standalone',
   reactStrictMode: true,
-  
-  // Dynamic routes for per-tenant serving
+
   async rewrites() {
     return [
+      // Exclude app routes from restaurant rewrite
+      ...APP_ROUTES.map((route) => ({
+        source: `/${route}`,
+        destination: `/${route}`,
+      })),
+      ...APP_ROUTES.map((route) => ({
+        source: `/${route}/:path*`,
+        destination: `/${route}/:path*`,
+      })),
+      // Dynamic routes for per-tenant serving
       {
         source: '/:slug',
         destination: '/restaurant/:slug',

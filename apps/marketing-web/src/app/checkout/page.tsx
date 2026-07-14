@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { checkoutAndPay } from '@/lib/razorpay';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
@@ -29,6 +30,9 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [step, setStep] = useState<'details' | 'payment'>('details');
 
   useEffect(() => { fetchPlans(); }, []);
 
@@ -83,13 +87,39 @@ export default function CheckoutPage() {
     if (!selectedPlan) return;
     setProcessing(true);
     setError('');
+
     try {
-      await new Promise((r) => setTimeout(r, 1500));
-      window.location.href = '/checkout/success?plan=' + selectedPlan.slug;
+      const result = await checkoutAndPay({
+        planId: selectedPlan.id,
+        planSlug: selectedPlan.slug,
+        couponCode: couponResult?.valid ? couponCode : undefined,
+        customerName: customerName || undefined,
+        customerEmail: customerEmail || undefined,
+      });
+
+      if (result.success) {
+        window.location.href = '/checkout/success?plan=' + selectedPlan.slug + '&orderId=' + (result.orderId || '');
+      } else {
+        setError(result.error || 'Payment failed. Please try again.');
+        setProcessing(false);
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Checkout failed. Please try again.');
       setProcessing(false);
     }
+  }
+
+  function handleProceedToPayment() {
+    if (selectedPlan && selectedPlan.price > 0 && !customerName.trim()) {
+      setError('Please enter your name to continue.');
+      return;
+    }
+    if (selectedPlan && selectedPlan.price > 0 && !customerEmail.trim()) {
+      setError('Please enter your email to continue.');
+      return;
+    }
+    setError('');
+    setStep('payment');
   }
 
   if (loading) {
@@ -122,6 +152,20 @@ export default function CheckoutPage() {
           <p className="mt-2" style={{ color: 'var(--text-secondary)' }}>Complete your subscription setup</p>
         </div>
 
+        {/* Step indicator */}
+        <div className="flex items-center justify-center gap-3 mb-8">
+          <div className={`flex items-center gap-2 text-sm font-medium ${step === 'details' ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}>
+            <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: step === 'details' ? 'var(--accent)' : 'var(--border)', color: step === 'details' ? '#fff' : 'var(--text-muted)' }}>1</span>
+            Details
+          </div>
+          <div className="w-8 h-px" style={{ background: 'var(--border)' }} />
+          <div className={`flex items-center gap-2 text-sm font-medium ${step === 'payment' ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}>
+            <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: step === 'payment' ? 'var(--accent)' : 'var(--border)', color: step === 'payment' ? '#fff' : 'var(--text-muted)' }}>2</span>
+            Payment
+          </div>
+        </div>
+
+        {/* Plan selection (always visible) */}
         <div className="p-6 rounded-[20px] mb-6" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)' }}>
           <h2 className="text-lg font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>Select Plan</h2>
           <div className="space-y-3">
@@ -147,6 +191,24 @@ export default function CheckoutPage() {
           </div>
         </div>
 
+        {/* Customer details (shown for paid plans, step 1) */}
+        {selectedPlan && selectedPlan.price > 0 && step === 'details' && (
+          <div className="p-6 rounded-[20px] mb-6" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)' }}>
+            <h2 className="text-lg font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>Your Details</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Full Name *</label>
+                <input type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Restaurant owner name" className="w-full px-4 py-2.5 rounded-[12px] text-base" style={inputStyle} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Email Address *</label>
+                <input type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} placeholder="owner@restaurant.com" className="w-full px-4 py-2.5 rounded-[12px] text-base" style={inputStyle} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Coupon (shown for paid plans) */}
         {selectedPlan && selectedPlan.price > 0 && (
           <div className="p-6 rounded-[20px] mb-6" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)' }}>
             <h2 className="text-lg font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>Have a coupon?</h2>
@@ -173,6 +235,7 @@ export default function CheckoutPage() {
           </div>
         )}
 
+        {/* Order summary */}
         {selectedPlan && (
           <div className="p-6 rounded-[20px] mb-6" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)' }}>
             <h2 className="text-lg font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>Order Summary</h2>
@@ -207,16 +270,37 @@ export default function CheckoutPage() {
           </div>
         )}
 
+        {/* Payment security note (shown at payment step) */}
+        {step === 'payment' && selectedPlan && selectedPlan.price > 0 && (
+          <div className="p-4 rounded-[16px] mb-6 flex items-center gap-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Secure payment powered by <strong>Razorpay</strong>. Your payment details are encrypted end-to-end.</p>
+          </div>
+        )}
+
         {error && <div className="mb-6 p-4 rounded-[16px] text-sm" style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}>{error}</div>}
 
-        <button onClick={handleCheckout} disabled={!selectedPlan || processing} className="w-full py-4 rounded-[16px] font-semibold text-lg text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all" style={{ background: 'var(--accent)' }}>
-          {processing ? (
-            <span className="flex items-center justify-center gap-2">
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              Processing...
-            </span>
-          ) : finalPrice === 0 ? 'Start Free' : `Pay ₹${finalPrice.toLocaleString()} / month`}
-        </button>
+        {/* CTA buttons */}
+        {step === 'details' && selectedPlan && selectedPlan.price > 0 ? (
+          <button onClick={handleProceedToPayment} className="w-full py-4 rounded-[16px] font-semibold text-lg text-white transition-all" style={{ background: 'var(--accent)' }}>
+            Proceed to Payment →
+          </button>
+        ) : (
+          <button onClick={handleCheckout} disabled={!selectedPlan || processing} className="w-full py-4 rounded-[16px] font-semibold text-lg text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all" style={{ background: 'var(--accent)' }}>
+            {processing ? (
+              <span className="flex items-center justify-center gap-2">
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Processing...
+              </span>
+            ) : finalPrice === 0 ? 'Start Free' : `Pay ₹${finalPrice.toLocaleString()} / month`}
+          </button>
+        )}
+
+        {step === 'payment' && (
+          <button onClick={() => setStep('details')} className="w-full py-3 rounded-[16px] font-medium text-sm mt-3 transition-all" style={{ border: '2px solid var(--border)', color: 'var(--text-secondary)' }}>
+            ← Back to Details
+          </button>
+        )}
 
         <p className="text-center text-sm mt-6" style={{ color: 'var(--text-muted)' }}>
           By completing this purchase, you agree to our{' '}

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/app_state.dart';
 import '../../../core/hardware/receipt_formatter.dart';
+import '../../../core/services/razorpay_service.dart';
 
 class PaymentScreen extends StatefulWidget {
   final String orderId;
@@ -17,6 +18,7 @@ class PaymentScreen extends StatefulWidget {
 
 class _PaymentScreenState extends State<PaymentScreen> {
   late final AppState _appState;
+  late final RazorpayService _razorpay;
   Map<String, dynamic>? _paymentInfo;
   String _selectedMethod = 'CASH';
   bool _isLoading = true;
@@ -28,12 +30,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
   void initState() {
     super.initState();
     _appState = context.read<AppState>();
+    _razorpay = RazorpayService(keyId: const String.fromEnvironment('RAZORPAY_KEY_ID', defaultValue: 'rzp_test_demo'));
     _loadPaymentInfo();
   }
 
   @override
   void dispose() {
     _referenceController.dispose();
+    _razorpay.dispose();
     super.dispose();
   }
 
@@ -94,36 +98,63 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
     setState(() => _isProcessing = true);
     try {
-      // Use offline-capable payment service
-      final result = await _appState.offlinePayments.recordPayment(
-        orderId: widget.orderId,
-        branchId: '',
-        method: _selectedMethod,
-        amount: remaining,
-        reference: _referenceController.text.isNotEmpty ? _referenceController.text : null,
-      );
-
-      // Print receipt on successful online payment
-      if (!result.isOffline && _paymentInfo != null) {
-        _printReceipt();
-      }
-
-      // Open cash drawer for cash payments (even when offline — drawer is local)
       if (_selectedMethod == 'CASH') {
-        _openCashDrawer();
-      }
-
-      if (mounted) {
-        final msg = result.isOffline
-            ? 'Payment saved offline! Will sync when connected.'
-            : 'Payment processed successfully!';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(msg),
-            backgroundColor: result.isOffline ? Colors.orange : AppColors.success,
-          ),
+        final result = await _appState.offlinePayments.recordPayment(
+          orderId: widget.orderId,
+          branchId: '',
+          method: _selectedMethod,
+          amount: remaining,
+          reference: _referenceController.text.isNotEmpty ? _referenceController.text : null,
         );
-        Navigator.pop(context, {'id': result.paymentId, 'offline': result.isOffline});
+
+        if (!result.isOffline && _paymentInfo != null) {
+          _printReceipt();
+        }
+        _openCashDrawer();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.isOffline ? 'Payment saved offline! Will sync when connected.' : 'Payment processed successfully!'),
+              backgroundColor: result.isOffline ? Colors.orange : AppColors.success,
+            ),
+          );
+          Navigator.pop(context, {'id': result.paymentId, 'offline': result.isOffline});
+        }
+      } else {
+        final paymentResponse = await _razorpay.openCheckout(
+          amount: remaining,
+          name: 'NexaROS',
+          description: 'Order Payment',
+          prefillContact: '',
+          prefillEmail: '',
+        );
+
+        if (paymentResponse == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Payment cancelled'), backgroundColor: Colors.orange),
+            );
+          }
+          return;
+        }
+
+        final result = await _appState.offlinePayments.recordPayment(
+          orderId: widget.orderId,
+          branchId: '',
+          method: _selectedMethod,
+          amount: remaining,
+          reference: paymentResponse.paymentId,
+        );
+
+        if (_paymentInfo != null) _printReceipt();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Payment processed: ${paymentResponse.paymentId}'), backgroundColor: AppColors.success),
+          );
+          Navigator.pop(context, {'id': result.paymentId, 'offline': false});
+        }
       }
     } catch (e) {
       if (mounted) {

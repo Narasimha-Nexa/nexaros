@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { useParams } from 'next/navigation';
 import { getTenantMenu, createOrder } from '@/lib/api';
-import type { TenantInfo, MenuCategory, MenuItem } from '@/lib/api';
+import type { TenantInfo, MenuCategory, MenuItem } from '@/types';
 import MenuDisplay from '@/components/MenuDisplay';
 
 interface CartItem {
@@ -145,7 +146,7 @@ export default function RestaurantPage() {
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center gap-3">
             {tenant?.logo && (
-              <img src={tenant.logo} alt={tenant.name} className="w-12 h-12 rounded-full object-cover" />
+              <Image src={tenant.logo} alt={tenant.name} width={48} height={48} className="rounded-full object-cover" />
             )}
             <div>
               <h1 className="text-xl font-bold text-gray-900">{tenant?.name || 'Restaurant'}</h1>

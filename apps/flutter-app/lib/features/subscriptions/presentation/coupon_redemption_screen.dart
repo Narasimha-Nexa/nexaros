@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/providers/subscription_provider.dart';
+import '../../../core/services/razorpay_service.dart';
 
 class CouponRedemptionScreen extends StatefulWidget {
   final String planId;
@@ -101,12 +102,27 @@ class _CouponRedemptionScreenState extends State<CouponRedemptionScreen> {
       final tenantId = api.branchId ?? '';
       final couponCode = _couponResult != null ? _couponController.text.trim() : null;
 
-      final result = await api.requestWithRetry(
-        () => api.createSubscriptionCheckoutRaw(tenantId, widget.planId, couponCode: couponCode),
+      final razorpay = RazorpayService(
+        keyId: const String.fromEnvironment('RAZORPAY_KEY_ID', defaultValue: 'rzp_test_demo'),
+      );
+
+      final result = await razorpay.checkoutAndVerify(
+        tenantId: tenantId,
+        planId: widget.planId,
+        couponCode: couponCode,
+        prefillName: '',
+        prefillEmail: '',
+        prefillContact: '',
       );
 
       if (mounted) {
-        _showCheckoutResult(result);
+        if (result != null && result['success'] == true) {
+          _showCheckoutResult(result);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Payment cancelled or failed'), backgroundColor: Colors.orange),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -123,23 +139,22 @@ class _CouponRedemptionScreenState extends State<CouponRedemptionScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Checkout Created', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+        title: Text(result['freeTrial'] == true ? 'Free Plan Activated!' : 'Payment Successful!', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Order ID: ${result['orderId'] ?? 'N/A'}', style: GoogleFonts.inter(fontSize: 13)),
-            const SizedBox(height: 8),
-            Text('Amount: ₹${(result['amount'] ?? 0).toStringAsFixed(0)}',
-                style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.primary)),
-            if (result['discount'] != null && (result['discount'] as num) > 0) ...[
-              const SizedBox(height: 4),
-              Text('Discount: -₹${(result['discount'] as num).toStringAsFixed(0)}',
-                  style: GoogleFonts.inter(fontSize: 13, color: AppColors.success)),
+            if (result['freeTrial'] == true)
+              Text('Your free plan has been activated. No payment required.', style: GoogleFonts.inter(fontSize: 14))
+            else ...[
+              Text('Order ID: ${result['orderId'] ?? 'N/A'}', style: GoogleFonts.inter(fontSize: 13)),
+              const SizedBox(height: 8),
+              Text('Amount: ₹${_finalPrice.toStringAsFixed(0)}/month',
+                  style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.primary)),
             ],
             const SizedBox(height: 12),
             Text(
-              'In a production environment, this would redirect to a payment gateway. For now, the subscription will be activated.',
+              'Your subscription has been activated. You can now access all features of your plan.',
               style: GoogleFonts.inter(fontSize: 12, color: AppColors.gray500),
             ),
           ],
