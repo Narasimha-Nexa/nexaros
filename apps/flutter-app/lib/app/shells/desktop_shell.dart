@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/app_state.dart';
+import '../../core/providers/subscription_provider.dart';
 import '../../core/widgets/sync_status_bar.dart';
 import '../../core/widgets/connectivity_banner.dart';
+import '../../core/widgets/subscription_status_bar.dart';
+import '../../core/widgets/grace_period_banner.dart';
+import '../../core/widgets/branch_switcher.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/orders/presentation/order_list_screen.dart';
 import '../../features/menu/presentation/menu_management_screen.dart';
@@ -17,6 +21,9 @@ import '../../features/inventory/presentation/inventory_management_screen.dart';
 import '../../features/inventory/presentation/supplier_management_screen.dart';
 import '../../features/inventory/presentation/purchase_order_screen.dart';
 import '../../features/reservations/presentation/reservation_screen.dart';
+import '../../features/subscriptions/presentation/subscription_screen.dart';
+import '../../features/branches/presentation/branch_management_screen.dart';
+import '../../features/branches/presentation/staff_branch_assignment_screen.dart';
 
 class DesktopShell extends StatefulWidget {
   const DesktopShell({super.key});
@@ -65,16 +72,29 @@ class _DesktopShellState extends State<DesktopShell> {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
+    final subProvider = context.watch<SubscriptionProvider>();
 
     return Scaffold(
       body: Column(
         children: [
-          // Offline banner at very top
           ConnectivityBanner(isOnline: appState.isOnline),
+          SubscriptionStatusBar(
+            info: subProvider.info,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+            ),
+          ),
+          GracePeriodBanner(
+            info: subProvider.info,
+            onUpgrade: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+            ),
+          ),
           Expanded(
             child: Row(
               children: [
-                // Sidebar
                 Container(
                   width: 240,
                   decoration: const BoxDecoration(
@@ -90,6 +110,11 @@ class _DesktopShellState extends State<DesktopShell> {
                           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF2563EB)),
                         ),
                       ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: BranchSwitcher(),
+                      ),
+                      const SizedBox(height: 4),
                       const Divider(height: 1),
                       Expanded(
                         child: ListView.builder(
@@ -122,11 +147,21 @@ class _DesktopShellState extends State<DesktopShell> {
                           },
                         ),
                       ),
-                      // Sync status bar
                       const Divider(height: 1),
                       SyncStatusBar(syncService: appState.sync),
                       const Divider(height: 1),
-                      // Settings button at bottom
+                      ListTile(
+                        leading: const Icon(Icons.card_membership, color: Color(0xFF64748B), size: 20),
+                        title: const Text('Subscription', style: TextStyle(fontSize: 14, color: Color(0xFF64748B))),
+                        dense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+                          );
+                        },
+                      ),
                       ListTile(
                         leading: const Icon(Icons.settings, color: Color(0xFF64748B), size: 20),
                         title: const Text('Settings', style: TextStyle(fontSize: 14, color: Color(0xFF64748B))),
@@ -139,10 +174,33 @@ class _DesktopShellState extends State<DesktopShell> {
                           );
                         },
                       ),
+                      ListTile(
+                        leading: const Icon(Icons.store, color: Color(0xFF64748B), size: 20),
+                        title: const Text('Branches', style: TextStyle(fontSize: 14, color: Color(0xFF64748B))),
+                        dense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const BranchManagementScreen()),
+                          );
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.assignment_ind, color: Color(0xFF64748B), size: 20),
+                        title: const Text('Staff Assignment', style: TextStyle(fontSize: 14, color: Color(0xFF64748B))),
+                        dense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const StaffBranchAssignmentScreen()),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),
-                // Content area
                 Expanded(child: _pages[_selectedIndex]),
               ],
             ),

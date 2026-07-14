@@ -60,14 +60,15 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://nexaros:nexaros_dev@nexaros-postgres:5432/nexaros?schema=public
-      JWT_SECRET: nexaros-prod-jwt-secret-change-in-production-64chars!!
-      JWT_REFRESH_SECRET: nexaros-prod-refresh-secret-change-in-production!!
+      JWT_SECRET: ${JWT_SECRET:-nexaros-prod-jwt-secret-change-in-production-64chars!!}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-nexaros-prod-refresh-secret-change-in-production!!}
       JWT_EXPIRATION: 15m
       JWT_REFRESH_EXPIRATION: 7d
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET:-nexaros-admin-jwt-secret-change-in-production-64chars!!}
       PORT: 4000
       APP_URL: http://nexaros-backend:4000
       NODE_ENV: production
-      CORS_ORIGIN: http://localhost:3000,http://localhost:3001,http://localhost:3002,http://nexaros-customer:3001,http://nexaros-marketing:3002
+      CORS_ORIGIN: http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:3003,http://nexaros-customer:3001,http://nexaros-marketing:3002,http://nexaros-admin:3003
       REDIS_HOST: nexaros-redis
       REDIS_PORT: 6379
     ports:
@@ -107,8 +108,27 @@ services:
     restart: unless-stopped
     networks:
       - nexaros-network
+    depends_on:
+      - nexaros-backend
     ports:
       - "3002:3002"
+
+  # ─── Admin Portal ───
+
+  nexaros-admin:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.admin
+    container_name: nexaros-admin
+    restart: unless-stopped
+    networks:
+      - nexaros-network
+    depends_on:
+      - nexaros-backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://nexaros-backend:4000/api
+    ports:
+      - "3003:3003"
 
 volumes:
   nexaros_postgres_data:

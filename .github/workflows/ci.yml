@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -10,61 +10,77 @@ jobs:
   backend:
     name: Backend
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: nexaros_test
-          POSTGRES_USER: nexaros
-          POSTGRES_PASSWORD: test_password
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-
+    strategy:
+      matrix:
+        node-version: [22]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'pnpm'
-
-      - name: Install pnpm
-        run: npm install -g pnpm
-
-      - name: Install dependencies
-        run: pnpm install
-        working-directory: apps/backend
-
-      - name: Generate Prisma Client
-        run: npx prisma generate
-        working-directory: apps/backend
-
-      - name: Run migrations
-        run: npx prisma migrate deploy
-        working-directory: apps/backend
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build backend
+        run: pnpm --filter @nexaros/backend run build
+      - name: Lint backend
+        run: pnpm --filter @nexaros/backend run lint
+      - name: Test backend
+        run: pnpm --filter @nexaros/backend run test
         env:
-          DATABASE_URL: postgresql://nexaros:test_password@localhost:5432/nexaros_test
+          DATABASE_URL: postgresql://nexaros:nexaros_dev@localhost:5432/nexaros?schema=public
+          JWT_SECRET: test-secret-for-ci-only-64-characters-long!!
+          JWT_REFRESH_SECRET: test-refresh-secret-for-ci-only-64-chars!!
+          ADMIN_JWT_SECRET: test-admin-secret-for-ci-only-64-characters-long!!
+      - name: Build Docker image
+        run: docker build -f docker/Dockerfile.backend -t nexaros-backend:ci .
 
-      - name: Run tests
-        run: pnpm test
-        working-directory: apps/backend
+  marketing:
+    name: Marketing Web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Lint marketing web
+        run: pnpm --filter @nexaros/marketing-web run lint
+      - name: Build marketing web
+        run: pnpm --filter @nexaros/marketing-web run build
         env:
-          DATABASE_URL: postgresql://nexaros:test_password@localhost:5432/nexaros_test
-          REDIS_URL: redis://localhost:6379
-          JWT_SECRET: test-jwt-secret
-          JWT_REFRESH_SECRET: test-refresh-secret
-          NODE_ENV: test
+          NEXT_PUBLIC_API_URL: http://localhost:4000/api
+          NEXT_PUBLIC_SITE_URL: http://localhost:3002
 
-      - name: Build
-        run: pnpm build
-        working-directory: apps/backend
+  admin:
+    name: Admin Portal
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Lint admin portal
+        run: pnpm --filter @nexaros/admin-portal run lint
+      - name: Build admin portal
+        run: pnpm --filter @nexaros/admin-portal run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4000/api
+
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: [backend, marketing, admin]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build all Docker images
+        run: |
+          docker build -f docker/Dockerfile.backend -t nexaros-backend:ci .
+          docker build -f docker/Dockerfile.marketing -t nexaros-marketing:ci .
+          docker build -f docker/Dockerfile.customer -t nexaros-customer:ci .
+          docker build -f docker/Dockerfile.admin -t nexaros-admin:ci .

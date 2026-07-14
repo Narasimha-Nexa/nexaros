@@ -12,20 +12,24 @@ datasource db {
 // ─────────────────────────────────────────────
 
 model Tenant {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  logo      String?
-  phone     String?
-  email     String?
-  address   String?
-  gstNumber String?
-  panNumber String?
-  timezone  String   @default("Asia/Kolkata")
-  currency  String   @default("INR")
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  logo         String?
+  phone        String?
+  email        String?
+  address      String?
+  gstNumber    String?
+  panNumber    String?
+  timezone     String   @default("Asia/Kolkata")
+  currency     String   @default("INR")
+  isActive     Boolean  @default(true)
+  businessType String?
+  country      String?  @default("India")
+  state        String?
+  city         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   branches      Branch[]
   users         User[]
@@ -34,11 +38,13 @@ model Tenant {
   menuItems     MenuItem[]
   inventoryItems InventoryItem[]
   suppliers     Supplier[]
-  plans         Plan[]
   subscriptions Subscription[]
   reservations  Reservation[]
   purchases     Purchase[]
   auditLogs     AuditLog[]
+  couponUsages  CouponUsage[]
+  paymentPromises PaymentPromise[]
+  supportTickets  SupportTicket[]
 
   @@map("tenants")
 }
@@ -666,24 +672,7 @@ enum AttendanceStatus {
 // SUBSCRIPTIONS
 // ─────────────────────────────────────────────
 
-model Plan {
-  id           String        @id @default(cuid())
-  tenantId     String
-  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  name         String
-  price        Decimal       @db.Decimal(10, 2)
-  billingCycle BillingCycle  @default(MONTHLY)
-  maxBranches  Int           @default(1)
-  maxStaff     Int           @default(10)
-  features     String[]
-  isActive     Boolean       @default(true)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-
-  subscriptions Subscription[]
-
-  @@map("plans")
-}
+// Old Plan model removed — replaced by PlatformPlan in billing section below
 
 enum BillingCycle {
   MONTHLY
@@ -691,28 +680,9 @@ enum BillingCycle {
   LIFETIME
 }
 
-model Subscription {
-  id         String             @id @default(cuid())
-  tenantId   String
-  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  planId     String
-  plan       Plan               @relation(fields: [planId], references: [id], onDelete: Cascade)
-  status     SubscriptionStatus @default(ACTIVE)
-  startDate  DateTime
-  endDate    DateTime?
-  razorpayId String?
-  createdAt  DateTime           @default(now())
-  updatedAt  DateTime           @updatedAt
+// Old Subscription model removed — replaced by Subscription in billing section below
 
-  @@map("subscriptions")
-}
-
-enum SubscriptionStatus {
-  ACTIVE
-  PAUSED
-  CANCELLED
-  EXPIRED
-}
+// Old SubscriptionStatus enum removed — replaced by SubscriptionStatus in billing section below
 
 // ─────────────────────────────────────────────
 // RECIPE ITEMS (inventory consumption tracking)
@@ -753,4 +723,389 @@ model AuditLog {
 
   @@index([tenantId, createdAt])
   @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────────
+// PLATFORM PLANS & ENTITLEMENTS
+// ─────────────────────────────────────────────
+
+model PlatformPlan {
+  id           String        @id @default(cuid())
+  name         String
+  slug         String        @unique
+  description  String?
+  price        Decimal       @db.Decimal(10, 2)
+  billingCycle BillingCycle  @default(MONTHLY)
+  trialDays    Int           @default(14)
+  maxBranches  Int           @default(1)
+  maxStaff     Int           @default(10)
+  isCustom     Boolean       @default(false)
+  isActive     Boolean       @default(true)
+  sortOrder    Int           @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  entitlements  PlanEntitlement[]
+  subscriptions Subscription[]
+
+  @@map("platform_plans")
+}
+
+model PlanEntitlement {
+  id        String       @id @default(cuid())
+  planId    String
+  plan      PlatformPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  moduleKey String
+  enabled   Boolean      @default(false)
+
+  @@unique([planId, moduleKey])
+  @@map("plan_entitlements")
+}
+
+// ─────────────────────────────────────────────
+// SUBSCRIPTIONS (Redesigned)
+// ─────────────────────────────────────────────
+
+model Subscription {
+  id                 String             @id @default(cuid())
+  tenantId           String
+  tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planId             String
+  plan               PlatformPlan       @relation(fields: [planId], references: [id], onDelete: Cascade)
+  status             SubscriptionStatus @default(TRIAL)
+  entitlements       Json
+  customPrice        Decimal?           @db.Decimal(10, 2)
+  discount           Decimal?           @db.Decimal(10, 2)
+  trialStartedAt     DateTime?
+  trialEndsAt        DateTime?
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  nextBillingDate    DateTime?
+  lastPaymentAt      DateTime?
+  gracePeriodDays    Int                @default(7)
+  graceStartedAt     DateTime?
+  hasPromise         Boolean            @default(false)
+  promiseUntil       DateTime?
+  promiseReason      String?
+  razorpayId         String?
+  razorpayPlanId     String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  payments SubscriptionPayment[]
+  invoices SubscriptionInvoice[]
+
+  @@index([tenantId, status])
+  @@index([status, nextBillingDate])
+  @@map("subscriptions_v2")
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAYMENT_PENDING
+  GRACE_PERIOD
+  RESTRICTED
+  SUSPENDED
+  ARCHIVED
+}
+
+// ─────────────────────────────────────────────
+// FEATURE FLAGS
+// ─────────────────────────────────────────────
+
+model FeatureFlag {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  name        String
+  description String?
+  enabled     Boolean @default(false)
+
+  tenantFlags TenantFeatureFlag[]
+
+  @@map("feature_flags")
+}
+
+model TenantFeatureFlag {
+  id            String      @id @default(cuid())
+  tenantId      String
+  featureFlagId String
+  featureFlag   FeatureFlag @relation(fields: [featureFlagId], references: [id], onDelete: Cascade)
+  enabled       Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+
+  @@unique([tenantId, featureFlagId])
+  @@map("tenant_feature_flags")
+}
+
+// ─────────────────────────────────────────────
+// COUPONS
+// ─────────────────────────────────────────────
+
+model Coupon {
+  id              String     @id @default(cuid())
+  code            String     @unique
+  description     String?
+  type            CouponType @default(FIXED_AMOUNT)
+  value           Decimal    @db.Decimal(10, 2)
+  maxDiscount     Decimal?   @db.Decimal(10, 2)
+  minPlanPrice    Decimal?   @db.Decimal(10, 2)
+  expiry          DateTime
+  maxTotalUses    Int?
+  maxUsesPerUser  Int        @default(1)
+  applicablePlans String[]
+  festivalTag     String?
+  isActive        Boolean    @default(true)
+  createdBy       String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  usages CouponUsage[]
+
+  @@map("coupons")
+}
+
+enum CouponType {
+  FIXED_AMOUNT
+  PERCENTAGE
+}
+
+model CouponUsage {
+  id             String   @id @default(cuid())
+  couponId       String
+  coupon         Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscriptionId String?
+  amount         Decimal  @db.Decimal(10, 2)
+  usedAt         DateTime @default(now())
+
+  @@map("coupon_usages")
+}
+
+// ─────────────────────────────────────────────
+// PAYMENT PROMISES
+// ─────────────────────────────────────────────
+
+model PaymentPromise {
+  id             String                 @id @default(cuid())
+  tenantId       String
+  tenant         Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscriptionId String
+  reason         String
+  expectedDate   DateTime
+  status         PaymentPromiseStatus   @default(PENDING)
+  approvedBy     String?
+  approvedAt     DateTime?
+  notes          String?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@map("payment_promises")
+}
+
+enum PaymentPromiseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+  EXPIRED
+}
+
+// ─────────────────────────────────────────────
+// SUBSCRIPTION PAYMENTS & INVOICES
+// ─────────────────────────────────────────────
+
+model SubscriptionPayment {
+  id             String       @id @default(cuid())
+  subscriptionId String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  amount         Decimal      @db.Decimal(10, 2)
+  method         PaymentMethod
+  reference      String?
+  status         PaymentStatus @default(PENDING)
+  createdAt      DateTime     @default(now())
+
+  @@map("subscription_payments")
+}
+
+model SubscriptionInvoice {
+  id             String       @id @default(cuid())
+  subscriptionId String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  number         String       @unique
+  amount         Decimal      @db.Decimal(10, 2)
+  taxAmount      Decimal      @db.Decimal(10, 2)
+  status         InvoiceStatus @default(PENDING)
+  pdfUrl         String?
+  createdAt      DateTime     @default(now())
+
+  @@map("subscription_invoices")
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+// ─────────────────────────────────────────────
+// ADMIN (Platform Owner)
+// ─────────────────────────────────────────────
+
+model AdminUser {
+  id          String    @id @default(cuid())
+  email       String    @unique
+  name        String
+  password    String
+  role        AdminRole @default(ADMIN)
+  mfaEnabled  Boolean   @default(false)
+  mfaSecret   String?
+  isActive    Boolean   @default(true)
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  sessions  AdminSession[]
+  auditLogs AdminAuditLog[]
+
+  @@map("admin_users")
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+  VIEWER
+}
+
+model AdminSession {
+  id          String    @id @default(cuid())
+  adminUserId String
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  token       String    @unique
+  ipAddress   String?
+  userAgent   String?
+  mfaVerified Boolean   @default(false)
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+
+  @@map("admin_sessions")
+}
+
+model AdminAuditLog {
+  id          String    @id @default(cuid())
+  adminUserId String
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  action      String
+  entity      String
+  entityId    String?
+  oldData     Json?
+  newData     Json?
+  ipAddress   String?
+  createdAt   DateTime  @default(now())
+
+  @@index([adminUserId, createdAt])
+  @@map("admin_audit_logs")
+}
+
+// ─────────────────────────────────────────────
+// DEMO REQUESTS
+// ─────────────────────────────────────────────
+
+model DemoRequest {
+  id              String             @id @default(cuid())
+  restaurantName  String
+  contactName     String
+  email           String
+  phone           String
+  city            String?
+  state           String?
+  currentPos      String?
+  message         String?
+  status          DemoRequestStatus  @default(NEW)
+  assignedTo      String?
+  notes           String?
+  source          String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@map("demo_requests")
+}
+
+enum DemoRequestStatus {
+  NEW
+  CONTACTED
+  SCHEDULED
+  CONVERTED
+  LOST
+}
+
+// ─────────────────────────────────────────────
+// SUPPORT TICKETS
+// ─────────────────────────────────────────────
+
+model SupportTicket {
+  id          String           @id @default(cuid())
+  tenantId    String
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subject     String
+  description String
+  priority    TicketPriority   @default(NORMAL)
+  status      TicketStatus     @default(OPEN)
+  assignedTo  String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  messages TicketMessage[]
+
+  @@map("support_tickets")
+}
+
+enum TicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+model TicketMessage {
+  id         String        @id @default(cuid())
+  ticketId   String
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderType SenderType
+  senderId   String
+  message    String
+  isInternal Boolean       @default(false)
+  createdAt  DateTime      @default(now())
+
+  @@map("ticket_messages")
+}
+
+enum SenderType {
+  CUSTOMER
+  SUPPORT
+  SYSTEM
+}
+
+// ─────────────────────────────────────────────
+// PLATFORM SETTINGS
+// ─────────────────────────────────────────────
+
+model PlatformSettings {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       Json
+  description String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("platform_settings")
 }

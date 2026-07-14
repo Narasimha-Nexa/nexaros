@@ -9,25 +9,42 @@
 
 **NexaROS** is an AI-Powered Restaurant Operating System — a real-time, multi-tenant, offline-first enterprise SaaS platform.
 
-### Three Applications, One Backend
+### Platform Architecture: Multiple Products, One Backend
 
-| Application | Technology | Purpose |
-|---|---|---|
-| Marketing Website | Next.js 16 + Tailwind CSS v4 | Branding, lead generation, restaurant onboarding |
-| Restaurant Website | Next.js 16 + PWA + i18n | Customer-facing: menu, ordering, reservations |
-| Management App | Flutter (Desktop + Mobile + Tablet + TV) | Restaurant operations: POS, orders, kitchen, inventory |
+```
+                    NexaROS Platform
+                           │
+        ┌──────────────────┼──────────────────┐
+        │                  │                  │
+        │                  │                  │
+ Marketing Website     Restaurant OS      Super Admin Portal
+  (Public)              (Private)          (Private)
+   nexaros.com          app.nexaros.com    admin.nexaros.com
+        │                  │                  │
+        └──────────────Shared Backend─────────┘
+                        NestJS APIs
+                   PostgreSQL + Redis
+```
+
+| Application | Technology | Port | Purpose |
+|---|---|---|---|
+| Marketing Website | Next.js 15 + Tailwind CSS v4 | 3002 | Public: branding, registration, pricing |
+| Customer Website | Next.js 15 + PWA | 3001 | Customer-facing: menu, ordering, reservations |
+| Restaurant App | Flutter (Desktop + Mobile + Tablet + TV) | — | Restaurant operations: POS, orders, kitchen, inventory |
+| Super Admin Portal | Next.js 15 + Tailwind CSS v4 + Recharts | 3003 | Private enterprise portal for platform management |
 
 ### Single Backend
 
 | Layer | Technology |
 |---|---|
 | API Server | NestJS (TypeScript) |
-| Database | PostgreSQL |
-| ORM | Prisma |
-| Cache | Redis |
+| Database | PostgreSQL (port 5433) |
+| ORM | Prisma 6.19.x |
+| Cache | Redis (port 6379) |
 | Real-time | Socket.IO |
 | Offline DB | SQLite (Drift ORM in Flutter) |
-| Auth | JWT + Refresh Tokens |
+| Auth (Restaurants) | JWT + Refresh Tokens |
+| Auth (Admin) | Separate JWT + MFA + RBAC + PBAC |
 
 ---
 
@@ -71,6 +88,49 @@
 - Different layouts per device, same data
 - Feature availability varies by device capability
 
+### 6. Marketing Website (Public)
+
+- Public website at nexaros.com
+- ONLY creates restaurants (registration)
+- Does NOT run restaurants, manage orders, or manage payments
+- Customer-facing website (app.nexaros.com) is separate, linked from marketing website
+- Registration calls POST /api/auth/register, creates restaurant
+
+### 7. Super Admin Portal (Private)
+
+- Enterprise portal at admin.nexaros.com
+- Never referenced from public marketing website
+- Platform owner accesses it directly
+- Manages subscriptions, billing, coupons, support, restaurants
+- Fully separate authentication (admin users, not restaurant users)
+
+### 8. Subscription & Billing System
+
+- Subscription lifecycle: TRIAL → ACTIVE → PAYMENT_PENDING → GRACE_PERIOD → RESTRICTED → SUSPENDED → ARCHIVED
+- Entitlement-based access control (module keys, not plan names)
+- Restricted mode allows core POS operations even without active subscription
+- Payment promises for deferred payments
+- Custom plans created by Super Admin per restaurant
+- Coupon system for festivals (Pongal, Diwali, Ugadi) and manual discounts
+- PlatformPlan stores plan config + entitlements
+- Subscription stores entitlement snapshot + custom pricing
+
+### 9. Entitlement System
+
+- 21 module keys: pos, kitchen, orders, tables, inventory, staff, shifts, attendance, payments, invoices, reports, ai_analytics, crm, loyalty, qr_ordering, customer_website, reservations, multi_branch, api_access, white_label, priority_support
+- Two restaurants on same plan can have different entitlements
+- Flutter screens check entitlements: `if (entitlements.features['module_key'])`
+- Backend guards check entitlements: `EntitlementsGuard`
+- Never check plan name, always check entitlements
+
+### 10. Restricted Mode
+
+When subscription is RESTRICTED or grace period expired:
+- POS, Orders, Kitchen, Tables, Payments, Invoices → ALWAYS WORK
+- Everything else requires active subscription
+- No data loss, just UI restriction
+- Owner sees upgrade prompts
+
 ---
 
 ## Folder Structure
@@ -78,9 +138,9 @@
 ```
 nexaros/
 ├── apps/
-│   ├── marketing-web/       # Next.js marketing site
-│   ├── customer-web/        # Next.js restaurant website
-│   ├── backend/             # NestJS API server
+│   ├── marketing-web/       # Next.js marketing site (public, port 3002)
+│   ├── customer-web/        # Next.js restaurant website (port 3001)
+│   ├── admin-portal/        # Next.js Super Admin Portal (private, port 3003)
 │   └── flutter-app/         # Flutter (mobile + desktop + tablet + TV)
 ├── packages/
 │   ├── types/               # Shared TypeScript types
@@ -239,14 +299,16 @@ class DashboardScreen extends StatelessWidget {
 ### Backend (.env)
 
 ```
-DATABASE_URL=postgresql://nexaros:nexaros_dev@localhost:5432/nexaros
+DATABASE_URL=postgresql://nexaros:nexaros_dev@localhost:5433/nexaros
 REDIS_URL=redis://localhost:6379
 JWT_SECRET=your-secret-key
 JWT_REFRESH_SECRET=your-refresh-secret
+ADMIN_JWT_SECRET=your-admin-secret-key  # Separate admin JWT secret
+ADMIN_JWT_REFRESH_SECRET=your-admin-refresh-secret
 PORT=4000
 NODE_ENV=development
 
-# Razorpay
+# Razorpay (stub until keys arrive)
 RAZORPAY_KEY_ID=
 RAZORPAY_KEY_SECRET=
 
@@ -261,6 +323,9 @@ R2_ACCOUNT_ID=
 R2_ACCESS_KEY=
 R2_SECRET_KEY=
 R2_BUCKET_NAME=
+
+# CORS (allow all 3 frontends)
+CORS_ORIGIN=http://localhost:3001,http://localhost:3002,http://localhost:3003
 ```
 
 ### Flutter (.env or config)
@@ -359,6 +424,10 @@ docker compose logs -f         # View logs
 - Never commit .env files
 - Never use `print()` for production logging (use logger package)
 - Never bypass RBAC guards
+- Never mix admin auth with restaurant auth
+- Never create fake/seeded payment data — use stub provider
+- Never check plan name for access — always check entitlements
+- Never block POS/Orders/Kitchen/Payments during subscription issues
 
 ---
 

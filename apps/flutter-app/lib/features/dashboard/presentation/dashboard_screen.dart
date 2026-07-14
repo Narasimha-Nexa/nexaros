@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/providers/subscription_provider.dart';
 import '../../../core/utils/date_utils.dart' as app_date_utils;
 import '../../menu/presentation/menu_management_screen.dart';
 import '../../orders/presentation/order_list_screen.dart';
 import '../../tables/presentation/table_grid_screen.dart';
 import '../../pos/presentation/pos_screen.dart';
 import '../../reports/presentation/report_charts.dart';
+import '../../subscriptions/presentation/subscription_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -52,6 +55,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Widget _buildSubscriptionBanner(BuildContext context) {
+    final provider = context.watch<SubscriptionProvider>();
+    final info = provider.info;
+
+    if (info.isNone || info.isActive) return const SizedBox.shrink();
+
+    return GestureDetector(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen())),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: provider.statusColor.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: provider.statusColor.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Icon(provider.statusIcon, color: provider.statusColor, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    provider.statusLabel,
+                    style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: provider.statusColor),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    info.isTrial
+                        ? provider.trialMessage
+                        : info.isGracePeriod
+                            ? provider.gracePeriodMessage
+                            : provider.restrictedMessage,
+                    style: GoogleFonts.inter(fontSize: 11, color: AppColors.gray600),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: provider.statusColor, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
@@ -79,11 +131,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   onRefresh: _loadStats,
                   child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Today\'s Overview', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold)),
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Subscription trial/upgrade prompt
+                          _buildSubscriptionBanner(context),
+
+                          Text('Today\'s Overview', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 16),
                         GridView.count(
                           crossAxisCount: isMobile ? 2 : 4,

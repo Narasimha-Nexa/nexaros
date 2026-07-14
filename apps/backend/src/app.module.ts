@@ -26,6 +26,13 @@ import { PrinterModule } from './modules/printer/printer.module';
 import { AiModule } from './modules/ai/ai.module';
 import { ReservationsModule } from './modules/reservations/reservations.module';
 import { PublicModule } from './modules/public/public.module';
+import { AdminModule } from './modules/admin/admin.module';
+import { BillingModule } from './modules/billing/billing.module';
+import { CouponsModule } from './modules/coupons/coupons.module';
+import { EntitlementsModule } from './modules/entitlements/entitlements.module';
+import { DemoRequestsModule } from './modules/demo-requests/demo-requests.module';
+import { SupportModule } from './modules/support/support.module';
+import { PlatformModule } from './modules/platform/platform.module';
 import { RateLimitMiddleware } from './common/middleware/rate-limit.middleware';
 import { LoginRateLimitMiddleware } from './common/middleware/login-rate-limit.middleware';
 import { CsrfMiddleware } from './common/middleware/csrf.middleware';
@@ -64,6 +71,13 @@ import { HealthController } from './health.controller';
     AiModule,
     ReservationsModule,
     PublicModule,
+    AdminModule,
+    BillingModule,
+    CouponsModule,
+    EntitlementsModule,
+    DemoRequestsModule,
+    SupportModule,
+    PlatformModule,
   ],
   controllers: [HealthController],
 })
@@ -79,7 +93,7 @@ export class AppModule implements NestModule {
 
     consumer
       .apply(LoginRateLimitMiddleware)
-      .forRoutes('/api/auth/login');
+      .forRoutes('/api/auth/login', '/api/admin/login');
 
     consumer
       .apply(CsrfMiddleware)

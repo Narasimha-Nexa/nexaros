@@ -5,10 +5,11 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger'
 import { KitchenService } from './kitchen.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { BranchScopeGuard } from '../../common/guards/branch-scope.guard';
+import { EntitlementsGuard } from '../../common/guards/entitlements.guard';
 
 @ApiTags('kitchen')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, BranchScopeGuard)
+@UseGuards(JwtAuthGuard, BranchScopeGuard, EntitlementsGuard)
 @Controller('kitchen')
 export class KitchenController {
   constructor(private readonly kitchenService: KitchenService) {}

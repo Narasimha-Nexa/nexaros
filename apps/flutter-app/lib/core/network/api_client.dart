@@ -125,6 +125,26 @@ class ApiClient {
     return _handleResponse(response);
   }
 
+  Future<Map<String, dynamic>> getBranch(String id) async {
+    final response = await _authedGet('$_baseUrl/branches/$id');
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> createBranch(Map<String, dynamic> data) async {
+    final response = await _authedPost('$_baseUrl/branches', data);
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> updateBranch(String id, Map<String, dynamic> data) async {
+    final response = await _authedPatch('$_baseUrl/branches/$id', data);
+    return _handleResponse(response);
+  }
+
+  Future<void> deleteBranch(String id) async {
+    final response = await _authedDelete('$_baseUrl/branches/$id');
+    _handleResponse(response);
+  }
+
   // ─── Menu ───
 
   Future<List<dynamic>> getCategories() async {
@@ -601,6 +621,42 @@ class ApiClient {
       'endDate': endDate,
     });
     final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  // ─── Billing / Entitlements ───
+
+  Future<http.Response> getEntitlements(String tenantId) async {
+    final h = await _headers;
+    return http.get(Uri.parse('$_baseUrl/billing/entitlements/$tenantId'), headers: h);
+  }
+
+  Future<http.Response> getAvailablePlans() async {
+    return _authedGet('$_baseUrl/entitlements/plans');
+  }
+
+  Future<http.Response> validateCouponRaw(String code, String tenantId, {String? planSlug}) async {
+    final body = <String, dynamic>{'code': code, 'tenantId': tenantId};
+    if (planSlug != null) body['planSlug'] = planSlug;
+    return http.post(
+      Uri.parse('$_baseUrl/coupons/validate'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+  }
+
+  Future<http.Response> createSubscriptionCheckoutRaw(String tenantId, String planId, {String? couponCode}) async {
+    final body = <String, dynamic>{'tenantId': tenantId, 'planId': planId};
+    if (couponCode != null) body['couponCode'] = couponCode;
+    return _authedPost('$_baseUrl/billing/checkout', body);
+  }
+
+  Future<Map<String, dynamic>> createPaymentPromise(String tenantId, String reason, String expectedDate) async {
+    final response = await _authedPost('$_baseUrl/billing/payment-promise', {
+      'tenantId': tenantId,
+      'reason': reason,
+      'expectedDate': expectedDate,
+    });
     return _handleResponse(response);
   }
 

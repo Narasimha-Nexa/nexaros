@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
@@ -13,25 +14,20 @@ export default function ContactPage() {
     e.preventDefault();
     setError('');
     setSending(true);
-
     const form = e.currentTarget;
     const formData = new FormData(form);
     const name = formData.get('name') as string;
     const email = formData.get('email') as string;
     const message = formData.get('message') as string;
-
     try {
       const res = await fetch(`${API_BASE}/public/contact`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, message }),
       });
-      if (!res.ok && res.status !== 404) {
-        throw new Error('Failed to send message');
-      }
+      if (!res.ok && res.status !== 404) throw new Error('Failed to send');
       setSubmitted(true);
     } catch {
-      // Endpoint may not exist yet — still show success to user
       setSubmitted(true);
     } finally {
       setSending(false);
@@ -40,12 +36,14 @@ export default function ContactPage() {
 
   if (submitted) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center p-8">
-          <div className="text-6xl mb-4">✅</div>
-          <h1 className="text-2xl font-bold mb-2">Thank You!</h1>
-          <p className="text-gray-500">We&apos;ll get back to you shortly.</p>
-          <a href="/" className="inline-block mt-6 px-6 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700">Back to Home</a>
+      <div className="min-h-screen flex items-center justify-center px-6">
+        <div className="text-center p-8 rounded-[24px]" style={{ background: 'var(--bg-secondary)' }}>
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6" style={{ background: 'var(--success-light)' }}>
+            <svg className="w-8 h-8" fill="none" stroke="var(--success)" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+          </div>
+          <h1 className="text-2xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>Thank You!</h1>
+          <p style={{ color: 'var(--text-secondary)' }}>We&apos;ll get back to you shortly.</p>
+          <Link href="/" className="inline-block mt-6 px-6 py-3 rounded-[16px] font-medium text-white" style={{ background: 'var(--accent)' }}>Back to Home</Link>
         </div>
       </div>
     );
@@ -53,77 +51,51 @@ export default function ContactPage() {
 
   return (
     <div className="min-h-screen">
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <a href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">N</span>
-            </div>
-            <span className="font-bold text-xl text-gray-900">NexaROS</span>
-          </a>
-          <a href="/" className="text-sm text-gray-600 hover:text-gray-900">Back to Home</a>
+      <section className="pt-32 pb-20 px-6 max-w-[768px] mx-auto">
+        <div className="text-center mb-12">
+          <div className="reveal inline-flex items-center gap-2 px-4 py-1.5 rounded-[16px] text-sm font-semibold tracking-wide uppercase mb-6" style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}>
+            Contact
+          </div>
+          <h1 className="reveal reveal-delay-1 text-[32px] md:text-[48px] font-extrabold leading-tight mb-4" style={{ color: 'var(--text-primary)' }}>Contact Us</h1>
+          <p className="reveal reveal-delay-2 text-lg" style={{ color: 'var(--text-secondary)' }}>
+            Have questions? We&apos;d love to hear from you.
+          </p>
         </div>
-      </nav>
 
-      <div className="pt-32 pb-20 px-4 max-w-2xl mx-auto">
-        <h1 className="text-4xl font-bold mb-4 text-center">Contact Us</h1>
-        <p className="text-gray-500 text-center mb-12">
-          Have questions? We&apos;d love to hear from you.
-        </p>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-12">
-          <div className="p-6 bg-gray-50 rounded-2xl">
-            <div className="text-2xl mb-2">📧</div>
-            <h3 className="font-semibold mb-1">Email</h3>
-            <p className="text-sm text-gray-500">hello@nexaros.com</p>
-          </div>
-          <div className="p-6 bg-gray-50 rounded-2xl">
-            <div className="text-2xl mb-2">📞</div>
-            <h3 className="font-semibold mb-1">Phone</h3>
-            <p className="text-sm text-gray-500">+91 88888 88888</p>
-          </div>
-          <div className="p-6 bg-gray-50 rounded-2xl">
-            <div className="text-2xl mb-2">💬</div>
-            <h3 className="font-semibold mb-1">WhatsApp</h3>
-            <p className="text-sm text-gray-500">+91 88888 88888</p>
-          </div>
-          <div className="p-6 bg-gray-50 rounded-2xl">
-            <div className="text-2xl mb-2">📍</div>
-            <h3 className="font-semibold mb-1">Office</h3>
-            <p className="text-sm text-gray-500">Bangalore, India</p>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-12">
+          {[
+            { icon: '📧', title: 'Email', value: 'hello@nexaros.com' },
+            { icon: '📞', title: 'Phone', value: '+91 88888 88888' },
+            { icon: '💬', title: 'WhatsApp', value: '+91 88888 88888' },
+            { icon: '📍', title: 'Office', value: 'Bangalore, India' },
+          ].map((item) => (
+            <div key={item.title} className="reveal p-5 rounded-[20px]" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
+              <div className="text-xl mb-2">{item.icon}</div>
+              <h3 className="font-semibold text-sm mb-1" style={{ color: 'var(--text-primary)' }}>{item.title}</h3>
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{item.value}</p>
+            </div>
+          ))}
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
-              {error}
-            </div>
-          )}
+          {error && <div className="p-4 rounded-[16px] text-sm" style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}>{error}</div>}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-            <input type="text" name="name" required className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Your name" />
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-primary)' }}>Name</label>
+            <input type="text" name="name" required className="w-full px-4 py-2.5 rounded-[12px] text-base transition-all" style={{ background: 'var(--bg-primary)', border: '2px solid var(--border)', color: 'var(--text-primary)' }} placeholder="Your name" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input type="email" name="email" required className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="you@example.com" />
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-primary)' }}>Email</label>
+            <input type="email" name="email" required className="w-full px-4 py-2.5 rounded-[12px] text-base transition-all" style={{ background: 'var(--bg-primary)', border: '2px solid var(--border)', color: 'var(--text-primary)' }} placeholder="you@example.com" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
-            <textarea name="message" required rows={5} className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="How can we help?" />
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-primary)' }}>Message</label>
+            <textarea name="message" required rows={5} className="w-full px-4 py-2.5 rounded-[12px] text-base transition-all resize-none" style={{ background: 'var(--bg-primary)', border: '2px solid var(--border)', color: 'var(--text-primary)' }} placeholder="How can we help?" />
           </div>
-          <button type="submit" disabled={sending} className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+          <button type="submit" disabled={sending} className="w-full py-3 rounded-[16px] font-semibold text-white transition-all hover:-translate-y-0.5 disabled:opacity-50" style={{ background: 'var(--accent)' }}>
             {sending ? 'Sending...' : 'Send Message'}
           </button>
         </form>
-      </div>
-
-      <footer className="bg-gray-900 text-gray-400 py-12 px-4">
-        <div className="max-w-6xl mx-auto text-center">
-          <p className="text-white font-semibold mb-2">NexaROS</p>
-          <p className="text-sm">AI-Powered Restaurant Operating System</p>
-        </div>
-      </footer>
+      </section>
     </div>
   );
 }

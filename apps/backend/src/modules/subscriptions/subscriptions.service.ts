@@ -10,7 +10,7 @@ export class SubscriptionsService {
   async findAll(tenantId: string) {
     return this.prisma.subscription.findMany({
       where: { tenantId },
-      include: { plan: { select: { id: true, name: true, price: true, billingCycle: true } } },
+      include: { plan: { select: { id: true, name: true, slug: true, price: true, billingCycle: true } } },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -18,7 +18,7 @@ export class SubscriptionsService {
   async findOne(id: string, tenantId: string) {
     const subscription = await this.prisma.subscription.findFirst({
       where: { id, tenantId },
-      include: { plan: true },
+      include: { plan: true, payments: true, invoices: true },
     });
     if (!subscription) throw new NotFoundException('Subscription not found');
     return subscription;
@@ -26,29 +26,36 @@ export class SubscriptionsService {
 
   async getActive(tenantId: string) {
     return this.prisma.subscription.findFirst({
-      where: { tenantId, status: 'ACTIVE' },
+      where: { tenantId, status: { in: ['ACTIVE', 'TRIAL', 'PAYMENT_PENDING', 'GRACE_PERIOD'] } },
       include: { plan: true },
-      orderBy: { startDate: 'desc' },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
   async create(tenantId: string, dto: CreateSubscriptionDto) {
-    // Verify plan exists
-    const plan = await this.prisma.plan.findFirst({
-      where: { id: dto.planId, tenantId },
+    const plan = await this.prisma.platformPlan.findUnique({
+      where: { id: dto.planId },
     });
-    if (!plan) throw new BadRequestException('Plan not found for this tenant');
+    if (!plan) throw new BadRequestException('Plan not found');
+
+    const entitlements: Record<string, boolean> = {};
+    const planEntitlements = await this.prisma.planEntitlement.findMany({
+      where: { planId: dto.planId },
+    });
+    for (const e of planEntitlements) {
+      entitlements[e.moduleKey] = e.enabled;
+    }
 
     return this.prisma.subscription.create({
       data: {
         tenantId,
         planId: dto.planId,
-        status: (dto.status as any) || 'ACTIVE',
-        startDate: new Date(dto.startDate),
-        endDate: dto.endDate ? new Date(dto.endDate) : null,
-        razorpayId: dto.razorpayId,
+        status: 'TRIAL',
+        entitlements,
+        trialStartedAt: new Date(),
+        trialEndsAt: new Date(Date.now() + plan.trialDays * 24 * 60 * 60 * 1000),
       },
-      include: { plan: { select: { id: true, name: true, price: true } } },
+      include: { plan: { select: { id: true, name: true, slug: true, price: true } } },
     });
   }
 
@@ -59,11 +66,8 @@ export class SubscriptionsService {
       data: {
         ...(dto.planId && { planId: dto.planId }),
         ...(dto.status && { status: dto.status as any }),
-        ...(dto.startDate && { startDate: new Date(dto.startDate) }),
-        ...(dto.endDate && { endDate: new Date(dto.endDate) }),
-        ...(dto.razorpayId && { razorpayId: dto.razorpayId }),
       },
-      include: { plan: { select: { id: true, name: true, price: true } } },
+      include: { plan: { select: { id: true, name: true, slug: true, price: true } } },
     });
   }
 

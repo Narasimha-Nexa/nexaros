@@ -1,27 +1,23 @@
-import { IsString, IsOptional, IsDateString, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateSubscriptionDto {
   @ApiProperty()
   @IsString()
   planId!: string;
+}
 
-  @ApiProperty({ enum: ['ACTIVE', 'PAUSED', 'CANCELLED', 'EXPIRED'], default: 'ACTIVE' })
-  @IsEnum(['ACTIVE', 'PAUSED', 'CANCELLED', 'EXPIRED'])
-  @IsOptional()
-  status?: 'ACTIVE' | 'PAUSED' | 'CANCELLED' | 'EXPIRED';
-
-  @ApiProperty()
-  @IsDateString()
-  startDate!: string;
-
-  @ApiProperty({ required: false })
-  @IsDateString()
-  @IsOptional()
-  endDate?: string;
-
+export class UpdateSubscriptionDto {
   @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
-  razorpayId?: string;
+  planId?: string;
+
+  @ApiProperty({
+    enum: ['TRIAL', 'ACTIVE', 'PAYMENT_PENDING', 'GRACE_PERIOD', 'RESTRICTED', 'SUSPENDED', 'ARCHIVED'],
+    required: false,
+  })
+  @IsEnum(['TRIAL', 'ACTIVE', 'PAYMENT_PENDING', 'GRACE_PERIOD', 'RESTRICTED', 'SUSPENDED', 'ARCHIVED'])
+  @IsOptional()
+  status?: string;
 }

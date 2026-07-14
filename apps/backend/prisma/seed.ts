@@ -541,15 +541,213 @@ async function main() {
     console.log(`  ⏭️  Inventory items already exist (${existingInventory})`);
   }
 
+  // ─── PLATFORM PLANS ───
+  const existingPlans = await prisma.platformPlan.count();
+  if (existingPlans === 0) {
+    console.log('\n📦 Seeding platform plans...');
+    const starterPlan = await prisma.platformPlan.create({
+      data: {
+        name: 'Starter Free',
+        slug: 'starter-free',
+        description: 'Perfect for small restaurants just getting started',
+        price: 0,
+        billingCycle: 'MONTHLY',
+        trialDays: 14,
+        maxBranches: 1,
+        maxStaff: 5,
+        sortOrder: 1,
+        entitlements: {
+          createMany: {
+            data: [
+              { moduleKey: 'pos', enabled: true },
+              { moduleKey: 'kitchen', enabled: true },
+              { moduleKey: 'orders', enabled: true },
+              { moduleKey: 'tables', enabled: true },
+              { moduleKey: 'payments', enabled: true },
+              { moduleKey: 'invoices', enabled: false },
+              { moduleKey: 'inventory', enabled: false },
+              { moduleKey: 'staff', enabled: false },
+              { moduleKey: 'shifts', enabled: false },
+              { moduleKey: 'attendance', enabled: false },
+              { moduleKey: 'reports', enabled: false },
+              { moduleKey: 'ai_analytics', enabled: false },
+              { moduleKey: 'crm', enabled: false },
+              { moduleKey: 'loyalty', enabled: false },
+              { moduleKey: 'qr_ordering', enabled: false },
+              { moduleKey: 'customer_website', enabled: false },
+              { moduleKey: 'reservations', enabled: false },
+              { moduleKey: 'multi_branch', enabled: false },
+              { moduleKey: 'api_access', enabled: false },
+              { moduleKey: 'white_label', enabled: false },
+              { moduleKey: 'priority_support', enabled: false },
+            ],
+          },
+        },
+      },
+    });
+
+    const proPlan = await prisma.platformPlan.create({
+      data: {
+        name: 'Professional',
+        slug: 'professional',
+        description: 'For growing restaurants that need full operations',
+        price: 2999,
+        billingCycle: 'MONTHLY',
+        trialDays: 14,
+        maxBranches: 2,
+        maxStaff: 25,
+        sortOrder: 2,
+        entitlements: {
+          createMany: {
+            data: [
+              { moduleKey: 'pos', enabled: true },
+              { moduleKey: 'kitchen', enabled: true },
+              { moduleKey: 'orders', enabled: true },
+              { moduleKey: 'tables', enabled: true },
+              { moduleKey: 'payments', enabled: true },
+              { moduleKey: 'invoices', enabled: true },
+              { moduleKey: 'inventory', enabled: true },
+              { moduleKey: 'staff', enabled: true },
+              { moduleKey: 'shifts', enabled: true },
+              { moduleKey: 'attendance', enabled: true },
+              { moduleKey: 'reports', enabled: true },
+              { moduleKey: 'ai_analytics', enabled: false },
+              { moduleKey: 'crm', enabled: true },
+              { moduleKey: 'loyalty', enabled: false },
+              { moduleKey: 'qr_ordering', enabled: true },
+              { moduleKey: 'customer_website', enabled: false },
+              { moduleKey: 'reservations', enabled: true },
+              { moduleKey: 'multi_branch', enabled: false },
+              { moduleKey: 'api_access', enabled: false },
+              { moduleKey: 'white_label', enabled: false },
+              { moduleKey: 'priority_support', enabled: false },
+            ],
+          },
+        },
+      },
+    });
+
+    const businessPlan = await prisma.platformPlan.create({
+      data: {
+        name: 'Business',
+        slug: 'business',
+        description: 'For restaurant chains and large operations',
+        price: 7999,
+        billingCycle: 'MONTHLY',
+        trialDays: 14,
+        maxBranches: 10,
+        maxStaff: 100,
+        sortOrder: 3,
+        entitlements: {
+          createMany: {
+            data: [
+              { moduleKey: 'pos', enabled: true },
+              { moduleKey: 'kitchen', enabled: true },
+              { moduleKey: 'orders', enabled: true },
+              { moduleKey: 'tables', enabled: true },
+              { moduleKey: 'payments', enabled: true },
+              { moduleKey: 'invoices', enabled: true },
+              { moduleKey: 'inventory', enabled: true },
+              { moduleKey: 'staff', enabled: true },
+              { moduleKey: 'shifts', enabled: true },
+              { moduleKey: 'attendance', enabled: true },
+              { moduleKey: 'reports', enabled: true },
+              { moduleKey: 'ai_analytics', enabled: true },
+              { moduleKey: 'crm', enabled: true },
+              { moduleKey: 'loyalty', enabled: true },
+              { moduleKey: 'qr_ordering', enabled: true },
+              { moduleKey: 'customer_website', enabled: true },
+              { moduleKey: 'reservations', enabled: true },
+              { moduleKey: 'multi_branch', enabled: true },
+              { moduleKey: 'api_access', enabled: true },
+              { moduleKey: 'white_label', enabled: false },
+              { moduleKey: 'priority_support', enabled: true },
+            ],
+          },
+        },
+      },
+    });
+
+    const enterprisePlan = await prisma.platformPlan.create({
+      data: {
+        name: 'Enterprise',
+        slug: 'enterprise',
+        description: 'Custom plan for large chains and franchises',
+        price: 19999,
+        billingCycle: 'MONTHLY',
+        trialDays: 30,
+        maxBranches: 100,
+        maxStaff: 500,
+        isCustom: true,
+        sortOrder: 4,
+        entitlements: {
+          createMany: {
+            data: [
+              { moduleKey: 'pos', enabled: true },
+              { moduleKey: 'kitchen', enabled: true },
+              { moduleKey: 'orders', enabled: true },
+              { moduleKey: 'tables', enabled: true },
+              { moduleKey: 'payments', enabled: true },
+              { moduleKey: 'invoices', enabled: true },
+              { moduleKey: 'inventory', enabled: true },
+              { moduleKey: 'staff', enabled: true },
+              { moduleKey: 'shifts', enabled: true },
+              { moduleKey: 'attendance', enabled: true },
+              { moduleKey: 'reports', enabled: true },
+              { moduleKey: 'ai_analytics', enabled: true },
+              { moduleKey: 'crm', enabled: true },
+              { moduleKey: 'loyalty', enabled: true },
+              { moduleKey: 'qr_ordering', enabled: true },
+              { moduleKey: 'customer_website', enabled: true },
+              { moduleKey: 'reservations', enabled: true },
+              { moduleKey: 'multi_branch', enabled: true },
+              { moduleKey: 'api_access', enabled: true },
+              { moduleKey: 'white_label', enabled: true },
+              { moduleKey: 'priority_support', enabled: true },
+            ],
+          },
+        },
+      },
+    });
+
+    console.log(`  ✅ Created 4 platform plans: Starter, Professional, Business, Enterprise`);
+  } else {
+    console.log(`  ⏭️  Platform plans already exist (${existingPlans})`);
+  }
+
+  // ─── ADMIN USER ───
+  const existingAdmin = await prisma.adminUser.count();
+  if (existingAdmin === 0) {
+    console.log('\n👤 Seeding admin user...');
+    const adminPassword = await bcrypt.hash('admin123', 12);
+    await prisma.adminUser.create({
+      data: {
+        email: 'admin@nexaros.com',
+        name: 'Platform Admin',
+        password: adminPassword,
+        role: 'SUPER_ADMIN',
+      },
+    });
+    console.log(`  ✅ Created admin: admin@nexaros.com / admin123`);
+  } else {
+    console.log(`  ⏭️  Admin users already exist (${existingAdmin})`);
+  }
+
   const totalItems = await prisma.menuItem.count({ where: { tenantId: tenant.id } });
   const totalCategories = await prisma.category.count({ where: { tenantId: tenant.id } });
+  const totalPlans = await prisma.platformPlan.count();
+  const totalAdmins = await prisma.adminUser.count();
 
   console.log('\n🎉 Seed completed!');
   console.log(`   📂 ${totalCategories} categories | 🍽️  ${totalItems} menu items`);
+  console.log(`   📦 ${totalPlans} platform plans | 👤 ${totalAdmins} admin users`);
   console.log('\n📋 Demo Credentials:');
   console.log('   Email:      admin@demo.com');
   console.log('   Password:   password123');
   console.log('   Restaurant: Hungry Island');
+  console.log('\n🔧 Admin Credentials:');
+  console.log('   Email:      admin@nexaros.com');
+  console.log('   Password:   admin123');
 }
 
 main()

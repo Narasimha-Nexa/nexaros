@@ -6,6 +6,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger'
 import { OrdersService } from './orders.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { BranchScopeGuard } from '../../common/guards/branch-scope.guard';
+import { EntitlementsGuard } from '../../common/guards/entitlements.guard';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { AddItemDto } from './dto/add-item.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
@@ -13,7 +14,7 @@ import { PaginationDto, paginate } from '../../common/dto/pagination.dto';
 
 @ApiTags('orders')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, BranchScopeGuard)
+@UseGuards(JwtAuthGuard, BranchScopeGuard, EntitlementsGuard)
 @Controller('orders')
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}

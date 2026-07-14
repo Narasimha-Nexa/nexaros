@@ -245,18 +245,10 @@ export class PublicService {
   }
 
   async getPlans() {
-    return this.prisma.plan.findMany({
+    return this.prisma.platformPlan.findMany({
       where: { isActive: true },
-      select: {
-        id: true,
-        name: true,
-        price: true,
-        billingCycle: true,
-        maxBranches: true,
-        maxStaff: true,
-        features: true,
-      },
-      orderBy: { price: 'asc' },
+      include: { entitlements: true },
+      orderBy: { sortOrder: 'asc' },
     });
   }
 

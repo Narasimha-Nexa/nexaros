@@ -28,7 +28,7 @@ describe('PublicService', () => {
     menuItem: { findMany: jest.fn() },
     restaurantTable: { findFirst: jest.fn(), update: jest.fn() },
     order: { findFirst: jest.fn(), create: jest.fn() },
-    plan: { findMany: jest.fn() },
+    platformPlan: { findMany: jest.fn() },
   };
 
   const mockGatewayService = {
@@ -297,17 +297,17 @@ describe('PublicService', () => {
           features: { onlineOrdering: true, analytics: true },
         },
       ];
-      mockPrisma.plan.findMany.mockResolvedValue(mockPlans);
+      mockPrisma.platformPlan.findMany.mockResolvedValue(mockPlans);
 
       const result = await service.getPlans();
 
       expect(result).toHaveLength(2);
       expect(result[0].name).toBe('Starter');
       expect(result[1].name).toBe('Pro');
-      expect(mockPrisma.plan.findMany).toHaveBeenCalledWith(
+      expect(mockPrisma.platformPlan.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { isActive: true },
-          orderBy: { price: 'asc' },
+          orderBy: { sortOrder: 'asc' },
         }),
       );
     });

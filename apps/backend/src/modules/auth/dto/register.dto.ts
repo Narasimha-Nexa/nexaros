@@ -27,4 +27,29 @@ export class RegisterDto {
   @ApiProperty({ example: 'The Spice Kitchen' })
   @IsString()
   restaurantName: string;
+
+  @ApiPropertyOptional({ example: 'Restaurant' })
+  @IsString()
+  @IsOptional()
+  businessType?: string;
+
+  @ApiPropertyOptional({ example: 'India' })
+  @IsString()
+  @IsOptional()
+  country?: string;
+
+  @ApiPropertyOptional({ example: 'Karnataka' })
+  @IsString()
+  @IsOptional()
+  state?: string;
+
+  @ApiPropertyOptional({ example: 'Bangalore' })
+  @IsString()
+  @IsOptional()
+  city?: string;
+
+  @ApiPropertyOptional({ example: '123 MG Road, Bangalore' })
+  @IsString()
+  @IsOptional()
+  address?: string;
 }

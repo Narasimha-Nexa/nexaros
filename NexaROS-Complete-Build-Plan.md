@@ -1877,6 +1877,613 @@ git push -u origin main
 
 ---
 
-*Document version: 1.0*  
+## Subscription & Billing System
+
+### Subscription Lifecycle
+
+```
+TRIAL (14 days)
+    │
+    ▼
+ACTIVE (paid)
+    │
+    ├── Payment fails → PAYMENT_PENDING (7 days to pay)
+    │                       │
+    │                       ▼
+    │                   GRACE_PERIOD (7 days)
+    │                       │
+    │                       ▼
+    │                   RESTRICTED (POS still works)
+    │                       │
+    │                       ▼
+    │                   SUSPENDED (30 days, then archived)
+    │
+    ├── Payment Promise at any stage → extends access
+    │
+    └── Manual suspension by Super Admin → SUSPENDED
+```
+
+### Platform Plans
+
+```typescript
+// Platform plans (not tenant-specific)
+platform_plans = [
+  {
+    name: "Starter Free",
+    price: 0,
+    billingCycle: "MONTHLY",
+    trialDays: 14,
+    entitlements: {
+      pos: true, kitchen: true, orders: true, tables: true,
+      payments: true, invoices: true,
+      // Everything else false
+    }
+  },
+  {
+    name: "Professional",
+    price: 2999,
+    billingCycle: "MONTHLY",
+    entitlements: {
+      pos: true, kitchen: true, orders: true, tables: true,
+      payments: true, invoices: true,
+      inventory: true, staff: true, shifts: true,
+      reports: true, reservations: true,
+      qr_ordering: true, customer_website: true,
+    }
+  },
+  {
+    name: "Business",
+    price: 7999,
+    billingCycle: "MONTHLY",
+    entitlements: {
+      // Everything enabled
+      pos: true, kitchen: true, orders: true, tables: true,
+      payments: true, invoices: true,
+      inventory: true, staff: true, shifts: true, attendance: true,
+      reports: true, ai_analytics: true,
+      crm: true, loyalty: true,
+      qr_ordering: true, customer_website: true,
+      reservations: true, multi_branch: true,
+      priority_support: true,
+    }
+  },
+  {
+    name: "Enterprise",
+    price: 0, // Custom
+    billingCycle: "MONTHLY",
+    entitlements: {
+      // Everything + custom
+      api_access: true, white_label: true,
+    }
+  }
+]
+```
+
+### Module Keys (21 Feature Flags)
+
+```
+pos, kitchen, orders, tables, inventory, staff, shifts, attendance,
+payments, invoices, reports, ai_analytics, crm, loyalty,
+qr_ordering, customer_website, reservations, multi_branch,
+api_access, white_label, priority_support
+```
+
+### Restricted Mode
+
+When subscription is RESTRICTED or grace period expired:
+- POS, Orders, Kitchen, Tables, Payments, Invoices → ALWAYS WORK
+- Everything else requires active subscription
+- No data loss, just UI restriction
+- Owner sees upgrade prompts
+
+### Payment Promise System
+
+Owner can request to defer payment:
+1. Owner clicks "Request Payment Promise"
+2. Selects reason + expected payment date
+3. Super Admin reviews (sees notification)
+4. Admin approves → Subscription access extended
+5. Payment promise tracked in admin portal
+
+---
+
+## Marketing Website Pages (20+ Pages)
+
+```
+apps/marketing-web/src/app/
+├── page.tsx                          # Landing (12 sections)
+├── features/
+│   └── page.tsx                      # Product features
+├── pricing/
+│   └── page.tsx                      # Pricing plans
+├── custom-plan/
+│   └── page.tsx                      # Request custom plan
+├── about/
+│   └── page.tsx                      # About NexaROS
+├── contact/
+│   └── page.tsx                      # Contact form
+├── blog/
+│   ├── page.tsx                      # Blog index
+│   └── [slug]/page.tsx              # Blog post
+├── docs/
+│   ├── page.tsx                      # Docs index
+│   └── [slug]/page.tsx              # Doc page
+├── faq/
+│   └── page.tsx                      # FAQ accordion
+├── careers/
+│   └── page.tsx                      # Join us
+├── partners/
+│   └── page.tsx                      # Partner program
+├── login/
+│   └── page.tsx                      # Restaurant login
+├── register/
+│   └── page.tsx                      # Restaurant registration
+├── checkout/
+│   └── page.tsx                      # Subscription checkout
+├── privacy/
+│   └── page.tsx                      # Privacy policy
+├── terms/
+│   └── page.tsx                      # Terms of service
+├── refund/
+│   └── page.tsx                      # Refund policy
+├── security/
+│   └── page.tsx                      # Security info
+├── status/
+│   └── page.tsx                      # System status
+├── changelog/
+│   └── page.tsx                      # Product updates
+└── not-found.tsx                     # 404 page
+```
+
+---
+
+## Super Admin Portal (admin.nexaros.com)
+
+### Pages
+
+```
+apps/admin-portal/src/app/
+├── page.tsx                          # Redirect to /dashboard
+├── login/
+│   └── page.tsx                      # Admin login (MFA)
+├── dashboard/
+│   └── page.tsx                      # KPIs + charts
+├── restaurants/
+│   ├── page.tsx                      # Restaurant list
+│   └── [id]/page.tsx                # Restaurant detail
+├── subscriptions/
+│   ├── page.tsx                      # Subscription list
+│   └── [id]/page.tsx                # Subscription detail
+├── billing/
+│   └── page.tsx                      # Billing dashboard
+├── coupons/
+│   └── page.tsx                      # Coupon management
+├── demo-requests/
+│   └── page.tsx                      # Demo pipeline
+├── support/
+│   ├── page.tsx                      # Ticket list
+│   └── [id]/page.tsx                # Ticket detail
+├── audit/
+│   └── page.tsx                      # Audit logs
+├── admin-users/
+│   └── page.tsx                      # Admin user management
+└── settings/
+    └── page.tsx                      # Platform settings
+```
+
+### Admin Auth
+
+- Separate `admin_users` table (not restaurant users)
+- MFA with TOTP (Google Authenticator)
+- JWT with separate secret (ADMIN_JWT_SECRET)
+- Session tracking (device, IP, timestamp)
+- Audit logging for all admin actions
+
+---
+
+## Coupon System
+
+### Coupon Types
+
+1. **Festival Coupons**: Pongal, Diwali, Ugadi, etc.
+2. **Promotional Coupons**: First month free, referral bonuses
+3. **Manual Coupons**: Per-restaurant, created by admin
+
+### Coupon Rules
+
+```typescript
+{
+  code: "PONGAL2026",
+  type: "FIXED_AMOUNT", // or "PERCENTAGE"
+  value: 500, // ₹500 off or 20% off
+  maxDiscount: 1000, // For percentage coupons
+  minPlanPrice: 1999, // Minimum plan price to apply
+  expiry: "2026-01-20", // Festival end date
+  maxTotalUses: 1000, // Total coupons available
+  maxUsesPerUser: 1, // One per restaurant
+  applicablePlans: ["professional", "business", "enterprise"],
+  festivalTag: "pongal2026", // For grouping
+}
+```
+
+### Usage Tracking
+
+- Coupon applied → `coupon_usages` table records:
+  - couponId, tenantId, subscriptionId, usedAt, amount
+- Admin sees: total used, remaining, revenue impact
+- Prevents reuse: maxUsesPerUser enforced
+
+---
+
+## Backend Modules Needed (New)
+
+### Existing Modules (25+)
+
+auth, tenants, branches, users, roles, menu, orders, tables, kitchen,
+inventory, suppliers, purchases, reports, reservations, staff, payments,
+invoices, notifications, sync, websockets, printer, ai, public, plans, subscriptions
+
+### New Modules to Add
+
+```
+admin/              # Admin auth, MFA, sessions, audit
+billing/            # Subscription lifecycle, grace, promises
+coupons/            # Coupon CRUD, validation, usage
+entitlements/       # Feature flags, entitlement checks
+demo-requests/      # Demo request pipeline
+support/            # Support tickets, messages
+platform/           # Platform settings, feature flags
+```
+
+---
+
+## New Prisma Models (Billing & Platform)
+
+```prisma
+// ─── PLATFORM PLANS ───
+model PlatformPlan {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  description   String?
+  price         Decimal  @db.Decimal(10, 2)
+  billingCycle  BillingCycle @default(MONTHLY)
+  trialDays     Int      @default(14)
+  maxBranches   Int      @default(1)
+  maxStaff      Int      @default(10)
+  isCustom      Boolean  @default(false) // Enterprise plans
+  isActive      Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  entitlements  PlanEntitlement[]
+  subscriptions Subscription[]
+}
+
+model PlanEntitlement {
+  id           String  @id @default(cuid())
+  planId       String
+  plan         PlatformPlan @relation(fields: [planId], references: [id])
+  moduleKey    String  // pos, kitchen, orders, tables, etc.
+  enabled      Boolean @default(false)
+  
+  @@unique([planId, moduleKey])
+}
+
+// ─── SUBSCRIPTIONS (Redesigned) ───
+model Subscription {
+  id               String             @id @default(cuid())
+  tenantId         String
+  tenant           Tenant             @relation(fields: [tenantId], references: [id])
+  planId           String
+  plan             PlatformPlan       @relation(fields: [planId], references: [id])
+  status           SubscriptionStatus @default(TRIAL)
+  
+  // Entitlement snapshot (copied from plan + custom overrides)
+  entitlements     Json               // { pos: true, kitchen: true, ... }
+  
+  // Custom pricing (for enterprise)
+  customPrice      Decimal?           @db.Decimal(10, 2)
+  discount         Decimal?           @db.Decimal(10, 2)
+  
+  // Trial
+  trialStartedAt   DateTime?
+  trialEndsAt      DateTime?
+  
+  // Billing
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  nextBillingDate    DateTime?
+  lastPaymentAt      DateTime?
+  
+  // Grace period
+  gracePeriodDays  Int      @default(7)
+  graceStartedAt   DateTime?
+  
+  // Payment promise
+  hasPromise       Boolean  @default(false)
+  promiseUntil     DateTime?
+  promiseReason    String?
+  
+  // Razorpay
+  razorpayId       String?
+  razorpayPlanId   String?
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  payments         SubscriptionPayment[]
+  invoices         SubscriptionInvoice[]
+  
+  @@index([tenantId, status])
+  @@index([status, nextBillingDate])
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAYMENT_PENDING
+  GRACE_PERIOD
+  RESTRICTED
+  SUSPENDED
+  ARCHIVED
+}
+
+// ─── FEATURE FLAGS ───
+model FeatureFlag {
+  id          String  @id @default(cuid())
+  key         String  @unique // e.g., "enable_ai_analytics"
+  name        String
+  description String?
+  enabled     Boolean @default(false)
+  
+  tenantFlags TenantFeatureFlag[]
+}
+
+model TenantFeatureFlag {
+  id              String      @id @default(cuid())
+  tenantId        String
+  tenant          Tenant      @relation(fields: [tenantId], references: [id])
+  featureFlagId   String
+  featureFlag     FeatureFlag @relation(fields: [featureFlagId], references: [id])
+  enabled         Boolean     @default(false)
+  
+  @@unique([tenantId, featureFlagId])
+}
+
+// ─── COUPONS ───
+model Coupon {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  description     String?
+  type            CouponType @default(FIXED_AMOUNT)
+  value           Decimal  @db.Decimal(10, 2)
+  maxDiscount     Decimal? @db.Decimal(10, 2) // For percentage
+  minPlanPrice    Decimal? @db.Decimal(10, 2)
+  expiry          DateTime
+  maxTotalUses    Int?
+  maxUsesPerUser  Int      @default(1)
+  applicablePlans String[] // ["professional", "business"]
+  festivalTag     String?
+  isActive        Boolean  @default(true)
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  usages          CouponUsage[]
+}
+
+enum CouponType {
+  FIXED_AMOUNT
+  PERCENTAGE
+}
+
+model CouponUsage {
+  id             String   @id @default(cuid())
+  couponId       String
+  coupon         Coupon   @relation(fields: [couponId], references: [id])
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id])
+  subscriptionId String?
+  amount         Decimal  @db.Decimal(10, 2)
+  usedAt         DateTime @default(now())
+}
+
+// ─── PAYMENT PROMISES ───
+model PaymentPromise {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id])
+  subscriptionId String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id])
+  reason         String
+  expectedDate   DateTime
+  status         PaymentPromiseStatus @default(PENDING)
+  approvedBy     String?
+  approvedAt     DateTime?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+enum PaymentPromiseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+  EXPIRED
+}
+
+// ─── SUBSCRIPTION PAYMENTS ───
+model SubscriptionPayment {
+  id             String   @id @default(cuid())
+  subscriptionId String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id])
+  amount         Decimal  @db.Decimal(10, 2)
+  method         PaymentMethod
+  reference      String?
+  status         PaymentStatus @default(PENDING)
+  invoiceId      String?
+  createdAt      DateTime @default(now())
+}
+
+model SubscriptionInvoice {
+  id             String   @id @default(cuid())
+  subscriptionId String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id])
+  number         String   @unique
+  amount         Decimal  @db.Decimal(10, 2)
+  taxAmount      Decimal  @db.Decimal(10, 2)
+  status         InvoiceStatus @default(PENDING)
+  pdfUrl         String?
+  createdAt      DateTime @default(now())
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+// ─── ADMIN (Platform Owner) ───
+model AdminUser {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String
+  password      String
+  role          AdminRole @default(ADMIN)
+  mfaEnabled    Boolean  @default(false)
+  mfaSecret     String?
+  isActive      Boolean  @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  sessions      AdminSession[]
+  auditLogs     AdminAuditLog[]
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+  VIEWER
+}
+
+model AdminSession {
+  id            String   @id @default(cuid())
+  adminUserId   String
+  adminUser     AdminUser @relation(fields: [adminUserId], references: [id])
+  token         String   @unique
+  ipAddress     String?
+  userAgent     String?
+  mfaVerified   Boolean  @default(false)
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+}
+
+model AdminAuditLog {
+  id            String   @id @default(cuid())
+  adminUserId   String
+  adminUser     AdminUser @relation(fields: [adminUserId], references: [id])
+  action        String
+  entity        String
+  entityId      String?
+  oldData       Json?
+  newData       Json?
+  ipAddress     String?
+  createdAt     DateTime @default(now())
+  
+  @@index([adminUserId, createdAt])
+}
+
+// ─── DEMO REQUESTS ───
+model DemoRequest {
+  id            String   @id @default(cuid())
+  restaurantName String
+  contactName   String
+  email         String
+  phone         String
+  city          String?
+  state         String?
+  currentPos    String?
+  message       String?
+  status        DemoRequestStatus @default(NEW)
+  assignedTo    String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+enum DemoRequestStatus {
+  NEW
+  CONTACTED
+  SCHEDULED
+  CONVERTED
+  LOST
+}
+
+// ─── SUPPORT TICKETS ───
+model SupportTicket {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  subject       String
+  description   String
+  priority      TicketPriority @default(NORMAL)
+  status        TicketStatus @default(OPEN)
+  assignedTo    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  messages      TicketMessage[]
+}
+
+enum TicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+model TicketMessage {
+  id            String   @id @default(cuid())
+  ticketId      String
+  ticket        SupportTicket @relation(fields: [ticketId], references: [id])
+  senderType    SenderType
+  senderId      String
+  message       String
+  isInternal    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+}
+
+enum SenderType {
+  CUSTOMER
+  SUPPORT
+  SYSTEM
+}
+
+// ─── PLATFORM SETTINGS ───
+model PlatformSettings {
+  id            String   @id @default(cuid())
+  key           String   @unique
+  value         Json
+  description   String?
+  updatedAt     DateTime @updatedAt
+}
+```
+
+---
+
+*Document version: 2.0*  
 *Last updated: July 2026*  
 *Project: NexaROS — AI-Powered Restaurant Operating System*

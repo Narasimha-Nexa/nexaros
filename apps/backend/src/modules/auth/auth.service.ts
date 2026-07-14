@@ -56,6 +56,11 @@ export class AuthService {
           slug: finalSlug,
           phone: dto.phone,
           email: dto.email,
+          businessType: dto.businessType,
+          country: dto.country,
+          state: dto.state,
+          city: dto.city,
+          address: dto.address,
         },
       });
 

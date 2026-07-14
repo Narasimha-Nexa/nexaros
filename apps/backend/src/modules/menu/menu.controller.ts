@@ -7,6 +7,7 @@ import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiConsumes } from '@nestjs/swagger';
 import { MenuService } from './menu.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { EntitlementsGuard } from '../../common/guards/entitlements.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
@@ -17,7 +18,7 @@ import { PaginationDto, paginate } from '../../common/dto/pagination.dto';
 
 @ApiTags('menu')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, EntitlementsGuard)
 @Controller('menu')
 export class MenuController {
   constructor(private readonly menuService: MenuService) {}
