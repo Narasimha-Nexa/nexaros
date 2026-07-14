@@ -5,7 +5,7 @@ nixPkgs = ["nodejs_22"]
 cmds = ["pnpm install --frozen-lockfile"]
 
 [phases.build]
-cmds = ["pnpm db:generate", "pnpm db:migrate:prod", "pnpm build"]
+cmds = ["pnpm run build"]
 
 [start]
 cmd = "node dist/main.js"
