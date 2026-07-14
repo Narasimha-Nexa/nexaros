@@ -1,0 +1,11 @@
+[build]
+builder = "nixpacks"
+rootDirectory = "apps/backend"
+
+[deploy]
+startCommand = "node dist/main.js"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[variables]
+NODE_ENV = "production"

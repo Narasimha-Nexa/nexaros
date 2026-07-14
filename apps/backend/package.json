@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "description": "NexaROS Backend API Server",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "build": "nest build",
     "start": "nest start",
@@ -19,7 +22,9 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
-    "db:reset": "prisma migrate reset"
+    "db:reset": "prisma migrate reset",
+    "railway:build": "pnpm install --frozen-lockfile && pnpm db:generate && pnpm db:migrate:prod",
+    "railway:start": "node dist/main.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.28",
