@@ -74,28 +74,35 @@ body {
   color: white;
 }
 
-/* Scroll reveal animation */
+/* Scroll reveal — always visible by default, animated only when JS loads */
 .reveal {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* When JS loads, hide elements and animate them in */
+.js-loaded .reveal {
   opacity: 0;
   transform: translateY(24px);
   transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.reveal.visible {
+.js-loaded .reveal.visible {
   opacity: 1;
   transform: translateY(0);
 }
 
-.reveal-delay-1 { transition-delay: 0.1s; }
-.reveal-delay-2 { transition-delay: 0.2s; }
-.reveal-delay-3 { transition-delay: 0.3s; }
-.reveal-delay-4 { transition-delay: 0.4s; }
+.reveal-delay-1 { transition-delay: 0.1s !important; }
+.reveal-delay-2 { transition-delay: 0.2s !important; }
+.reveal-delay-3 { transition-delay: 0.3s !important; }
+.reveal-delay-4 { transition-delay: 0.4s !important; }
 
 @media (prefers-reduced-motion: reduce) {
-  .reveal {
-    opacity: 1;
-    transform: none;
-    transition: none;
+  .reveal,
+  .js-loaded .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
   }
 }
 
