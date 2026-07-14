@@ -5,10 +5,12 @@ import { StatCard } from '@/components/ui/stat-card';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/layout/page-header';
+import { WiredChart, wiredBaseOptions, wiredYAxis, WIRED_PALETTE } from '@/components/charts/wired-chart';
 import {
   Building2, Users, CreditCard, TrendingUp, AlertTriangle,
   ArrowRight, LifeBuoy, Activity, DollarSign, Clock, Plus
 } from 'lucide-react';
+import type { ApexOptions } from 'apexcharts';
 
 const stats = [
   { label: 'Total Restaurants', value: '2,847', change: '+12.5%', changeType: 'positive' as const },
@@ -16,6 +18,117 @@ const stats = [
   { label: 'Monthly Revenue', value: '₹42.8L', change: '+15.2%', changeType: 'positive' as const },
   { label: 'Pending Issues', value: '23', change: '-4.1%', changeType: 'negative' as const },
 ];
+
+const revenueData = {
+  series: [{
+    name: 'Revenue',
+    data: [18.2, 22.5, 25.1, 28.4, 31.7, 34.2, 37.8, 39.1, 41.5, 42.8, 44.1, 46.3],
+  }],
+  options: {
+    ...wiredBaseOptions,
+    chart: { ...wiredBaseOptions.chart, type: 'area' as const },
+    colors: [WIRED_PALETTE[0]],
+    stroke: { ...wiredBaseOptions.stroke, width: 2 },
+    fill: {
+      type: 'gradient',
+      gradient: {
+        shadeIntensity: 1,
+        opacityFrom: 0.15,
+        opacityTo: 0.01,
+        stops: [0, 100],
+      },
+    },
+    xaxis: {
+      ...wiredBaseOptions.xaxis,
+      categories: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    },
+    yaxis: wiredYAxis({ formatter: (val: number) => `₹${val}L` }),
+    tooltip: {
+      ...wiredBaseOptions.tooltip,
+      y: { formatter: (val: number) => `₹${val}L` },
+    },
+  } as ApexOptions,
+};
+
+const ordersData = {
+  series: [{
+    name: 'Orders',
+    data: [12400, 14200, 16800, 18100, 21500, 24300, 26700, 28100, 31200, 33400, 35100, 38200],
+  }],
+  options: {
+    ...wiredBaseOptions,
+    chart: { ...wiredBaseOptions.chart, type: 'bar' as const },
+    colors: [WIRED_PALETTE[0]],
+    plotOptions: {
+      bar: {
+        borderRadius: 0,
+        borderWidth: 0,
+        columnWidth: '60%',
+      },
+    },
+    xaxis: {
+      ...wiredBaseOptions.xaxis,
+      categories: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    },
+    yaxis: wiredYAxis({ formatter: (val: number) => `${(val / 1000).toFixed(0)}K` }),
+    tooltip: {
+      ...wiredBaseOptions.tooltip,
+      y: { formatter: (val: number) => val.toLocaleString('en-IN') },
+    },
+  } as ApexOptions,
+};
+
+const subscriptionDonut = {
+  series: [2156, 423, 178, 90],
+  options: {
+    ...wiredBaseOptions,
+    chart: { ...wiredBaseOptions.chart, type: 'donut' as const },
+    colors: WIRED_PALETTE.slice(0, 4),
+    labels: ['Active', 'Trial', 'Grace Period', 'Suspended'],
+    plotOptions: {
+      pie: {
+        donut: {
+          size: '72%',
+          labels: {
+            show: true,
+            name: {
+              show: true,
+              fontSize: '12px',
+              fontFamily: "'Inter', system-ui, sans-serif",
+              fontWeight: 500,
+              color: '#737373',
+            },
+            value: {
+              show: true,
+              fontSize: '24px',
+              fontFamily: "'Playfair Display', Georgia, serif",
+              fontWeight: 400,
+              color: '#000000',
+            },
+            total: {
+              show: true,
+              label: 'Total',
+              fontSize: '12px',
+              fontFamily: "'Inter', system-ui, sans-serif",
+              fontWeight: 500,
+              color: '#737373',
+              formatter: () => '2,847',
+            },
+          },
+        },
+      },
+    },
+    stroke: { width: 2, colors: ['#ffffff'] },
+    legend: {
+      ...wiredBaseOptions.legend,
+      position: 'bottom' as const,
+    },
+    tooltip: {
+      ...wiredBaseOptions.tooltip,
+      y: { formatter: (val: number) => val.toLocaleString('en-IN') },
+    },
+  } as ApexOptions,
+};
 
 const recentActivity = [
   { id: '1', type: 'signup', message: 'New restaurant registered: Pizza Palace', time: '2 min ago' },
@@ -63,23 +176,39 @@ export default function DashboardPage() {
 
       <div className="divider-heavy" />
 
-      {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => (
           <StatCard key={stat.label} {...stat} />
         ))}
       </div>
 
-      {/* Main Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-display-xs font-sans">Revenue Trend</h2>
+            <span className="text-caption font-sans text-body">Last 12 months</span>
+          </div>
+          <WiredChart options={revenueData.options} series={revenueData.series} type="area" height={260} />
+        </Card>
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-display-xs font-sans">Order Volume</h2>
+            <span className="text-caption font-sans text-body">Monthly</span>
+          </div>
+          <WiredChart options={ordersData.options} series={ordersData.series} type="bar" height={260} />
+        </Card>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Activity Feed */}
+        <Card>
+          <h2 className="text-display-xs font-sans mb-4">Subscriptions</h2>
+          <WiredChart options={subscriptionDonut.options} series={subscriptionDonut.series} type="donut" height={280} />
+        </Card>
         <div className="lg:col-span-2">
           <Card>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-display-xs font-sans">Recent Activity</h2>
-              <Link href="/audit-logs" className="text-caption font-sans font-semibold text-link hover:underline">
-                View All
-              </Link>
+              <Link href="/audit-logs" className="text-caption font-sans font-semibold text-link hover:underline">View All</Link>
             </div>
             <div className="divide-y divide-hairline">
               {recentActivity.map((item) => (
@@ -94,8 +223,7 @@ export default function DashboardPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-body-sm font-sans truncate">{item.message}</p>
                     <p className="text-caption text-body font-sans flex items-center gap-1 mt-0.5">
-                      <Clock size={10} />
-                      {item.time}
+                      <Clock size={10} />{item.time}
                     </p>
                   </div>
                 </div>
@@ -103,76 +231,52 @@ export default function DashboardPage() {
             </div>
           </Card>
         </div>
+      </div>
 
-        {/* Right Column */}
-        <div className="space-y-5">
-          {/* System Health */}
-          <Card>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-display-xs font-sans">System Health</h2>
-              <Link href="/monitoring" className="text-caption font-sans font-semibold text-link hover:underline">
-                Details
-              </Link>
-            </div>
-            <div className="space-y-3">
-              {systemHealth.map((service) => (
-                <div key={service.name} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${service.status === 'Operational' ? 'bg-success' : 'bg-warning'}`} />
-                    <span className="text-body-sm font-sans">{service.name}</span>
-                  </div>
-                  <span className="text-caption text-body font-sans">{service.uptime}</span>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-display-xs font-sans">System Health</h2>
+            <Link href="/monitoring" className="text-caption font-sans font-semibold text-link hover:underline">Details</Link>
+          </div>
+          <div className="space-y-3">
+            {systemHealth.map((service) => (
+              <div key={service.name} className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${service.status === 'Operational' ? 'bg-success' : 'bg-warning'}`} />
+                  <span className="text-body-sm font-sans">{service.name}</span>
                 </div>
-              ))}
-            </div>
-          </Card>
-
-          {/* Top Tenants */}
-          <Card>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-display-xs font-sans">Top Restaurants</h2>
-              <Link href="/tenants" className="text-caption font-sans font-semibold text-link hover:underline">
-                View All
-              </Link>
-            </div>
-            <div className="space-y-3">
-              {topTenants.map((tenant) => (
-                <div key={tenant.name} className="flex items-center justify-between">
-                  <div className="min-w-0">
-                    <p className="text-body-sm font-sans font-medium truncate">{tenant.name}</p>
-                    <p className="text-caption text-body font-sans">{tenant.plan}</p>
-                  </div>
-                  <Badge variant={tenant.status === 'trial' ? 'outline' : 'filled'}>
-                    {tenant.mrr}
-                  </Badge>
+                <span className="text-caption text-body font-sans">{service.uptime}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-display-xs font-sans">Top Restaurants</h2>
+            <Link href="/tenants" className="text-caption font-sans font-semibold text-link hover:underline">View All</Link>
+          </div>
+          <div className="space-y-3">
+            {topTenants.map((tenant) => (
+              <div key={tenant.name} className="flex items-center justify-between">
+                <div className="min-w-0">
+                  <p className="text-body-sm font-sans font-medium truncate">{tenant.name}</p>
+                  <p className="text-caption text-body font-sans">{tenant.plan}</p>
                 </div>
-              ))}
-            </div>
-          </Card>
-
-          {/* Quick Actions */}
-          <Card>
-            <h2 className="text-display-xs font-sans mb-4">Quick Actions</h2>
-            <div className="space-y-2">
-              <Link href="/provision" className="btn btn-primary btn-sm w-full justify-start">
-                <Plus size={14} />
-                Create Restaurant
-              </Link>
-              <Link href="/tenants" className="btn btn-outline btn-sm w-full justify-start">
-                <Building2 size={14} />
-                Manage Restaurants
-              </Link>
-              <Link href="/subscriptions" className="btn btn-outline btn-sm w-full justify-start">
-                <CreditCard size={14} />
-                View Subscriptions
-              </Link>
-              <Link href="/settings" className="btn btn-outline btn-sm w-full justify-start">
-                <Activity size={14} />
-                Platform Settings
-              </Link>
-            </div>
-          </Card>
-        </div>
+                <Badge variant={tenant.status === 'trial' ? 'outline' : 'filled'}>{tenant.mrr}</Badge>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <Card>
+          <h2 className="text-display-xs font-sans mb-4">Quick Actions</h2>
+          <div className="space-y-2">
+            <Link href="/provision" className="btn btn-primary btn-sm w-full justify-start"><Plus size={14} />Create Restaurant</Link>
+            <Link href="/tenants" className="btn btn-outline btn-sm w-full justify-start"><Building2 size={14} />Manage Restaurants</Link>
+            <Link href="/subscriptions" className="btn btn-outline btn-sm w-full justify-start"><CreditCard size={14} />View Subscriptions</Link>
+            <Link href="/settings" className="btn btn-outline btn-sm w-full justify-start"><Activity size={14} />Platform Settings</Link>
+          </div>
+        </Card>
       </div>
     </div>
   );
