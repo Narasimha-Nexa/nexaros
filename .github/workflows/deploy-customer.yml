@@ -1,11 +1,10 @@
-name: Deploy Marketing Website
+name: Deploy Customer Website
 
 on:
   push:
     branches: [main]
     paths:
-      - 'apps/marketing-web/**'
-      - 'netlify.toml'
+      - 'apps/customer-web/**'
   workflow_dispatch:
 
 jobs:
@@ -26,19 +25,18 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Build marketing website
-        run: pnpm --filter @nexaros/marketing-web run build
+      - name: Build customer website
+        run: pnpm --filter @nexaros/customer-web run build
         env:
           NEXT_PUBLIC_API_URL: ${{ secrets.BACKEND_URL }}/api
-          NEXT_PUBLIC_SITE_URL: https://nexaros.com
 
       - name: Deploy to Netlify
         uses: nwtgck/actions-netlify@v3
         with:
-          publish-dir: apps/marketing-web/.next
+          publish-dir: apps/customer-web/.next
           production-deploy: true
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          deploy-message: "Deploy from GitHub Actions - ${{ github.sha }}"
+          deploy-message: "Deploy customer-web from GitHub Actions - ${{ github.sha }}"
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          NETLIFY_CUSTOMER_SITE_ID: ${{ secrets.NETLIFY_CUSTOMER_SITE_ID }}

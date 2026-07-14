@@ -50,7 +50,23 @@
    - `NEXT_PUBLIC_API_URL` = `https://your-backend-url.railway.app/api`
 5. Click **Deploy**
 
-## After All 3 Are Deployed
+### 4. Customer Website (Netlify) — Restaurant customer-facing ordering
+
+This is the website customers see when they scan a QR code to order food.
+
+1. Go to [app.netlify.com](https://app.netlify.com) → Sign in with GitHub
+2. **"Add new site"** → **"Import an existing project"**
+3. Select **GitHub** → Select `Narasimha-Nexa/nexaros`
+4. Configure:
+   - **Base directory:** `apps/customer-web`
+   - **Build command:** `npm run build`
+   - **Publish directory:** `.next`
+5. Add env var: `NODE_VERSION` = `22`
+6. Click **Deploy**
+7. Once deployed, go to **Site settings → Environment variables** and add:
+   - `NEXT_PUBLIC_API_URL` = `https://your-backend-url.railway.app/api`
+
+## After All 4 Are Deployed
 
 Update the Netlify and Vercel env vars with the actual Railway backend URL:
 - `NEXT_PUBLIC_API_URL` = `https://your-actual-backend.up.railway.app/api`
@@ -63,7 +79,8 @@ Go to **GitHub repo → Settings → Secrets and variables → Actions** and add
 |---|---|
 | `BACKEND_URL` | Your Railway backend URL (e.g. `https://nexaros-backend.up.railway.app`) |
 | `NETLIFY_AUTH_TOKEN` | Netlify → User settings → Applications → Personal access tokens |
-| `NETLIFY_SITE_ID` | Netlify → Site → Build & deploy → Site information |
+| `NETLIFY_SITE_ID` | Netlify → Marketing site → Build & deploy → Site information |
+| `NETLIFY_CUSTOMER_SITE_ID` | Netlify → Customer site → Build & deploy → Site information |
 | `VERCEL_TOKEN` | Vercel → Settings → Tokens |
 | `VERCEL_ORG_ID` | Vercel → Settings → General → Team ID |
 | `VERCEL_PROJECT_ID` | Vercel → Your project → Settings → General → Project ID |

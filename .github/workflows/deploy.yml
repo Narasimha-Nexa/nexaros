@@ -1,7 +1,9 @@
-name: Deploy
+name: CI
 
 on:
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
   workflow_dispatch:
 
@@ -31,7 +33,7 @@ jobs:
           version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: cd apps/backend && npx prisma generate && npx nest build
@@ -45,10 +47,12 @@ jobs:
           version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: cd apps/customer-web && pnpm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4000/api
 
   test-marketing-web:
     runs-on: ubuntu-latest
@@ -59,7 +63,21 @@ jobs:
           version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: cd apps/marketing-web && pnpm run build
+
+  test-admin-portal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: cd apps/admin-portal && pnpm run build
