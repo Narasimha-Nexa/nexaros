@@ -21,7 +21,8 @@ export default function SignupPage() {
     setLoading(true);
     setError('');
     try {
-      await signup({ ...form, name: form.name });
+      const [firstName = '', lastName = ''] = form.name.split(' ');
+      await signup({ firstName, lastName, email: form.email, phone: form.phone, password: form.password });
       router.push('/profile');
     } catch {
       setError('Something went wrong. Please try again.');

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import type { MenuCategory, MenuItem } from '@/types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 const API_HOST = API_BASE_URL.replace(/\/api\/?$/, '');
 
 interface MenuDisplayProps {

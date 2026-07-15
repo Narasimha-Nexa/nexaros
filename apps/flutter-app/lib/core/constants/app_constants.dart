@@ -8,7 +8,7 @@ class AppConstants {
   static const String appTagline = 'The Complete Restaurant Operating System';
 
   // ─── API ───
-  static const String defaultApiUrl = 'http://localhost:4000/api';
+  static const String defaultApiUrl = 'http://localhost:4000/api/v1';
   static const Duration apiTimeout = Duration(seconds: 30);
   static const Duration apiRetryDelay = Duration(seconds: 2);
   static const int apiMaxRetries = 3;

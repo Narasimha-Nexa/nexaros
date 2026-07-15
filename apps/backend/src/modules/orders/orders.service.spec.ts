@@ -70,7 +70,7 @@ describe('OrdersService', () => {
     orderStatusHistory: { create: jest.fn() },
   };
 
-  const mockGateway = { emitToBranch: jest.fn() };
+  const mockGateway = { emitToBranch: jest.fn(), emitToOrder: jest.fn() };
 
   beforeEach(async () => {
     jest.clearAllMocks();

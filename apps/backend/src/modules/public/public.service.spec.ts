@@ -35,6 +35,7 @@ describe('PublicService', () => {
     emitToBranch: jest.fn(),
     emitToTenant: jest.fn(),
     emitToRoom: jest.fn(),
+    emitToOrder: jest.fn(),
   };
 
   beforeEach(async () => {

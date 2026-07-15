@@ -75,7 +75,7 @@ describe('KitchenService', () => {
     stockMovement: { create: jest.fn() },
   };
 
-  const mockGateway = { emitToBranch: jest.fn() };
+  const mockGateway = { emitToBranch: jest.fn(), emitToOrder: jest.fn() };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -215,7 +215,10 @@ describe('KitchenService', () => {
 
   describe('updateItemStatus', () => {
     it('should update individual item status', async () => {
-      mockPrisma.orderItem.findFirst.mockResolvedValue(mockOrder.items[0]);
+      mockPrisma.orderItem.findFirst.mockResolvedValue({
+        ...mockOrder.items[0],
+        order: { id: 'order-1', branchId: 'branch-1', orderNumber: 101 },
+      });
       mockPrisma.orderItem.update.mockResolvedValue({ ...mockOrder.items[0], status: 'PREPARING' });
 
       const result = await service.updateItemStatus('order-1', 'item-1', 'PREPARING');

@@ -81,7 +81,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.customer
       args:
-        NEXT_PUBLIC_API_URL: http://nexaros-backend:4000/api
+        NEXT_PUBLIC_API_URL: http://nexaros-backend:4000/api/v1
         NEXT_PUBLIC_SOCKET_URL: http://nexaros-backend:4000
     container_name: nexaros-customer
     restart: unless-stopped
@@ -90,7 +90,7 @@ services:
     depends_on:
       - nexaros-backend
     environment:
-      NEXT_PUBLIC_API_URL: http://nexaros-backend:4000/api
+      NEXT_PUBLIC_API_URL: http://nexaros-backend:4000/api/v1
       NEXT_PUBLIC_SOCKET_URL: http://nexaros-backend:4000
     ports:
       - "3001:3001"
@@ -102,7 +102,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.marketing
       args:
-        NEXT_PUBLIC_API_URL: http://nexaros-backend:4000/api
+        NEXT_PUBLIC_API_URL: http://nexaros-backend:4000/api/v1
         NEXT_PUBLIC_SITE_URL: http://nexaros-marketing:3002
     container_name: nexaros-marketing
     restart: unless-stopped
@@ -126,7 +126,7 @@ services:
     depends_on:
       - nexaros-backend
     environment:
-      NEXT_PUBLIC_API_URL: http://nexaros-backend:4000/api
+      NEXT_PUBLIC_API_URL: http://nexaros-backend:4000/api/v1
     ports:
       - "3003:3003"
 

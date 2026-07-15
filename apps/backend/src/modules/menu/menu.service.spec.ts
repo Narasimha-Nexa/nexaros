@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { MenuService } from './menu.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GatewayService } from '../websockets/gateway.service';
+import { RedisService } from '../../common/redis/redis.service';
 import { NotFoundException } from '@nestjs/common';
 
 // Mock fs/promises unlink (used when deleting images)
@@ -13,6 +14,7 @@ describe('MenuService', () => {
   let service: MenuService;
   let prisma: jest.Mocked<PrismaService>;
   let gateway: jest.Mocked<GatewayService>;
+  let redis: jest.Mocked<RedisService>;
 
   const mockCategory = {
     id: 'cat-1',
@@ -74,6 +76,14 @@ describe('MenuService', () => {
 
   const mockGateway = { emitToTenant: jest.fn() };
 
+  const mockRedis = {
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue(undefined),
+    del: jest.fn().mockResolvedValue(undefined),
+    delPattern: jest.fn().mockResolvedValue(undefined),
+    isReady: jest.fn().mockReturnValue(true),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
 
@@ -82,12 +92,14 @@ describe('MenuService', () => {
         MenuService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: GatewayService, useValue: mockGateway },
+        { provide: RedisService, useValue: mockRedis },
       ],
     }).compile();
 
     service = module.get<MenuService>(MenuService);
     prisma = module.get(PrismaService) as jest.Mocked<PrismaService>;
     gateway = module.get(GatewayService) as jest.Mocked<GatewayService>;
+    redis = module.get(RedisService) as jest.Mocked<RedisService>;
   });
 
   // ── CATEGORIES ──
@@ -160,7 +172,7 @@ describe('MenuService', () => {
       mockPrisma.menuItem.findMany.mockResolvedValue([mockMenuItem]);
       mockPrisma.menuItem.count.mockResolvedValue(1);
 
-      const result = await service.findAllItems('tenant-1');
+      const result = await service.findAllItems('tenant-1') as any;
 
       expect(result.items).toHaveLength(1);
       expect(result.total).toBe(1);

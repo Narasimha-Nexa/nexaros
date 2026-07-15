@@ -12,24 +12,27 @@ datasource db {
 // ─────────────────────────────────────────────
 
 model Tenant {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   name         String
-  slug         String   @unique
+  slug         String    @unique
   logo         String?
   phone        String?
   email        String?
   address      String?
   gstNumber    String?
   panNumber    String?
-  timezone     String   @default("Asia/Kolkata")
-  currency     String   @default("INR")
-  isActive     Boolean  @default(true)
+  timezone     String    @default("Asia/Kolkata")
+  currency     String    @default("INR")
+  isActive     Boolean   @default(true)
   businessType String?
-  country      String?  @default("India")
+  country      String?   @default("India")
   state        String?
   city         String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  version      Int       @default(1)
+  createdBy    String?
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   branches      Branch[]
   users         User[]
@@ -59,6 +62,10 @@ model Branch {
   phone     String?
   isPrimary Boolean  @default(false)
   isActive  Boolean  @default(true)
+  version   Int      @default(1)
+  deletedAt DateTime?
+  createdBy String?
+  updatedBy String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -77,20 +84,24 @@ model Branch {
 // ─────────────────────────────────────────────
 
 model User {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  email       String   @unique
-  phone       String?  @unique
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email       String    @unique
+  phone       String?   @unique
   password    String
   firstName   String
   lastName    String
   avatar      String?
-  role        UserRole @default(OWNER)
-  isActive    Boolean  @default(true)
+  role        UserRole  @default(OWNER)
+  isActive    Boolean   @default(true)
   lastLoginAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+  createdBy   String?
+  updatedBy   String?
+  version     Int       @default(1)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   staff         Staff[]
   refreshTokens RefreshToken[]
@@ -131,6 +142,10 @@ model Role {
   name        String
   description String?
   isSystem    Boolean  @default(false)
+  version     Int      @default(1)
+  deletedAt   DateTime?
+  createdBy   String?
+  updatedBy   String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -138,6 +153,7 @@ model Role {
   staff       Staff[]
 
   @@unique([tenantId, name])
+  @@index([tenantId])
   @@map("roles")
 }
 
@@ -165,25 +181,31 @@ model RolePermission {
 }
 
 model Staff {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
+  tenantId  String?
   branchId  String
-  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  branch    Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
   userId    String?
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
   roleId    String
-  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  role      Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
   name      String
   phone     String?
   pin       String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isActive  Boolean   @default(true)
+  deletedAt DateTime?
+  createdBy String?
+  updatedBy String?
+  version   Int       @default(1)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   orders     Order[]
   shifts     StaffShift[]
   attendance Attendance[]
 
   @@index([branchId])
+  @@index([tenantId])
   @@map("staff")
 }
 
@@ -192,16 +214,20 @@ model Staff {
 // ─────────────────────────────────────────────
 
 model Category {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name        String
   description String?
-  sortOrder   Int      @default(0)
-  isActive    Boolean  @default(true)
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
   image       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+  createdBy   String?
+  updatedBy   String?
+  version     Int       @default(1)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   items MenuItem[]
 
@@ -210,26 +236,30 @@ model Category {
 }
 
 model MenuItem {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   categoryId  String
-  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  category    Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   name        String
   description String?
-  price       Decimal  @db.Decimal(10, 2)
-  costPrice   Decimal? @db.Decimal(10, 2)
+  price       Decimal   @db.Decimal(10, 2)
+  costPrice   Decimal?  @db.Decimal(10, 2)
   sku         String?
   barcode     String?
   image       String?
-  isVeg       Boolean  @default(false)
-  isAvailable Boolean  @default(true)
+  isVeg       Boolean   @default(false)
+  isAvailable Boolean   @default(true)
   prepTimeMin Int?
-  sortOrder   Int      @default(0)
-  taxRate     Decimal  @default(0) @db.Decimal(5, 2)
+  sortOrder   Int       @default(0)
+  taxRate     Decimal   @default(0) @db.Decimal(5, 2)
   tags        String[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  version     Int       @default(1)
+  deletedAt   DateTime?
+  createdBy   String?
+  updatedBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   variants      MenuItemVariant[]
   addOns        MenuItemAddOn[]
@@ -265,6 +295,7 @@ model MenuItemVariant {
   price      Decimal  @db.Decimal(10, 2)
   isActive   Boolean  @default(true)
 
+  @@index([menuItemId])
   @@map("menu_item_variants")
 }
 
@@ -276,6 +307,7 @@ model MenuItemAddOn {
   price      Decimal  @db.Decimal(10, 2)
   isActive   Boolean  @default(true)
 
+  @@index([menuItemId])
   @@map("menu_item_add_ons")
 }
 
@@ -293,6 +325,10 @@ model RestaurantTable {
   status      TableStatus @default(FREE)
   qrCode      String?
   isActive    Boolean     @default(true)
+  version     Int         @default(1)
+  deletedAt   DateTime?
+  createdBy   String?
+  updatedBy   String?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -318,6 +354,7 @@ enum TableStatus {
 
 model Order {
   id             String      @id @default(cuid())
+  tenantId       String?
   branchId       String
   branch         Branch      @relation(fields: [branchId], references: [id], onDelete: Cascade)
   tableId        String?
@@ -338,6 +375,9 @@ model Order {
   kotPrinted     Boolean     @default(false)
   synced         Boolean     @default(false)
   localId        String?
+  version        Int         @default(1)
+  deletedAt      DateTime?
+  createdBy      String?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
@@ -346,6 +386,7 @@ model Order {
   statusHistory OrderStatusHistory[]
 
   @@index([branchId, status])
+  @@index([tenantId])
   @@index([createdAt])
   @@map("orders")
 }
@@ -380,9 +421,14 @@ model OrderItem {
   totalPrice    Decimal         @db.Decimal(10, 2)
   notes         String?
   status        OrderItemStatus @default(PENDING)
+  version       Int             @default(1)
+  deletedAt     DateTime?
+  createdBy     String?
+  updatedBy     String?
 
   addOns OrderItemAddOn[]
 
+  @@index([orderId])
   @@map("order_items")
 }
 
@@ -401,6 +447,7 @@ model OrderItemAddOn {
   name        String
   price       Decimal   @db.Decimal(10, 2)
 
+  @@index([orderItemId])
   @@map("order_item_add_ons")
 }
 
@@ -410,6 +457,7 @@ model OrderStatusHistory {
   order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
   status    OrderStatus
   notes     String?
+  createdBy String?
   createdAt DateTime    @default(now())
 
   @@index([orderId])
@@ -431,10 +479,16 @@ model Payment {
   reference  String?
   status     PaymentStatus @default(PENDING)
   receivedAt DateTime      @default(now())
+  version    Int           @default(1)
+  deletedAt  DateTime?
+  createdBy  String?
+  updatedBy  String?
   createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
 
   invoice Invoice?
 
+  @@index([orderId])
   @@index([branchId])
   @@map("payments")
 }
@@ -457,16 +511,21 @@ enum PaymentStatus {
 }
 
 model Invoice {
-  id        String  @id @default(cuid())
-  paymentId String  @unique
-  payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  paymentId String   @unique
+  payment   Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
   number    String
-  gstAmount Decimal @db.Decimal(10, 2)
-  cgst      Decimal @db.Decimal(10, 2)
-  sgst      Decimal @db.Decimal(10, 2)
-  igst      Decimal @db.Decimal(10, 2)
+  gstAmount Decimal  @db.Decimal(10, 2)
+  cgst      Decimal  @db.Decimal(10, 2)
+  sgst      Decimal  @db.Decimal(10, 2)
+  igst      Decimal  @db.Decimal(10, 2)
   pdfUrl    String?
+  version   Int      @default(1)
+  deletedAt DateTime?
+  createdBy String?
+  updatedBy String?
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("invoices")
 }
@@ -476,18 +535,22 @@ model Invoice {
 // ─────────────────────────────────────────────
 
 model InventoryItem {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   tenantId        String
-  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name            String
   unit            String
-  currentStock    Decimal  @default(0) @db.Decimal(10, 2)
-  minimumStock    Decimal  @default(0) @db.Decimal(10, 2)
-  costPrice       Decimal  @db.Decimal(10, 2)
-  reorderQuantity Decimal? @db.Decimal(10, 2)
+  currentStock    Decimal   @default(0) @db.Decimal(10, 2)
+  minimumStock    Decimal   @default(0) @db.Decimal(10, 2)
+  costPrice       Decimal   @db.Decimal(10, 2)
+  reorderQuantity Decimal?  @db.Decimal(10, 2)
   barcode         String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  version         Int       @default(1)
+  deletedAt       DateTime?
+  createdBy       String?
+  updatedBy       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   stockMovements StockMovement[]
   purchaseItems  PurchaseItem[]
@@ -507,9 +570,11 @@ model StockMovement {
   quantity        Decimal           @db.Decimal(10, 2)
   reference       String?
   notes           String?
+  createdBy       String?
   createdAt       DateTime          @default(now())
 
   @@index([inventoryItemId])
+  @@index([createdAt])
   @@map("stock_movements")
 }
 
@@ -535,6 +600,10 @@ model Supplier {
   address   String?
   gstNumber String?
   isActive  Boolean  @default(true)
+  version   Int      @default(1)
+  deletedAt DateTime?
+  createdBy String?
+  updatedBy String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -553,6 +622,10 @@ model Purchase {
   totalAmount Decimal         @db.Decimal(10, 2)
   status      PurchaseStatus  @default(PENDING)
   notes       String?
+  version     Int             @default(1)
+  deletedAt   DateTime?
+  createdBy   String?
+  updatedBy   String?
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
@@ -578,6 +651,8 @@ model PurchaseItem {
   unitPrice       Decimal       @db.Decimal(10, 2)
   totalCost       Decimal       @db.Decimal(10, 2)
 
+  @@index([purchaseId])
+  @@index([inventoryItemId])
   @@map("purchase_items")
 }
 
@@ -598,6 +673,10 @@ model Reservation {
   guestCount    Int
   status        ReservationStatus  @default(CONFIRMED)
   notes         String?
+  version       Int                @default(1)
+  deletedAt     DateTime?
+  createdBy     String?
+  updatedBy     String?
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
@@ -624,6 +703,12 @@ model Shift {
   name      String
   startTime String
   endTime   String
+  version   Int      @default(1)
+  deletedAt DateTime?
+  createdBy String?
+  updatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   staffShifts StaffShift[]
 
@@ -631,14 +716,20 @@ model Shift {
 }
 
 model StaffShift {
-  id       String     @id @default(cuid())
-  shiftId  String
-  shift    Shift      @relation(fields: [shiftId], references: [id], onDelete: Cascade)
-  staffId  String
-  staff    Staff      @relation(fields: [staffId], references: [id], onDelete: Cascade)
-  date     DateTime
-  status   ShiftStatus @default(ASSIGNED)
+  id        String     @id @default(cuid())
+  shiftId   String
+  shift     Shift      @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  staffId   String
+  staff     Staff      @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  date      DateTime
+  status    ShiftStatus @default(ASSIGNED)
+  version   Int        @default(1)
+  deletedAt DateTime?
+  createdBy String?
+  updatedBy String?
 
+  @@index([staffId])
+  @@index([shiftId])
   @@map("staff_shifts")
 }
 
@@ -650,15 +741,20 @@ enum ShiftStatus {
 }
 
 model Attendance {
-  id       String           @id @default(cuid())
-  staffId  String
-  staff    Staff            @relation(fields: [staffId], references: [id], onDelete: Cascade)
-  date     DateTime
-  checkIn  DateTime?
-  checkOut DateTime?
-  status   AttendanceStatus @default(PRESENT)
-  notes    String?
+  id        String           @id @default(cuid())
+  staffId   String
+  staff     Staff            @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  date      DateTime
+  checkIn   DateTime?
+  checkOut  DateTime?
+  status    AttendanceStatus @default(PRESENT)
+  notes     String?
+  version   Int              @default(1)
+  deletedAt DateTime?
+  createdBy String?
+  updatedBy String?
 
+  @@index([staffId])
   @@map("attendance")
 }
 
@@ -743,6 +839,10 @@ model PlatformPlan {
   isCustom     Boolean       @default(false)
   isActive     Boolean       @default(true)
   sortOrder    Int           @default(0)
+  version      Int           @default(1)
+  deletedAt    DateTime?
+  createdBy    String?
+  updatedBy    String?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
@@ -758,6 +858,7 @@ model PlanEntitlement {
   plan      PlatformPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
   moduleKey String
   enabled   Boolean      @default(false)
+  createdAt DateTime     @default(now())
 
   @@unique([planId, moduleKey])
   @@map("plan_entitlements")
@@ -790,6 +891,10 @@ model Subscription {
   promiseReason      String?
   razorpayId         String?
   razorpayPlanId     String?
+  version            Int                @default(1)
+  deletedAt          DateTime?
+  createdBy          String?
+  updatedBy          String?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
@@ -821,6 +926,7 @@ model FeatureFlag {
   name        String
   description String?
   enabled     Boolean @default(false)
+  createdAt   DateTime @default(now())
 
   tenantFlags TenantFeatureFlag[]
 
@@ -836,6 +942,7 @@ model TenantFeatureFlag {
   createdAt     DateTime    @default(now())
 
   @@unique([tenantId, featureFlagId])
+  @@index([tenantId])
   @@map("tenant_feature_flags")
 }
 
@@ -857,7 +964,10 @@ model Coupon {
   applicablePlans String[]
   festivalTag     String?
   isActive        Boolean    @default(true)
+  version         Int        @default(1)
+  deletedAt       DateTime?
   createdBy       String?
+  updatedBy       String?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
@@ -881,6 +991,8 @@ model CouponUsage {
   amount         Decimal  @db.Decimal(10, 2)
   usedAt         DateTime @default(now())
 
+  @@index([couponId])
+  @@index([tenantId])
   @@map("coupon_usages")
 }
 
@@ -899,9 +1011,15 @@ model PaymentPromise {
   approvedBy     String?
   approvedAt     DateTime?
   notes          String?
+  version        Int                    @default(1)
+  deletedAt      DateTime?
+  createdBy      String?
+  updatedBy      String?
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
 
+  @@index([tenantId])
+  @@index([subscriptionId])
   @@map("payment_promises")
 }
 
@@ -925,8 +1043,14 @@ model SubscriptionPayment {
   method         PaymentMethod
   reference      String?
   status         PaymentStatus @default(PENDING)
+  version        Int          @default(1)
+  deletedAt      DateTime?
+  createdBy      String?
+  updatedBy      String?
   createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
+  @@index([subscriptionId])
   @@map("subscription_payments")
 }
 
@@ -939,8 +1063,14 @@ model SubscriptionInvoice {
   taxAmount      Decimal      @db.Decimal(10, 2)
   status         InvoiceStatus @default(PENDING)
   pdfUrl         String?
+  version        Int          @default(1)
+  deletedAt      DateTime?
+  createdBy      String?
+  updatedBy      String?
   createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
+  @@index([subscriptionId])
   @@map("subscription_invoices")
 }
 
@@ -965,6 +1095,8 @@ model AdminUser {
   mfaSecret   String?
   isActive    Boolean   @default(true)
   lastLoginAt DateTime?
+  version     Int       @default(1)
+  deletedAt   DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -1029,9 +1161,14 @@ model DemoRequest {
   assignedTo      String?
   notes           String?
   source          String?
+  version         Int                @default(1)
+  deletedAt       DateTime?
+  createdBy       String?
+  updatedBy       String?
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
+  @@index([status])
   @@map("demo_requests")
 }
 
@@ -1056,11 +1193,17 @@ model SupportTicket {
   priority    TicketPriority   @default(NORMAL)
   status      TicketStatus     @default(OPEN)
   assignedTo  String?
+  version     Int              @default(1)
+  deletedAt   DateTime?
+  createdBy   String?
+  updatedBy   String?
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
   messages TicketMessage[]
 
+  @@index([tenantId])
+  @@index([status])
   @@map("support_tickets")
 }
 
@@ -1089,6 +1232,8 @@ model TicketMessage {
   isInternal Boolean       @default(false)
   createdAt  DateTime      @default(now())
 
+  @@index([ticketId])
+  @@index([senderId])
   @@map("ticket_messages")
 }
 
@@ -1106,6 +1251,11 @@ model TenantWebsiteConfig {
   id        String   @id @default(cuid())
   tenantId  String   @unique
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  version   Int      @default(1)
+  deletedAt DateTime?
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // ── Global Settings ──
   restaurantName String  @default("")
@@ -1130,16 +1280,13 @@ model TenantWebsiteConfig {
   containerWidth String @default("max-w-7xl")
 
   // ── JSON Configs ──
-  features      Json @default("{}")  // Feature toggles, widget configs
-  seo           Json @default("{}")  // Meta titles, descriptions, OG, Twitter
-  openingHours  Json @default("{}")  // Per-day opening hours
-  socialLinks   Json @default("{}")  // Instagram, Facebook, Twitter, YouTube
-  analytics     Json @default("{}")  // GA4, Meta Pixel, GTM
-  legalPages    Json @default("{}")  // Privacy, Terms, Refund, Cancellation, Cookie
-  homeSections  Json @default("[]")  // Ordered array of home page section configs
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  features      Json @default("{}")
+  seo           Json @default("{}")
+  openingHours  Json @default("{}")
+  socialLinks   Json @default("{}")
+  analytics     Json @default("{}")
+  legalPages    Json @default("{}")
+  homeSections  Json @default("[]")
 
   @@index([tenantId])
   @@map("tenant_website_configs")

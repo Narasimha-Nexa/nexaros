@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiClient {
-  static const String _baseUrl = String.fromEnvironment('API_URL', defaultValue: 'http://localhost:4000/api');
+  static const String _baseUrl = String.fromEnvironment('API_URL', defaultValue: 'http://localhost:4000/api/v1');
   /// Root server URL (without /api path) for WebSocket connections
   static const String serverUrl = String.fromEnvironment('SERVER_URL', defaultValue: 'http://localhost:4000');
   final FlutterSecureStorage _storage = const FlutterSecureStorage();

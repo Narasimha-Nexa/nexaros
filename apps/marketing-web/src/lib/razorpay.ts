@@ -63,7 +63,7 @@ export async function checkoutAndPay(data: {
   customerName?: string;
   customerEmail?: string;
 }): Promise<{ success: boolean; orderId?: string; subscriptionId?: string; error?: string }> {
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
   try {
     const checkoutRes = await fetch(`${API_BASE}/billing/checkout`, {

@@ -47,6 +47,9 @@ describe('BillingService', () => {
     platformPlan: {
       findUnique: jest.fn(),
     },
+    tenant: {
+      findUnique: jest.fn(),
+    },
     coupon: {
       findUnique: jest.fn(),
     },
@@ -184,6 +187,7 @@ describe('BillingService', () => {
   describe('createCheckout', () => {
     it('should create checkout with plan price', async () => {
       mockPrisma.platformPlan.findUnique.mockResolvedValue(mockPlan as any);
+      mockPrisma.tenant.findUnique.mockResolvedValue({ id: 'tenant-1', email: 'test@test.com', phone: '+911234567890' } as any);
 
       const result = await service.createCheckout('tenant-1', 'plan-pro');
 
@@ -194,6 +198,7 @@ describe('BillingService', () => {
 
     it('should apply percentage coupon discount', async () => {
       mockPrisma.platformPlan.findUnique.mockResolvedValue(mockPlan as any);
+      mockPrisma.tenant.findUnique.mockResolvedValue({ id: 'tenant-1', email: 'test@test.com', phone: '+911234567890' } as any);
       mockPrisma.coupon.findUnique.mockResolvedValue({
         code: 'FEST20', type: 'PERCENTAGE', value: 20, maxDiscount: 1000,
         isActive: true, expiry: new Date(Date.now() + 86400000),
@@ -207,6 +212,7 @@ describe('BillingService', () => {
 
     it('should apply fixed amount coupon discount', async () => {
       mockPrisma.platformPlan.findUnique.mockResolvedValue(mockPlan as any);
+      mockPrisma.tenant.findUnique.mockResolvedValue({ id: 'tenant-1', email: 'test@test.com', phone: '+911234567890' } as any);
       mockPrisma.coupon.findUnique.mockResolvedValue({
         code: 'FLAT500', type: 'FIXED_AMOUNT', value: 500, maxDiscount: null,
         isActive: true, expiry: new Date(Date.now() + 86400000),

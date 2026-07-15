@@ -17,6 +17,9 @@ describe('PlatformService', () => {
     menuItem: { count: jest.fn() },
     order: { count: jest.fn() },
     subscription: { count: jest.fn() },
+    supportTicket: { count: jest.fn() },
+    adminAuditLog: { findMany: jest.fn() },
+    $queryRawUnsafe: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -133,6 +136,9 @@ describe('PlatformService', () => {
         .mockResolvedValueOnce(45)   // totalSubscriptions
         .mockResolvedValueOnce(30)   // activeSubscriptions
         .mockResolvedValueOnce(15);  // trialSubscriptions
+      mockPrisma.supportTicket.count.mockResolvedValue(3);
+      mockPrisma.adminAuditLog.findMany.mockResolvedValue([]);
+      mockPrisma.$queryRawUnsafe.mockResolvedValue([{ total: '0' }]);
 
       const result = await service.getPlatformStats();
 

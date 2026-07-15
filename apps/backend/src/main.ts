@@ -5,20 +5,33 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { Reflector } from '@nestjs/core';
 import { join } from 'path';
 import * as cookieParser from 'cookie-parser';
+import * as compression from 'compression';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { TimeoutInterceptor } from './common/interceptors/timeout.interceptor';
+import { CorrelationIdInterceptor } from './common/interceptors/correlation-id.interceptor';
+import { validateEnvironment } from './common/config/env-validator';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  validateEnvironment();
 
-  // Global prefix
-  app.setGlobalPrefix('api');
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    logger: process.env.NODE_ENV === 'production'
+      ? ['error', 'warn', 'log']
+      : ['error', 'warn', 'log', 'debug', 'verbose'],
+  });
+
+  // Global prefix with versioning
+  app.setGlobalPrefix('api/v1');
 
   // Cookie parser (needed by CsrfMiddleware)
   app.use(cookieParser());
+
+  // Gzip compression
+  app.use(compression());
 
   // Security headers
   app.use(helmet({
@@ -44,7 +57,11 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter());
 
   // Global interceptors
-  app.useGlobalInterceptors(new LoggingInterceptor());
+  app.useGlobalInterceptors(
+    new CorrelationIdInterceptor(),
+    new LoggingInterceptor(),
+    new TimeoutInterceptor(),
+  );
 
   // Global guards
   const reflector = app.get(Reflector);
@@ -85,12 +102,28 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);
 
+  // Graceful shutdown
+  const server = app.getHttpServer();
+  const shutdownSignals: NodeJS.Signals[] = ['SIGTERM', 'SIGINT'];
+
+  for (const signal of shutdownSignals) {
+    process.on(signal, async () => {
+      console.log(`\n${signal} received. Shutting down gracefully...`);
+      server.close(() => {
+        console.log('HTTP server closed.');
+      });
+      await app.close();
+      console.log('Application closed.');
+      process.exit(0);
+    });
+  }
+
   const port = process.env.PORT || 4000;
   await app.listen(port);
 
-  console.log(`\n  🚀 NexaROS Backend running on: http://localhost:${port}`);
-  console.log(`  📚 API Docs:                 http://localhost:${port}/docs`);
-  console.log(`  🎯 Environment:              ${process.env.NODE_ENV || 'development'}\n`);
+  console.log(`\n  NexaROS Backend running on: http://localhost:${port}`);
+  console.log(`  API Docs:                 http://localhost:${port}/docs`);
+  console.log(`  Environment:              ${process.env.NODE_ENV || 'development'}\n`);
 }
 
 bootstrap();

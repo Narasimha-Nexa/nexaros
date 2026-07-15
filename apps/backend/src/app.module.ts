@@ -33,6 +33,10 @@ import { EntitlementsModule } from './modules/entitlements/entitlements.module';
 import { DemoRequestsModule } from './modules/demo-requests/demo-requests.module';
 import { SupportModule } from './modules/support/support.module';
 import { PlatformModule } from './modules/platform/platform.module';
+import { RedisModule } from './common/redis/redis.module';
+import { QueueModule } from './common/queue/queue.module';
+import { WorkersModule } from './common/workers/workers.module';
+import { EventBusModule } from './common/event-bus/event-bus.module';
 import { RateLimitMiddleware } from './common/middleware/rate-limit.middleware';
 import { LoginRateLimitMiddleware } from './common/middleware/login-rate-limit.middleware';
 import { CsrfMiddleware } from './common/middleware/csrf.middleware';
@@ -45,6 +49,10 @@ import { HealthController } from './health.controller';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    RedisModule,
+    QueueModule,
+    WorkersModule,
+    EventBusModule,
     PrismaModule,
     AuthModule,
     TenantsModule,

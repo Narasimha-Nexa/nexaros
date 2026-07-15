@@ -112,8 +112,22 @@ export class KitchenService {
       tableNumber: updated.table?.number,
     });
 
+    // Notify customer tracking page
+    this.gateway.emitToOrder(id, 'order:status-changed', {
+      orderId: updated.id,
+      orderNumber: updated.orderNumber,
+      status: updated.status,
+      tableNumber: updated.table?.number,
+    });
+
     if (status === 'READY') {
       this.gateway.emitToBranch(broadcastBranch, 'order:ready', {
+        orderId: updated.id,
+        orderNumber: updated.orderNumber,
+        tableNumber: updated.table?.number,
+      });
+
+      this.gateway.emitToOrder(id, 'order:ready', {
         orderId: updated.id,
         orderNumber: updated.orderNumber,
         tableNumber: updated.table?.number,
@@ -126,13 +140,33 @@ export class KitchenService {
   async updateItemStatus(orderId: string, itemId: string, status: string) {
     const item = await this.prisma.orderItem.findFirst({
       where: { id: itemId, orderId },
+      include: {
+        order: { select: { id: true, branchId: true, orderNumber: true } },
+      },
     });
     if (!item) throw new NotFoundException('Order item not found');
 
-    return this.prisma.orderItem.update({
+    const updated = await this.prisma.orderItem.update({
       where: { id: itemId },
       data: { status: status as any },
     });
+
+    const payload = {
+      orderId,
+      orderNumber: item.order.orderNumber,
+      itemId,
+      itemName: item.name,
+      status,
+      quantity: item.quantity,
+    };
+
+    // Emit to staff devices (branch room)
+    this.gateway.emitToBranch(item.order.branchId, 'item:status-changed', payload);
+
+    // Emit to customer tracking page (order room on /public namespace)
+    this.gateway.emitToOrder(orderId, 'item:status-changed', payload);
+
+    return updated;
   }
 
   async getKotData(orderId: string) {

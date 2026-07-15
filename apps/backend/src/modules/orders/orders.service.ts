@@ -272,8 +272,22 @@ export class OrdersService {
       tableNumber: updated.table?.number,
     });
 
+    // Notify customer's tracking page
+    this.gateway.emitToOrder(id, 'order:status-changed', {
+      orderId: updated.id,
+      orderNumber: updated.orderNumber,
+      status: updated.status,
+      tableNumber: updated.table?.number,
+    });
+
     if (status === 'READY') {
       this.gateway.emitToBranch(order.branchId, 'order:ready', {
+        orderId: updated.id,
+        orderNumber: updated.orderNumber,
+        tableNumber: updated.table?.number,
+      });
+
+      this.gateway.emitToOrder(id, 'order:ready', {
         orderId: updated.id,
         orderNumber: updated.orderNumber,
         tableNumber: updated.table?.number,

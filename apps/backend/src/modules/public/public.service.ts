@@ -196,6 +196,16 @@ export class PublicService {
       totalAmount: order.totalAmount,
     });
 
+    // Also notify the customer's tracking page via public namespace
+    this.gateway.emitToOrder(order.id, 'order:created', {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      totalAmount: Number(order.totalAmount),
+      itemCount: dto.items.length,
+      customerName: dto.customerName,
+    });
+
     return {
       id: order.id,
       orderNumber,

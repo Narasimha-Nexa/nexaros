@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GatewayService } from '../websockets/gateway.service';
+import { RedisService } from '../../common/redis/redis.service';
 import { unlink } from 'fs/promises';
 import { join } from 'path';
 import { CreateCategoryDto } from './dto/create-category.dto';
@@ -10,27 +11,38 @@ import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
 
 @Injectable()
 export class MenuService {
+  private readonly CACHE_TTL = 300; // 5 minutes
+
   constructor(
     private prisma: PrismaService,
     private gateway: GatewayService,
+    private redis: RedisService,
   ) {}
 
   // ─── Categories ───
 
   async findAllCategories(tenantId: string) {
-    return this.prisma.category.findMany({
+    const cacheKey = `menu:categories:${tenantId}`;
+    const cached = await this.redis.get(cacheKey);
+    if (cached) return cached;
+
+    const categories = await this.prisma.category.findMany({
       where: { tenantId },
       include: {
         _count: { select: { items: true } },
       },
       orderBy: { sortOrder: 'asc' },
     });
+
+    await this.redis.set(cacheKey, categories, this.CACHE_TTL);
+    return categories;
   }
 
   async createCategory(tenantId: string, dto: CreateCategoryDto) {
     const category = await this.prisma.category.create({
       data: { ...dto, tenantId },
     });
+    await this.redis.delPattern(`menu:categories:${tenantId}*`);
     this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'category', action: 'created' });
     return category;
   }
@@ -38,6 +50,7 @@ export class MenuService {
   async updateCategory(id: string, tenantId: string, dto: UpdateCategoryDto) {
     await this.prisma.category.findFirst({ where: { id, tenantId } });
     const category = await this.prisma.category.update({ where: { id }, data: dto });
+    await this.redis.delPattern(`menu:categories:${tenantId}*`);
     this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'category', action: 'updated' });
     return category;
   }
@@ -53,6 +66,8 @@ export class MenuService {
     }
 
     await this.prisma.category.delete({ where: { id } });
+    await this.redis.delPattern(`menu:categories:${tenantId}*`);
+    await this.redis.delPattern(`menu:items:${tenantId}*`);
     this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'category', action: 'deleted' });
     return { message: 'Category deleted' };
   }
@@ -60,6 +75,10 @@ export class MenuService {
   // ─── Menu Items ───
 
   async findAllItems(tenantId: string, categoryId?: string, search?: string, skip = 0, take = 50) {
+    const cacheKey = `menu:items:${tenantId}:${categoryId || 'all'}:${search || ''}:${skip}:${take}`;
+    const cached = await this.redis.get(cacheKey);
+    if (cached) return cached;
+
     const where: { tenantId: string; categoryId?: string; OR?: object[] } = { tenantId };
 
     if (categoryId) {
@@ -89,7 +108,10 @@ export class MenuService {
       }),
       this.prisma.menuItem.count({ where }),
     ]);
-    return { items, total, skip, take };
+
+    const result = { items, total, skip, take };
+    await this.redis.set(cacheKey, result, this.CACHE_TTL);
+    return result;
   }
 
   async findOneItem(id: string, tenantId: string) {
@@ -117,6 +139,7 @@ export class MenuService {
       },
       include: { variants: true, addOns: true, images: true },
     });
+    await this.redis.delPattern(`menu:items:${tenantId}*`);
     this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'item', action: 'created' });
     return item;
   }
@@ -204,6 +227,7 @@ export class MenuService {
       include: { variants: true, addOns: true, images: true },
     });
 
+    await this.redis.delPattern(`menu:items:${tenantId}*`);
     this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'item', action: 'updated' });
     return item;
   }
@@ -214,6 +238,7 @@ export class MenuService {
       where: { id },
       data: { isAvailable: !item.isAvailable },
     });
+    await this.redis.delPattern(`menu:items:${tenantId}*`);
     this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'item', action: 'availability_changed' });
     return updated;
   }
@@ -230,6 +255,7 @@ export class MenuService {
     }
 
     await this.prisma.menuItem.delete({ where: { id } });
+    await this.redis.delPattern(`menu:items:${tenantId}*`);
     this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'item', action: 'deleted' });
     return { message: 'Menu item deleted' };
   }
@@ -254,6 +280,7 @@ export class MenuService {
     );
 
     this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'item', action: 'images_uploaded' });
+    await this.redis.delPattern(`menu:items:${tenantId}*`);
     return createdImages;
   }
 
@@ -272,6 +299,7 @@ export class MenuService {
     } catch {}
 
     await this.prisma.menuItemImage.delete({ where: { id: imageId } });
+    await this.redis.delPattern(`menu:items:${tenantId}*`);
     this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'item', action: 'image_deleted' });
     return { message: 'Image deleted' };
   }
@@ -290,6 +318,7 @@ export class MenuService {
       data: { isPrimary: true },
     });
 
+    await this.redis.delPattern(`menu:items:${tenantId}*`);
     this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'item', action: 'primary_changed' });
     return image;
   }

@@ -1,8 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { trackOrder } from '@/lib/api';
+import { useOrderSocket } from '@/lib/socket';
+import { useOrderNotifications } from '@/lib/hooks/use-order-notifications';
+import NotificationBanner from '@/components/NotificationBanner';
 import type { Order } from '@/types';
 
 const STATUS_STEPS: string[] = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'COMPLETED'];
@@ -20,14 +23,6 @@ const STATUS_ICONS: Record<string, string> = {
   READY: '🍽️',
   COMPLETED: '✔️',
 };
-const STATUS_COLORS: Record<string, string> = {
-  PENDING: 'bg-yellow-500',
-  CONFIRMED: 'bg-blue-500',
-  PREPARING: 'bg-orange-500',
-  READY: 'bg-green-500',
-  COMPLETED: 'bg-gray-400',
-};
-
 export default function OrderTrackingPage() {
   const params = useParams();
   const orderId = params.orderId as string;
@@ -37,18 +32,127 @@ export default function OrderTrackingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const isCompletedRef = useRef(false);
+
+  // Sync the completed ref when order status changes
+  useEffect(() => {
+    if (order) {
+      isCompletedRef.current =
+        order.status === 'COMPLETED' || order.status === 'DELIVERED' || order.status === 'CANCELLED';
+    }
+  }, [order?.status]);
+
+  // Initial fetch
   useEffect(() => {
     if (!orderId) return;
-    const load = () => {
-      trackOrder(orderId)
-        .then((data) => { setOrder(data); setLoading(false); })
-        .catch(() => { setError('Order not found'); setLoading(false); });
-    };
-    load();
-    // Poll every 10 seconds for status updates
-    const interval = setInterval(load, 10000);
-    return () => clearInterval(interval);
+    setLoading(true);
+    trackOrder(orderId)
+      .then((data) => { setOrder(data); setLoading(false); })
+      .catch(() => { setError('Order not found'); setLoading(false); });
   }, [orderId]);
+
+  const ITEM_STATUS_LABELS: Record<string, string> = {
+    PENDING: 'Pending',
+    PREPARING: 'Preparing',
+    READY: 'Done',
+    SERVED: 'Served',
+    CANCELLED: 'Cancelled',
+  };
+
+  const ITEM_STATUS_COLORS: Record<string, string> = {
+    PENDING: 'bg-gray-200 text-gray-500',
+    PREPARING: 'bg-orange-100 text-orange-700 animate-pulse',
+    READY: 'bg-green-100 text-green-700',
+    SERVED: 'bg-green-100 text-green-700',
+    CANCELLED: 'bg-red-100 text-red-700',
+  };
+
+  // Browser notifications for order status changes
+  const notifHandlers = useOrderNotifications({
+    orderId,
+    orderNumber: order?.orderNumber || 0,
+    slug,
+    enabled: !!order && !error,
+    initialStatus: order?.status,
+    initialItemStatuses: Object.fromEntries(
+      (order?.items || []).map((item) => [item.id, item.status]),
+    ),
+  });
+
+  // Real-time updates via WebSocket (instant)
+  useOrderSocket({
+    orderId,
+    enabled: !!order && !error,
+    onStatusChange: (data) => {
+      notifHandlers.onStatusChange(data);
+      setOrder((prev) => {
+        if (!prev) return prev;
+        const newStatus = data.status;
+        return {
+          ...prev,
+          status: newStatus as Order['status'],
+          statusHistory: [
+            ...prev.statusHistory,
+            {
+              status: newStatus,
+              label: STATUS_LABELS[newStatus] || newStatus,
+              notes: '',
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        };
+      });
+    },
+    onOrderReady: (data) => {
+      notifHandlers.onOrderReady(data);
+      setOrder((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          status: 'READY' as Order['status'],
+          statusHistory: [
+            ...prev.statusHistory,
+            {
+              status: 'READY',
+              label: 'Ready to Serve',
+              notes: 'Your order is ready!',
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        };
+      });
+    },
+    onItemStatusChange: (data) => {
+      notifHandlers.onItemStatusChange(data);
+      setOrder((prev) => {
+        if (!prev) return prev;
+        const updatedItems = prev.items.map((item) =>
+          item.id === data.itemId
+            ? { ...item, status: data.status }
+            : item,
+        );
+        return { ...prev, items: updatedItems };
+      });
+    },
+  });
+
+  // Polling fallback — refreshes every 60s in case the WebSocket drops
+  useEffect(() => {
+    if (!orderId || !order || isCompletedRef.current) return;
+    const fallbackTimer = setInterval(async () => {
+      try {
+        const data = await trackOrder(orderId);
+        if (data) {
+          setOrder(data);
+          isCompletedRef.current =
+            data.status === 'COMPLETED' || data.status === 'DELIVERED' || data.status === 'CANCELLED';
+        }
+      } catch {
+        // Silently ignore fallback errors — socket will surface real issues
+      }
+    }, 60_000);
+    return () => clearInterval(fallbackTimer);
+  }, [orderId, order]);
 
   if (loading) return <div className="flex items-center justify-center min-h-screen"><div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>;
   if (error) return <div className="flex items-center justify-center min-h-screen p-8 text-center"><div className="text-6xl mb-4">🔍</div><h1 className="text-2xl font-bold mb-2">Order Not Found</h1></div>;
@@ -73,6 +177,13 @@ export default function OrderTrackingPage() {
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+        {/* Notification permission banner */}
+        <NotificationBanner
+          id={orderId}
+          orderNumber={order.orderNumber}
+          slug={slug}
+        />
+
         {/* Progress tracker */}
         <div className="bg-white rounded-2xl p-6 shadow-sm">
           <h2 className="font-semibold text-gray-800 mb-4">Order Progress</h2>
@@ -109,17 +220,30 @@ export default function OrderTrackingPage() {
         <div className="bg-white rounded-2xl p-6 shadow-sm">
           <h2 className="font-semibold text-gray-800 mb-3">Items</h2>
           <div className="space-y-2">
-            {order.items.map((item, i) => (
-              <div key={i} className="flex justify-between items-center">
-                <span className="text-gray-700"><span className="font-medium">{item.quantity}x</span> {item.name}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${
-                  item.status === 'READY' ? 'bg-green-100 text-green-700' :
-                  item.status === 'PREPARING' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-500'
-                }`}>
-                  {item.status || 'Pending'}
-                </span>
-              </div>
-            ))}
+            {order.items.map((item, i) => {
+              const itemStatusColor = ITEM_STATUS_COLORS[item.status] || ITEM_STATUS_COLORS.PENDING;
+              const itemStatusLabel = ITEM_STATUS_LABELS[item.status] || item.status || 'Pending';
+              const isPreparing = item.status === 'PREPARING';
+              const isDone = item.status === 'READY' || item.status === 'SERVED';
+              return (
+                <div key={item.id || i} className="flex justify-between items-center py-1">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    {/* Animated icon */}
+                    <div className={`w-3 h-3 rounded-full flex-shrink-0 transition-all duration-500 ${
+                      isPreparing ? 'bg-orange-400 animate-pulse' :
+                      isDone ? 'bg-green-500' :
+                      'bg-gray-300'
+                    }`} />
+                    <span className="text-gray-700 truncate">
+                      <span className="font-medium">{item.quantity}x</span> {item.name}
+                    </span>
+                  </div>
+                  <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium transition-all duration-500 flex-shrink-0 ml-2 ${itemStatusColor}`}>
+                    {itemStatusLabel}
+                  </span>
+                </div>
+              );
+            })}
           </div>
           <div className="border-t border-gray-100 mt-3 pt-3 flex justify-between">
             <span className="font-semibold">Total</span>
