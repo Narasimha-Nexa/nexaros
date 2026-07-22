@@ -42,6 +42,10 @@ import { OffersModule } from './modules/offers/offers.module';
 import { AnnouncementsModule } from './modules/announcements/announcements.module';
 import { GalleryModule } from './modules/gallery/gallery.module';
 import { MediaModule } from './modules/media/media.module';
+import { TestimonialsModule } from './modules/testimonials/testimonials.module';
+import { FaqsModule } from './modules/faqs/faqs.module';
+import { BlogPostsModule } from './modules/blog-posts/blog-posts.module';
+import { EventsModule } from './modules/events/events.module';
 import { MarketingModule } from './modules/marketing/marketing.module';
 import { OmnichannelModule } from './modules/omnichannel/omnichannel.module';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
@@ -119,6 +123,10 @@ import { HealthController } from './health.controller';
     OffersModule,
     AnnouncementsModule,
     GalleryModule,
+    TestimonialsModule,
+    FaqsModule,
+    BlogPostsModule,
+    EventsModule,
     DeliveryModule,
     DashboardModule,
     PosModule,

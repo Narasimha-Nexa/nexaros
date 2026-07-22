@@ -38,6 +38,7 @@ export class GalleryService {
         thumbnailUrl: dto.thumbnailUrl,
         caption: dto.caption,
         altText: dto.altText,
+        category: dto.category,
         displayOrder: dto.displayOrder ?? 0,
         isFeatured: dto.isFeatured ?? false,
         imageMetadata: dto.imageMetadata,
@@ -57,6 +58,7 @@ export class GalleryService {
     if (dto.altText !== undefined) data.altText = dto.altText;
     if (dto.displayOrder !== undefined) data.displayOrder = dto.displayOrder;
     if (dto.isFeatured !== undefined) data.isFeatured = dto.isFeatured;
+    if (dto.category !== undefined) data.category = dto.category;
     if (dto.imageMetadata !== undefined) data.imageMetadata = dto.imageMetadata;
     if (dto.branchId !== undefined) data.branchId = dto.branchId;
 

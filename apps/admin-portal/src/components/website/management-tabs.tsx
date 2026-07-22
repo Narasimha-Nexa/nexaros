@@ -319,3 +319,197 @@ export function GalleryTab({ tenantId }: { tenantId: string }) {
     </div>
   );
 }
+
+/* ───────────── Testimonials ───────────── */
+
+export function TestimonialsTab({ tenantId }: { tenantId: string }) {
+  const { addToast } = useToastStore();
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState<any>(null);
+  const [form, setForm] = useState<any>({});
+  const [deleting, setDeleting] = useState<any>(null);
+  const { data, isLoading } = useQuery({ queryKey: ['admin-testimonials', tenantId], queryFn: () => adminApi.listTestimonials(tenantId) });
+
+  const open = (t?: any) => { setEditing(t || {}); setForm(t || { customerName: '', text: '', rating: 5, isFeatured: false, isVerified: false }); };
+  const save = useMutation({ mutationFn: () => (editing.id ? adminApi.updateTestimonial(tenantId, editing.id, form) : adminApi.createTestimonial(tenantId, form)), onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-testimonials', tenantId] }); setEditing(null); addToast('Testimonial saved', 'success'); }, onError: (e: any) => addToast(e.message || 'Failed', 'error') });
+  const remove = useMutation({ mutationFn: (id: string) => adminApi.deleteTestimonial(tenantId, id), onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-testimonials', tenantId] }); setDeleting(null); addToast('Testimonial deleted', 'success'); }, onError: (e: any) => addToast(e.message || 'Failed', 'error') });
+
+  const items: any[] = data || [];
+  return (
+    <div>
+      <div className="flex justify-end mb-3"><Button size="sm" onClick={() => open()}>+ New Testimonial</Button></div>
+      <DataTable isLoading={isLoading} data={items} keyExtractor={(r) => r.id}
+        columns={[
+          { key: 'customerName', header: 'Customer', render: (v) => <span className="font-semibold text-ink">{v}</span> },
+          { key: 'rating', header: 'Rating', render: (v) => <span className="text-warning">{'★'.repeat(v || 0)}{'☆'.repeat(5 - (v || 0))}</span> },
+          { key: 'text', header: 'Review', render: (v) => <span className="text-xs truncate max-w-[200px] block">{v}</span> },
+          { key: 'status', header: 'Status', render: (_: any, r: any) => <StatusBadge status={r.isVerified ? 'VERIFIED' : 'PENDING'} label={r.isVerified ? 'Verified' : 'Pending'} /> },
+          { key: 'actions', header: '', render: (_: any, r: any) => (<div className="flex gap-2 justify-end"><Button size="sm" variant="ghost" onClick={() => open(r)}>Edit</Button><Button size="sm" variant="danger" onClick={() => setDeleting(r)}>Delete</Button></div>) },
+        ]} emptyMessage="No testimonials yet." />
+      {editing && (
+        <Dialog open onClose={() => setEditing(null)} title={editing.id ? 'Edit Testimonial' : 'New Testimonial'} size="lg">
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            <Input label="Customer Name" value={form.customerName || ''} onChange={(e) => setForm({ ...form, customerName: e.target.value })} />
+            <div>
+              <label className="label">Rating</label>
+              <div className="flex gap-1">{[1,2,3,4,5].map((s) => (<button key={s} type="button" onClick={() => setForm({ ...form, rating: s })} className={`text-xl ${s <= (form.rating || 0) ? 'text-warning' : 'text-ink/20'}`}>★</button>))}</div>
+            </div>
+            <Textarea label="Review Text" value={form.text || ''} onChange={(e) => setForm({ ...form, text: e.target.value })} />
+            <Input label="Avatar URL" value={form.avatar || ''} onChange={(e) => setForm({ ...form, avatar: e.target.value })} />
+            <label className="flex items-center gap-2"><input type="checkbox" checked={!!form.isVerified} onChange={(e) => setForm({ ...form, isVerified: e.target.checked })} /><span className="text-body-sm">Verified</span></label>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={!!form.isFeatured} onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })} /><span className="text-body-sm">Featured</span></label>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button><Button onClick={() => save.mutate()} isLoading={save.isPending}>Save</Button></DialogFooter>
+        </Dialog>
+      )}
+      <ConfirmDeleteDialog open={!!deleting} onClose={() => setDeleting(null)} title={deleting?.customerName || 'this testimonial'} isLoading={remove.isPending} onConfirm={() => deleting && remove.mutate(deleting.id)} />
+    </div>
+  );
+}
+
+/* ───────────── FAQs ───────────── */
+
+export function FaqsTab({ tenantId }: { tenantId: string }) {
+  const { addToast } = useToastStore();
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState<any>(null);
+  const [form, setForm] = useState<any>({});
+  const [deleting, setDeleting] = useState<any>(null);
+  const { data, isLoading } = useQuery({ queryKey: ['admin-faqs', tenantId], queryFn: () => adminApi.listFaqs(tenantId) });
+
+  const open = (f?: any) => { setEditing(f || {}); setForm(f || { question: '', answer: '', category: '', displayOrder: 0, isActive: true }); };
+  const save = useMutation({ mutationFn: () => (editing.id ? adminApi.updateFaq(tenantId, editing.id, form) : adminApi.createFaq(tenantId, form)), onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-faqs', tenantId] }); setEditing(null); addToast('FAQ saved', 'success'); }, onError: (e: any) => addToast(e.message || 'Failed', 'error') });
+  const remove = useMutation({ mutationFn: (id: string) => adminApi.deleteFaq(tenantId, id), onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-faqs', tenantId] }); setDeleting(null); addToast('FAQ deleted', 'success'); }, onError: (e: any) => addToast(e.message || 'Failed', 'error') });
+
+  const items: any[] = (data || []).sort((a: any, b: any) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+  return (
+    <div>
+      <div className="flex justify-end mb-3"><Button size="sm" onClick={() => open()}>+ New FAQ</Button></div>
+      <DataTable isLoading={isLoading} data={items} keyExtractor={(r) => r.id}
+        columns={[
+          { key: 'question', header: 'Question', render: (v) => <span className="font-semibold text-ink">{v}</span> },
+          { key: 'category', header: 'Category', render: (v) => v || '—' },
+          { key: 'displayOrder', header: 'Order', render: (v) => v ?? 0 },
+          { key: 'isActive', header: 'Active', render: (v) => v ? '✅' : '—' },
+          { key: 'actions', header: '', render: (_: any, r: any) => (<div className="flex gap-2 justify-end"><Button size="sm" variant="ghost" onClick={() => open(r)}>Edit</Button><Button size="sm" variant="danger" onClick={() => setDeleting(r)}>Delete</Button></div>) },
+        ]} emptyMessage="No FAQs yet." />
+      {editing && (
+        <Dialog open onClose={() => setEditing(null)} title={editing.id ? 'Edit FAQ' : 'New FAQ'} size="lg">
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            <Input label="Question" value={form.question || ''} onChange={(e) => setForm({ ...form, question: e.target.value })} />
+            <Textarea label="Answer" value={form.answer || ''} onChange={(e) => setForm({ ...form, answer: e.target.value })} />
+            <Input label="Category" value={form.category || ''} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="e.g. Ordering, Delivery, Payment" />
+            <Input label="Display Order" type="number" value={form.displayOrder ?? 0} onChange={(e) => setForm({ ...form, displayOrder: Number(e.target.value) })} />
+            <label className="flex items-center gap-2"><input type="checkbox" checked={!!form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} /><span className="text-body-sm">Active</span></label>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button><Button onClick={() => save.mutate()} isLoading={save.isPending}>Save</Button></DialogFooter>
+        </Dialog>
+      )}
+      <ConfirmDeleteDialog open={!!deleting} onClose={() => setDeleting(null)} title={deleting?.question || 'this FAQ'} isLoading={remove.isPending} onConfirm={() => deleting && remove.mutate(deleting.id)} />
+    </div>
+  );
+}
+
+/* ───────────── Blog Posts ───────────── */
+
+export function BlogTab({ tenantId }: { tenantId: string }) {
+  const { addToast } = useToastStore();
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState<any>(null);
+  const [form, setForm] = useState<any>({});
+  const [deleting, setDeleting] = useState<any>(null);
+  const { data, isLoading } = useQuery({ queryKey: ['admin-blog', tenantId], queryFn: () => adminApi.listBlogPosts(tenantId) });
+
+  const open = (b?: any) => { setEditing(b || {}); setForm(b || { title: '', slug: '', content: '', excerpt: '', author: '', tags: [], status: 'DRAFT' }); };
+  const save = useMutation({ mutationFn: () => (editing.id ? adminApi.updateBlogPost(tenantId, editing.id, form) : adminApi.createBlogPost(tenantId, form)), onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-blog', tenantId] }); setEditing(null); addToast('Blog post saved', 'success'); }, onError: (e: any) => addToast(e.message || 'Failed', 'error') });
+  const remove = useMutation({ mutationFn: (id: string) => adminApi.deleteBlogPost(tenantId, id), onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-blog', tenantId] }); setDeleting(null); addToast('Blog post deleted', 'success'); }, onError: (e: any) => addToast(e.message || 'Failed', 'error') });
+
+  const items: any[] = data || [];
+  return (
+    <div>
+      <div className="flex justify-end mb-3"><Button size="sm" onClick={() => open()}>+ New Post</Button></div>
+      <DataTable isLoading={isLoading} data={items} keyExtractor={(r) => r.id}
+        columns={[
+          { key: 'title', header: 'Title', render: (v) => <span className="font-semibold text-ink">{v}</span> },
+          { key: 'status', header: 'Status', render: (v) => <StatusBadge status={v} label={v} /> },
+          { key: 'author', header: 'Author', render: (v) => v || '—' },
+          { key: 'publishedAt', header: 'Published', render: (v) => v ? new Date(v).toLocaleDateString() : '—' },
+          { key: 'actions', header: '', render: (_: any, r: any) => (<div className="flex gap-2 justify-end"><Button size="sm" variant="ghost" onClick={() => open(r)}>Edit</Button><Button size="sm" variant="danger" onClick={() => setDeleting(r)}>Delete</Button></div>) },
+        ]} emptyMessage="No blog posts yet." />
+      {editing && (
+        <Dialog open onClose={() => setEditing(null)} title={editing.id ? 'Edit Post' : 'New Post'} size="lg">
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            <Input label="Title" value={form.title || ''} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            <Input label="Slug" value={form.slug || ''} onChange={(e) => setForm({ ...form, slug: e.target.value })} placeholder="auto-generated-from-title" />
+            <Textarea label="Content" value={form.content || ''} onChange={(e) => setForm({ ...form, content: e.target.value })} />
+            <Textarea label="Excerpt" value={form.excerpt || ''} onChange={(e) => setForm({ ...form, excerpt: e.target.value })} />
+            <Input label="Cover Image URL" value={form.coverImage || ''} onChange={(e) => setForm({ ...form, coverImage: e.target.value })} />
+            <Input label="Author" value={form.author || ''} onChange={(e) => setForm({ ...form, author: e.target.value })} />
+            <Input label="Tags (comma-separated)" value={(form.tags || []).join(', ')} onChange={(e) => setForm({ ...form, tags: e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean) })} />
+            <div>
+              <label className="label">Status</label>
+              <select className="input" value={form.status || 'DRAFT'} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                {['DRAFT', 'PUBLISHED', 'ARCHIVED'].map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button><Button onClick={() => save.mutate()} isLoading={save.isPending}>Save</Button></DialogFooter>
+        </Dialog>
+      )}
+      <ConfirmDeleteDialog open={!!deleting} onClose={() => setDeleting(null)} title={deleting?.title || 'this post'} isLoading={remove.isPending} onConfirm={() => deleting && remove.mutate(deleting.id)} />
+    </div>
+  );
+}
+
+/* ───────────── Events ───────────── */
+
+export function EventsTab({ tenantId }: { tenantId: string }) {
+  const { addToast } = useToastStore();
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState<any>(null);
+  const [form, setForm] = useState<any>({});
+  const [deleting, setDeleting] = useState<any>(null);
+  const { data, isLoading } = useQuery({ queryKey: ['admin-events', tenantId], queryFn: () => adminApi.listEvents(tenantId) });
+
+  const open = (e?: any) => { setEditing(e || {}); setForm(e || { title: '', description: '', startDate: '', endDate: '', location: '', isVirtual: false, status: 'UPCOMING' }); };
+  const save = useMutation({ mutationFn: () => (editing.id ? adminApi.updateEvent(tenantId, editing.id, form) : adminApi.createEvent(tenantId, form)), onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-events', tenantId] }); setEditing(null); addToast('Event saved', 'success'); }, onError: (e: any) => addToast(e.message || 'Failed', 'error') });
+  const remove = useMutation({ mutationFn: (id: string) => adminApi.deleteEvent(tenantId, id), onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-events', tenantId] }); setDeleting(null); addToast('Event deleted', 'success'); }, onError: (e: any) => addToast(e.message || 'Failed', 'error') });
+
+  const items: any[] = data || [];
+  return (
+    <div>
+      <div className="flex justify-end mb-3"><Button size="sm" onClick={() => open()}>+ New Event</Button></div>
+      <DataTable isLoading={isLoading} data={items} keyExtractor={(r) => r.id}
+        columns={[
+          { key: 'title', header: 'Title', render: (v) => <span className="font-semibold text-ink">{v}</span> },
+          { key: 'startDate', header: 'Start Date', render: (v) => v ? new Date(v).toLocaleDateString() : '—' },
+          { key: 'status', header: 'Status', render: (v) => <StatusBadge status={v} label={v} /> },
+          { key: 'isVirtual', header: 'Type', render: (v) => v ? 'Virtual' : 'In-Person' },
+          { key: 'actions', header: '', render: (_: any, r: any) => (<div className="flex gap-2 justify-end"><Button size="sm" variant="ghost" onClick={() => open(r)}>Edit</Button><Button size="sm" variant="danger" onClick={() => setDeleting(r)}>Delete</Button></div>) },
+        ]} emptyMessage="No events yet." />
+      {editing && (
+        <Dialog open onClose={() => setEditing(null)} title={editing.id ? 'Edit Event' : 'New Event'} size="lg">
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            <Input label="Title" value={form.title || ''} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            <Textarea label="Description" value={form.description || ''} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            <div className="grid grid-cols-2 gap-3">
+              <Input label="Start Date" type="datetime-local" value={form.startDate ? new Date(form.startDate).toISOString().slice(0, 16) : ''} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
+              <Input label="End Date" type="datetime-local" value={form.endDate ? new Date(form.endDate).toISOString().slice(0, 16) : ''} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
+            </div>
+            <Input label="Location" value={form.location || ''} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+            <Input label="Image URL" value={form.image || ''} onChange={(e) => setForm({ ...form, image: e.target.value })} />
+            <label className="flex items-center gap-2"><input type="checkbox" checked={!!form.isVirtual} onChange={(e) => setForm({ ...form, isVirtual: e.target.checked })} /><span className="text-body-sm">Virtual Event</span></label>
+            <div>
+              <label className="label">Status</label>
+              <select className="input" value={form.status || 'UPCOMING'} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                {['UPCOMING', 'ONGOING', 'PAST', 'CANCELLED'].map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button><Button onClick={() => save.mutate()} isLoading={save.isPending}>Save</Button></DialogFooter>
+        </Dialog>
+      )}
+      <ConfirmDeleteDialog open={!!deleting} onClose={() => setDeleting(null)} title={deleting?.title || 'this event'} isLoading={remove.isPending} onConfirm={() => deleting && remove.mutate(deleting.id)} />
+    </div>
+  );
+}

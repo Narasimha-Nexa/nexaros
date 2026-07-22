@@ -6,6 +6,10 @@ import { OrderType, TableStatus } from '@prisma/client';
 import { OffersService } from '../offers/offers.service';
 import { AnnouncementsService } from '../announcements/announcements.service';
 import { GalleryService } from '../gallery/gallery.service';
+import { TestimonialsService } from '../testimonials/testimonials.service';
+import { FaqsService } from '../faqs/faqs.service';
+import { BlogPostsService } from '../blog-posts/blog-posts.service';
+import { EventsService } from '../events/events.service';
 
 @Injectable()
 export class PublicService {
@@ -19,6 +23,10 @@ export class PublicService {
     private offersService: OffersService,
     private announcementsService: AnnouncementsService,
     private galleryService: GalleryService,
+    private testimonialsService: TestimonialsService,
+    private faqsService: FaqsService,
+    private blogPostsService: BlogPostsService,
+    private eventsService: EventsService,
   ) {}
 
   async getTenantBySlug(slug: string) {
@@ -704,5 +712,40 @@ export class PublicService {
       tenantName: tenant?.name,
       currency: tenant?.currency || 'INR',
     };
+  }
+
+  async getTestimonials(slug: string) {
+    const tenant = await this.getTenantBySlug(slug);
+    return this.prisma.testimonial.findMany({
+      where: { tenantId: tenant.id, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+  }
+
+  async getFaqs(slug: string) {
+    const tenant = await this.getTenantBySlug(slug);
+    return this.prisma.faq.findMany({
+      where: { tenantId: tenant.id, deletedAt: null, isActive: true },
+      orderBy: { displayOrder: 'asc' },
+    });
+  }
+
+  async getBlogPosts(slug: string) {
+    const tenant = await this.getTenantBySlug(slug);
+    return this.prisma.blogPost.findMany({
+      where: { tenantId: tenant.id, deletedAt: null, status: 'PUBLISHED' },
+      orderBy: { publishedAt: 'desc' },
+      take: 20,
+    });
+  }
+
+  async getEvents(slug: string) {
+    const tenant = await this.getTenantBySlug(slug);
+    return this.prisma.event.findMany({
+      where: { tenantId: tenant.id, deletedAt: null, status: { in: ['UPCOMING', 'ONGOING'] } },
+      orderBy: { startDate: 'asc' },
+      take: 20,
+    });
   }
 }

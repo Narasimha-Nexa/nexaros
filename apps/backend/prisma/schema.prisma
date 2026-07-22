@@ -196,8 +196,12 @@ model Tenant {
     whatsappCampaigns    WhatsAppBulkCampaign[]
     whatsappAutomations  WhatsAppAutomation[]
     whatsappAnalytics    WhatsAppAnalytics[]
-     mediaAssets          MediaAsset[]
-     websiteRevisions     WebsiteRevision[]
+      mediaAssets          MediaAsset[]
+      websiteRevisions     WebsiteRevision[]
+      testimonials         Testimonial[]
+      faqs                 Faq[]
+      blogPosts            BlogPost[]
+      events               Event[]
 
   @@index([ownerProfileId])
   @@map("tenants")
@@ -3912,4 +3916,90 @@ model MediaAsset {
   @@index([tenantId, folder])
   @@index([tenantId, mimeType])
   @@map("media_assets")
+}
+
+// ─────────────────────────────────────────────
+// WEBSITE CMS CONTENT: Testimonials, FAQs, Blog, Events
+// ─────────────────────────────────────────────
+
+model Testimonial {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerName String
+  rating       Int      @default(5)
+  text         String
+  avatar       String?
+  isFeatured   Boolean  @default(false)
+  isVerified   Boolean  @default(false)
+  branchId     String?
+  deletedAt    DateTime?
+  createdBy    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([tenantId])
+  @@map("testimonials")
+}
+
+model Faq {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  question     String
+  answer       String
+  category     String?
+  displayOrder Int      @default(0)
+  isActive     Boolean  @default(true)
+  deletedAt    DateTime?
+  createdBy    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([tenantId])
+  @@map("faqs")
+}
+
+model BlogPost {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title       String
+  slug        String
+  content     String
+  excerpt     String?
+  coverImage  String?
+  author      String?
+  tags        String[]
+  status      String    @default("DRAFT")
+  publishedAt DateTime?
+  deletedAt   DateTime?
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@map("blog_posts")
+}
+
+model Event {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  startDate   DateTime
+  endDate     DateTime?
+  image       String?
+  location    String?
+  isVirtual   Boolean   @default(false)
+  status      String    @default("UPCOMING")
+  deletedAt   DateTime?
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([tenantId])
+  @@map("events")
 }

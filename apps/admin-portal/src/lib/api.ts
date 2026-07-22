@@ -819,6 +819,30 @@ class AdminApiClient {
     return this.request(`/admin/tenants/${tenantId}/gallery/${id}`, { method: 'DELETE' });
   }
 
+  // ─── Testimonials (admin, tenant-scoped) ───
+  async listTestimonials(tenantId: string) { return this.request(`/admin/tenants/${tenantId}/testimonials`); }
+  async createTestimonial(tenantId: string, data: Record<string, any>) { return this.request(`/admin/tenants/${tenantId}/testimonials`, { method: 'POST', body: JSON.stringify(data) }); }
+  async updateTestimonial(tenantId: string, id: string, data: Record<string, any>) { return this.request(`/admin/tenants/${tenantId}/testimonials/${id}`, { method: 'PUT', body: JSON.stringify(data) }); }
+  async deleteTestimonial(tenantId: string, id: string) { return this.request(`/admin/tenants/${tenantId}/testimonials/${id}`, { method: 'DELETE' }); }
+
+  // ─── FAQs (admin, tenant-scoped) ───
+  async listFaqs(tenantId: string) { return this.request(`/admin/tenants/${tenantId}/faqs`); }
+  async createFaq(tenantId: string, data: Record<string, any>) { return this.request(`/admin/tenants/${tenantId}/faqs`, { method: 'POST', body: JSON.stringify(data) }); }
+  async updateFaq(tenantId: string, id: string, data: Record<string, any>) { return this.request(`/admin/tenants/${tenantId}/faqs/${id}`, { method: 'PUT', body: JSON.stringify(data) }); }
+  async deleteFaq(tenantId: string, id: string) { return this.request(`/admin/tenants/${tenantId}/faqs/${id}`, { method: 'DELETE' }); }
+
+  // ─── Blog Posts (admin, tenant-scoped) ───
+  async listBlogPosts(tenantId: string) { return this.request(`/admin/tenants/${tenantId}/blog-posts`); }
+  async createBlogPost(tenantId: string, data: Record<string, any>) { return this.request(`/admin/tenants/${tenantId}/blog-posts`, { method: 'POST', body: JSON.stringify(data) }); }
+  async updateBlogPost(tenantId: string, id: string, data: Record<string, any>) { return this.request(`/admin/tenants/${tenantId}/blog-posts/${id}`, { method: 'PUT', body: JSON.stringify(data) }); }
+  async deleteBlogPost(tenantId: string, id: string) { return this.request(`/admin/tenants/${tenantId}/blog-posts/${id}`, { method: 'DELETE' }); }
+
+  // ─── Events (admin, tenant-scoped) ───
+  async listEvents(tenantId: string) { return this.request(`/admin/tenants/${tenantId}/events`); }
+  async createEvent(tenantId: string, data: Record<string, any>) { return this.request(`/admin/tenants/${tenantId}/events`, { method: 'POST', body: JSON.stringify(data) }); }
+  async updateEvent(tenantId: string, id: string, data: Record<string, any>) { return this.request(`/admin/tenants/${tenantId}/events/${id}`, { method: 'PUT', body: JSON.stringify(data) }); }
+  async deleteEvent(tenantId: string, id: string) { return this.request(`/admin/tenants/${tenantId}/events/${id}`, { method: 'DELETE' }); }
+
   // ─── BI / Executive Analytics (admin, tenant-scoped) ───
   async getBiExecutiveSummary(tenantId: string, params: Record<string, string> = {}) {
     return this.request('/admin/bi/executive-summary', { params: { ...params, tenantId } });

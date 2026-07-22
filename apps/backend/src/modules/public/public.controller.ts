@@ -135,4 +135,28 @@ export class PublicController {
   ) {
     return this.publicService.createPublicReservation(slug, body);
   }
+
+  @Get('cms/:slug/testimonials')
+  @ApiOperation({ summary: 'Get testimonials for a restaurant (public)' })
+  getTestimonials(@Param('slug') slug: string) {
+    return this.publicService.getTestimonials(slug);
+  }
+
+  @Get('cms/:slug/faqs')
+  @ApiOperation({ summary: 'Get FAQs for a restaurant (public)' })
+  getFaqs(@Param('slug') slug: string) {
+    return this.publicService.getFaqs(slug);
+  }
+
+  @Get('cms/:slug/blog')
+  @ApiOperation({ summary: 'Get published blog posts for a restaurant (public)' })
+  getBlogPosts(@Param('slug') slug: string) {
+    return this.publicService.getBlogPosts(slug);
+  }
+
+  @Get('cms/:slug/events')
+  @ApiOperation({ summary: 'Get events for a restaurant (public)' })
+  getEvents(@Param('slug') slug: string) {
+    return this.publicService.getEvents(slug);
+  }
 }

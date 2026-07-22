@@ -10,17 +10,18 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { PageHeader } from '@/components/layout/page-header';
 import { LivePreview } from '@/components/website/LivePreview';
-import { OffersTab, AnnouncementsTab, GalleryTab } from '@/components/website/management-tabs';
+import { OffersTab, AnnouncementsTab, GalleryTab, TestimonialsTab, FaqsTab, BlogTab, EventsTab } from '@/components/website/management-tabs';
 import {
   Palette, Type, Search, Share2, Clock, Phone, FileText, LayoutGrid, ToggleLeft,
-  Tag, Megaphone, Images, Eye, Rocket, History,
+  Tag, Megaphone, Images, Eye, Rocket, History, Star,
 } from 'lucide-react';
 import { Dialog, DialogFooter } from '@/components/ui/dialog';
 
 type TabId =
   | 'branding' | 'theme' | 'typography' | 'seo' | 'social'
   | 'contact' | 'legal' | 'sections' | 'features' | 'offers'
-  | 'announcements' | 'gallery' | 'preview' | 'history';
+  | 'announcements' | 'gallery' | 'testimonials' | 'faqs' | 'blog' | 'events'
+  | 'preview' | 'history';
 
 const FONT_OPTIONS = [
   'Playfair Display', 'Inter', 'Lora', 'Montserrat', 'Poppins',
@@ -143,6 +144,10 @@ export default function WebsiteHub() {
     { id: 'offers', label: 'Offers', icon: <Tag size={16} /> },
     { id: 'announcements', label: 'Announcements', icon: <Megaphone size={16} /> },
     { id: 'gallery', label: 'Gallery', icon: <Images size={16} /> },
+    { id: 'testimonials', label: 'Testimonials', icon: <Star size={16} /> },
+    { id: 'faqs', label: 'FAQs', icon: <FileText size={16} /> },
+    { id: 'blog', label: 'Blog', icon: <FileText size={16} /> },
+    { id: 'events', label: 'Events', icon: <Megaphone size={16} /> },
     { id: 'history', label: 'History', icon: <History size={16} /> },
     { id: 'preview', label: 'Preview & Publish', icon: <Eye size={16} /> },
   ];
@@ -197,6 +202,10 @@ export default function WebsiteHub() {
             {tab === 'offers' && <OffersTab tenantId={tenantId} />}
             {tab === 'announcements' && <AnnouncementsTab tenantId={tenantId} />}
             {tab === 'gallery' && <GalleryTab tenantId={tenantId} />}
+            {tab === 'testimonials' && <TestimonialsTab tenantId={tenantId} />}
+            {tab === 'faqs' && <FaqsTab tenantId={tenantId} />}
+            {tab === 'blog' && <BlogTab tenantId={tenantId} />}
+            {tab === 'events' && <EventsTab tenantId={tenantId} />}
             {tab === 'history' && <HistoryTab tenantId={tenantId} draft={draft} setDraft={setDraft} />}
             {tab === 'preview' && <PreviewTab draft={draft} />}
           </div>
