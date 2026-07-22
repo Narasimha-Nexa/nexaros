@@ -1,21 +1,25 @@
 'use client';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { useToastStore } from '@/stores/ui.store';
-import { Input } from '@/components/ui/input';
-import { Textarea, Switch, ColorPicker, Tabs, MediaField } from '@/components/ui/website-primitives';
+import { useWebsiteBuilderStore } from '@/stores/website-builder.store';
+import { Tabs } from '@/components/ui/website-primitives';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { PageHeader } from '@/components/layout/page-header';
-import { LivePreview } from '@/components/website/LivePreview';
-import { OffersTab, AnnouncementsTab, GalleryTab, TestimonialsTab, FaqsTab, BlogTab, EventsTab } from '@/components/website/management-tabs';
+import { WebsiteBuilderLayout } from '@/components/website/WebsiteBuilderLayout';
+import {
+  BrandingTab, ThemeTab, TypographyTab, SeoTab, SocialHoursTab, ContactTab,
+  LegalTab, SectionsTab, FeaturesTab, PreviewTab, HistoryTab,
+  OffersTab, AnnouncementsTab, GalleryTab, TestimonialsTab, FaqsTab, BlogTab, EventsTab,
+} from '@/components/website/tabs';
 import {
   Palette, Type, Search, Share2, Clock, Phone, FileText, LayoutGrid, ToggleLeft,
   Tag, Megaphone, Images, Eye, Rocket, History, Star,
 } from 'lucide-react';
 import { Dialog, DialogFooter } from '@/components/ui/dialog';
+import { Card } from '@/components/ui/card';
 
 type TabId =
   | 'branding' | 'theme' | 'typography' | 'seo' | 'social'
@@ -23,13 +27,6 @@ type TabId =
   | 'announcements' | 'gallery' | 'testimonials' | 'faqs' | 'blog' | 'events'
   | 'preview' | 'history';
 
-const FONT_OPTIONS = [
-  'Playfair Display', 'Inter', 'Lora', 'Montserrat', 'Poppins',
-  'Roboto', 'Open Sans', 'Merriweather', 'Oswald', 'Nunito',
-];
-
-// Strip Prisma/system fields that are not part of the UpdateCmsConfigDto so the
-// backend's forbidNonWhitelisted ValidationPipe does not reject the request.
 const CONFIG_FIELDS = [
   'restaurantName', 'tagline', 'logo', 'favicon', 'phone', 'email', 'address',
   'mapUrl', 'whatsappNumber', 'currency', 'timezone', 'primaryColor',
@@ -51,9 +48,8 @@ export default function WebsiteHub() {
   const router = useRouter();
   const { addToast } = useToastStore();
   const queryClient = useQueryClient();
+  const store = useWebsiteBuilderStore();
   const [tab, setTab] = useState<TabId>('branding');
-  const [device, setDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
-  const [draft, setDraft] = useState<Record<string, any>>({});
 
   const { data, isLoading } = useQuery({
     queryKey: ['website', tenantId],
@@ -66,42 +62,30 @@ export default function WebsiteHub() {
   });
   const slug = (tenant as any)?.data?.slug || tenant?.slug || '' as string;
 
-  const isDirty = useRef(false);
-  const serverHash = useRef('');
-
   useEffect(() => {
     if (data) {
-      setDraft({ ...data, slug });
-      serverHash.current = JSON.stringify(data);
+      store.initializeDraft({ ...data, slug });
     }
   }, [data, slug]);
 
-  useEffect(() => {
-    isDirty.current = JSON.stringify(draft) !== serverHash.current;
-  }, [draft]);
+  const { draft, isDirty } = store;
 
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (isDirty.current) {
+      if (isDirty) {
         e.preventDefault();
         e.returnValue = '';
       }
     };
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
-  }, []);
-
-  const set = (key: string, value: any) =>
-    setDraft((d) => ({ ...d, [key]: value }));
-  const setJson = (key: string, patch: Record<string, any>) =>
-    setDraft((d) => ({ ...d, [key]: { ...(d[key] || {}), ...patch } }));
+  }, [isDirty]);
 
   const saveMutation = useMutation({
     mutationFn: (payload: Record<string, any>) => adminApi.updateWebsiteConfig(tenantId, sanitizeConfig(payload)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['website', tenantId] });
-      serverHash.current = JSON.stringify(draft);
-      isDirty.current = false;
+      store.markSaved(JSON.stringify(draft));
       addToast('Website settings saved', 'success');
     },
     onError: (e: any) => addToast(e.message || 'Save failed', 'error'),
@@ -114,8 +98,9 @@ export default function WebsiteHub() {
       await adminApi.saveRevision(tenantId, 'Pre-publish snapshot');
       return adminApi.publishWebsite(tenantId);
     },
-    onSuccess: (data: any) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['website', tenantId] });
+      store.markPublished(new Date());
       addToast('Website published & cache refreshed', 'success');
       setConfirmPublish(false);
     },
@@ -154,8 +139,37 @@ export default function WebsiteHub() {
 
   if (isLoading) return <p className="text-body">Loading website configuration...</p>;
 
+  const set = (key: string, value: any) => store.setDraft((d) => ({ ...d, [key]: value }));
+  const setJson = (key: string, patch: Record<string, any>) => store.setDraft((d) => ({ ...d, [key]: { ...(d[key] || {}), ...patch } }));
+
+  const leftPanel = (
+    <div className="p-3">
+      <Tabs tabs={tabs} active={tab} onChange={(t) => setTab(t as TabId)} />
+      <div className="mt-3 space-y-4">
+        {tab === 'branding' && <BrandingTab tenantId={tenantId} draft={draft} set={set} setJson={setJson} />}
+        {tab === 'theme' && <ThemeTab draft={draft} set={set} />}
+        {tab === 'typography' && <TypographyTab draft={draft} set={set} />}
+        {tab === 'seo' && <SeoTab tenantId={tenantId} draft={draft} setJson={setJson} />}
+        {tab === 'social' && <SocialHoursTab draft={draft} setJson={setJson} />}
+        {tab === 'contact' && <ContactTab draft={draft} set={set} />}
+        {tab === 'legal' && <LegalTab draft={draft} setJson={setJson} />}
+        {tab === 'sections' && <SectionsTab draft={draft} set={set} />}
+        {tab === 'features' && <FeaturesTab draft={draft} setJson={setJson} />}
+        {tab === 'offers' && <OffersTab tenantId={tenantId} />}
+        {tab === 'announcements' && <AnnouncementsTab tenantId={tenantId} />}
+        {tab === 'gallery' && <GalleryTab tenantId={tenantId} />}
+        {tab === 'testimonials' && <TestimonialsTab tenantId={tenantId} />}
+        {tab === 'faqs' && <FaqsTab tenantId={tenantId} />}
+        {tab === 'blog' && <BlogTab tenantId={tenantId} />}
+        {tab === 'events' && <EventsTab tenantId={tenantId} />}
+        {tab === 'history' && <HistoryTab tenantId={tenantId} draft={draft} setDraft={store.setDraft} />}
+        {tab === 'preview' && <PreviewTab draft={draft} />}
+      </div>
+    </div>
+  );
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-0">
       <PageHeader
         title={draft.restaurantName || 'Website'}
         description={`Editing /${draft.slug || ''} · tenant ${tenantId}`}
@@ -163,12 +177,18 @@ export default function WebsiteHub() {
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => router.push('/website')}>Change Tenant</Button>
             <Button variant="ghost" onClick={() => resetMutation.mutate()} isLoading={resetMutation.isPending}>Reset</Button>
-            <Button variant="outline" onClick={() => saveMutation.mutate(draft)} isLoading={saveMutation.isPending}>Save</Button>
-            <Button onClick={() => setConfirmPublish(true)} isLoading={publishMutation.isPending}>
-              <Rocket size={16} className="mr-1" /> Publish
-            </Button>
           </div>
         }
+      />
+
+      <WebsiteBuilderLayout
+        tenantId={tenantId}
+        slug={slug}
+        leftPanel={leftPanel}
+        onSave={() => saveMutation.mutate(draft)}
+        onPublish={() => setConfirmPublish(true)}
+        isSaving={saveMutation.isPending}
+        isPublishing={publishMutation.isPending}
       />
 
       {confirmPublish && (
@@ -182,353 +202,6 @@ export default function WebsiteHub() {
             <Button onClick={() => publishMutation.mutate()} isLoading={publishMutation.isPending}>
               <Rocket size={14} className="mr-1" /> Confirm Publish
             </Button>
-          </DialogFooter>
-        </Dialog>
-      )}
-
-      <div className="grid lg:grid-cols-[1fr_420px] gap-6 items-start">
-        <Card className="p-5">
-          <Tabs tabs={tabs} active={tab} onChange={setTab} />
-          <div className="min-h-[420px]">
-            {tab === 'branding' && <BrandingTab tenantId={tenantId} draft={draft} set={set} setJson={setJson} />}
-            {tab === 'theme' && <ThemeTab draft={draft} set={set} />}
-            {tab === 'typography' && <TypographyTab draft={draft} set={set} />}
-            {tab === 'seo' && <SeoTab tenantId={tenantId} draft={draft} setJson={setJson} />}
-            {tab === 'social' && <SocialHoursTab draft={draft} setJson={setJson} />}
-            {tab === 'contact' && <ContactTab draft={draft} set={set} />}
-            {tab === 'legal' && <LegalTab draft={draft} setJson={setJson} />}
-            {tab === 'sections' && <SectionsTab draft={draft} set={set} />}
-            {tab === 'features' && <FeaturesTab draft={draft} setJson={setJson} />}
-            {tab === 'offers' && <OffersTab tenantId={tenantId} />}
-            {tab === 'announcements' && <AnnouncementsTab tenantId={tenantId} />}
-            {tab === 'gallery' && <GalleryTab tenantId={tenantId} />}
-            {tab === 'testimonials' && <TestimonialsTab tenantId={tenantId} />}
-            {tab === 'faqs' && <FaqsTab tenantId={tenantId} />}
-            {tab === 'blog' && <BlogTab tenantId={tenantId} />}
-            {tab === 'events' && <EventsTab tenantId={tenantId} />}
-            {tab === 'history' && <HistoryTab tenantId={tenantId} draft={draft} setDraft={setDraft} />}
-            {tab === 'preview' && <PreviewTab draft={draft} />}
-          </div>
-        </Card>
-
-        <div className="lg:sticky lg:top-6 space-y-3">
-          <Card className="p-3">
-            <div className="flex gap-1 mb-3">
-              {(['desktop', 'tablet', 'mobile'] as const).map((d) => (
-                <Button key={d} size="sm" variant={device === d ? 'primary' : 'ghost'}
-                  onClick={() => setDevice(d)} className="capitalize flex-1">{d}</Button>
-              ))}
-            </div>
-            <LivePreview config={draft} device={device} slug={slug} />
-            {draft.publishedAt && (
-              <p className="text-[10px] text-ink/40 text-center mt-2">
-                Last published: {new Date(draft.publishedAt).toLocaleString()}
-              </p>
-            )}
-            <Button variant="outline" size="sm" className="mt-2 w-full"
-              onClick={() => window.open(`${process.env.NEXT_PUBLIC_CUSTOMER_SITE_URL || 'http://localhost:3001'}/restaurant/${draft.slug || ''}`, '_blank')}>
-              Open Live Site ↗
-            </Button>
-          </Card>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ───────────── Tab panels ───────────── */
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="mb-4">
-      <label className="block text-xs font-medium text-ink/60 mb-1">{label}</label>
-      {children}
-    </div>
-  );
-}
-
-function BrandingTab({ tenantId, draft, set, setJson }: any) {
-  return (
-    <div>
-      <Field label="Restaurant Name"><Input value={draft.restaurantName || ''} onChange={(e) => set('restaurantName', e.target.value)} /></Field>
-      <Field label="Tagline"><Input value={draft.tagline || ''} onChange={(e) => set('tagline', e.target.value)} /></Field>
-      <Field label="Logo"><MediaField value={draft.logo} onChange={(v) => set('logo', v)} label="Logo" aspect="aspect-square" tenantId={tenantId} folder="branding" /></Field>
-      <Field label="Favicon"><MediaField value={draft.favicon} onChange={(v) => set('favicon', v)} label="Favicon" aspect="aspect-square" tenantId={tenantId} folder="branding" /></Field>
-    </div>
-  );
-}
-
-function ThemeTab({ draft, set }: any) {
-  return (
-    <div className="grid sm:grid-cols-2 gap-4">
-      <ColorPicker label="Primary Color" value={draft.primaryColor} onChange={(v) => set('primaryColor', v)} />
-      <ColorPicker label="Secondary Color" value={draft.secondaryColor} onChange={(v) => set('secondaryColor', v)} />
-      <ColorPicker label="Accent Color" value={draft.accentColor} onChange={(v) => set('accentColor', v)} />
-      <Field label="Border Radius">
-        <select className="input" value={draft.borderRadius || 'xl'} onChange={(e) => set('borderRadius', e.target.value)}>
-          {['none', 'sm', 'md', 'lg', 'xl', '2xl', 'full'].map((r) => <option key={r} value={r}>{r}</option>)}
-        </select>
-      </Field>
-      <Field label="Container Width">
-        <select className="input" value={draft.containerWidth || 'max-w-7xl'} onChange={(e) => set('containerWidth', e.target.value)}>
-          {['max-w-5xl', 'max-w-6xl', 'max-w-7xl', 'max-w-screen-xl', 'max-w-full'].map((w) => <option key={w} value={w}>{w}</option>)}
-        </select>
-      </Field>
-    </div>
-  );
-}
-
-function TypographyTab({ draft, set }: any) {
-  return (
-    <div className="grid sm:grid-cols-2 gap-4">
-      <Field label="Heading Font">
-        <select className="input" value={draft.fontHeading || 'Playfair Display'} onChange={(e) => set('fontHeading', e.target.value)}>
-          {FONT_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}
-        </select>
-      </Field>
-      <Field label="Body Font">
-        <select className="input" value={draft.fontBody || 'Inter'} onChange={(e) => set('fontBody', e.target.value)}>
-          {FONT_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}
-        </select>
-      </Field>
-    </div>
-  );
-}
-
-function SeoTab({ tenantId, draft, setJson }: any) {
-  const seo = draft.seo || {};
-  return (
-    <div>
-      <Field label="Meta Title"><Input value={seo.title || ''} onChange={(e) => setJson('seo', { title: e.target.value })} /></Field>
-      <Field label="Meta Description"><Textarea value={seo.description || ''} onChange={(e) => setJson('seo', { description: e.target.value })} /></Field>
-      <Field label="Keywords (comma separated)">
-        <Input value={(seo.keywords || []).join(', ')} onChange={(e) => setJson('seo', { keywords: e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean) })} />
-      </Field>
-      <Field label="OG Image"><MediaField value={seo.ogImage} onChange={(v) => setJson('seo', { ogImage: v })} label="Social Preview" tenantId={tenantId} folder="seo" /></Field>
-      <Field label="Robots Index">
-        <Switch checked={seo.robots?.index !== false} onChange={(v) => setJson('seo', { robots: { ...(seo.robots || {}), index: v } })} />
-      </Field>
-    </div>
-  );
-}
-
-function SocialHoursTab({ draft, setJson }: any) {
-  const social = draft.socialLinks || {};
-  const hours = draft.openingHours || {};
-  const socialKeys = ['facebook', 'instagram', 'twitter', 'youtube', 'linkedin', 'website'];
-  const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-
-  const updateHours = (day: string, field: 'open' | 'close' | 'isOpen', value: any) => {
-    const current = hours[day] || {};
-    const isString = typeof current === 'string';
-    const base = isString ? { open: '9:00 AM', close: '10:00 PM', isOpen: true } : current;
-    setJson('openingHours', { [day]: { ...base, [field]: value } });
-  };
-
-  const getDayValue = (day: string, field: 'open' | 'close' | 'isOpen') => {
-    const h = hours[day];
-    if (!h) return field === 'isOpen' ? false : '';
-    if (typeof h === 'string') {
-      const parts = h.split(' - ');
-      if (field === 'open') return parts[0] || '';
-      if (field === 'close') return parts[1] || '';
-      return true;
-    }
-    return h[field] ?? (field === 'isOpen' ? false : '');
-  };
-
-  return (
-    <div className="grid lg:grid-cols-2 gap-6">
-      <div>
-        <h3 className="font-semibold text-ink mb-3">Social Media</h3>
-        {socialKeys.map((k) => (
-          <Field key={k} label={k.charAt(0).toUpperCase() + k.slice(1)}>
-            <Input value={social[k] || ''} onChange={(e) => setJson('socialLinks', { [k]: e.target.value })} placeholder="https://..." />
-          </Field>
-        ))}
-      </div>
-      <div>
-        <h3 className="font-semibold text-ink mb-3">Business Hours</h3>
-        {days.map((d) => (
-          <div key={d} className="mb-3 border border-ink/10 rounded-lg p-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium capitalize text-ink">{d}</span>
-              <Switch checked={getDayValue(d, 'isOpen') as boolean} onChange={(v) => updateHours(d, 'isOpen', v)} label="Open" />
-            </div>
-            {getDayValue(d, 'isOpen') && (
-              <div className="grid grid-cols-2 gap-2">
-                <Input value={getDayValue(d, 'open') as string} onChange={(e) => updateHours(d, 'open', e.target.value)} placeholder="9:00 AM" />
-                <Input value={getDayValue(d, 'close') as string} onChange={(e) => updateHours(d, 'close', e.target.value)} placeholder="10:00 PM" />
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ContactTab({ draft, set }: any) {
-  return (
-    <div className="grid sm:grid-cols-2 gap-4">
-      <Field label="Phone"><Input value={draft.phone || ''} onChange={(e) => set('phone', e.target.value)} /></Field>
-      <Field label="Email"><Input value={draft.email || ''} onChange={(e) => set('email', e.target.value)} /></Field>
-      <Field label="WhatsApp Number"><Input value={draft.whatsappNumber || ''} onChange={(e) => set('whatsappNumber', e.target.value)} /></Field>
-      <Field label="Address"><Input value={draft.address || ''} onChange={(e) => set('address', e.target.value)} /></Field>
-      <Field label="Map URL"><Input value={draft.mapUrl || ''} onChange={(e) => set('mapUrl', e.target.value)} /></Field>
-      <Field label="Currency"><Input value={draft.currency || 'INR'} onChange={(e) => set('currency', e.target.value)} /></Field>
-    </div>
-  );
-}
-
-function LegalTab({ draft, setJson }: any) {
-  const legal = draft.legalPages || {};
-  const pages = ['privacyPolicy', 'termsOfService', 'refundPolicy', 'cancellationPolicy', 'cookiePolicy'];
-  return (
-    <div className="space-y-4">
-      {pages.map((p) => (
-        <Card key={p} className="p-4">
-          <h4 className="font-semibold text-ink mb-2 capitalize">{p.replace(/([A-Z])/g, ' $1')}</h4>
-          <Field label="Title"><Input value={legal[p]?.title || ''} onChange={(e) => setJson('legalPages', { [p]: { ...(legal[p] || {}), title: e.target.value } })} /></Field>
-          <Field label="Content"><Textarea value={legal[p]?.content || ''} onChange={(e) => setJson('legalPages', { [p]: { ...(legal[p] || {}), content: e.target.value } })} /></Field>
-        </Card>
-      ))}
-    </div>
-  );
-}
-
-function SectionsTab({ draft, set }: any) {
-  const sections = useMemo(() => draft.homeSections || [], [draft.homeSections]);
-  const available = ['hero', 'about', 'menu', 'gallery', 'offers', 'hours', 'contact', 'reviews', 'footer'];
-  const toggle = (key: string) => {
-    const exists = sections.find((s: any) => s.key === key);
-    if (exists) {
-      set('homeSections', sections.filter((s: any) => s.key !== key));
-    } else {
-      set('homeSections', [...sections, { key, enabled: true, order: sections.length + 1 }]);
-    }
-  };
-  const move = (idx: number, dir: -1 | 1) => {
-    const next = [...sections];
-    const j = idx + dir;
-    if (j < 0 || j >= next.length) return;
-    [next[idx], next[j]] = [next[j], next[idx]];
-    next.forEach((s, i) => (s.order = i + 1));
-    set('homeSections', next);
-  };
-  return (
-    <div className="space-y-2">
-      <p className="text-body text-sm mb-2">Enable/disable and reorder homepage sections.</p>
-      {available.map((key) => {
-        const idx = sections.findIndex((s: any) => s.key === key);
-        const enabled = idx >= 0;
-        return (
-          <div key={key} className="flex items-center justify-between border border-ink/10 rounded-lg px-3 py-2">
-            <span className="font-sans font-semibold capitalize text-ink">{key}</span>
-            <div className="flex items-center gap-2">
-              {enabled && (
-                <>
-                  <Button size="sm" variant="ghost" onClick={() => move(idx, -1)}>↑</Button>
-                  <Button size="sm" variant="ghost" onClick={() => move(idx, 1)}>↓</Button>
-                </>
-              )}
-              <Switch checked={enabled} onChange={() => toggle(key)} />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function FeaturesTab({ draft, setJson }: any) {
-  const features = draft.features || {};
-  const list = [
-    ['onlineOrdering', 'Online Ordering'], ['reservations', 'Reservations'], ['reviews', 'Reviews'],
-    ['offers', 'Offers'], ['loyalty', 'Loyalty'], ['qrOrdering', 'QR Ordering'],
-    ['delivery', 'Delivery'], ['pickup', 'Pickup'], ['whatsappOrdering', 'WhatsApp Ordering'],
-    ['aiAssistant', 'AI Assistant'], ['maintenanceMode', 'Maintenance Mode'],
-  ];
-  return (
-    <div className="grid sm:grid-cols-2 gap-3">
-      {list.map(([k, label]) => (
-        <div key={k} className="border border-ink/10 rounded-lg px-3 py-2">
-          <Switch checked={features[k] !== false} onChange={(v) => setJson('features', { [k]: v })} label={label} />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function PreviewTab({ draft }: any) {
-  return (
-    <div className="space-y-3">
-      <p className="text-body">This is a quick themed preview. Use "Open Live Site" for the full customer experience. Changes are pushed live instantly after Publish via real-time sync.</p>
-      <pre className="text-xs bg-canvas border border-ink/10 rounded-lg p-3 overflow-auto max-h-64">
-        {JSON.stringify({ restaurantName: draft.restaurantName, primaryColor: draft.primaryColor, features: draft.features, homeSections: draft.homeSections }, null, 2)}
-      </pre>
-    </div>
-  );
-}
-
-function HistoryTab({ tenantId, draft, setDraft }: { tenantId: string; draft: any; setDraft: (fn: (d: any) => any) => void }) {
-  const { addToast } = useToastStore();
-  const qc = useQueryClient();
-  const [reverting, setReverting] = useState<any>(null);
-
-  const { data: revisions, isLoading } = useQuery({
-    queryKey: ['website-revisions', tenantId],
-    queryFn: () => adminApi.listRevisions(tenantId),
-  });
-
-  const revertMutation = useMutation({
-    mutationFn: (revisionId: string) => adminApi.revertRevision(tenantId, revisionId),
-    onSuccess: (data: any) => {
-      setDraft(() => data);
-      qc.invalidateQueries({ queryKey: ['website-revisions', tenantId] });
-      setReverting(null);
-      addToast('Reverted to previous revision', 'success');
-    },
-    onError: (e: any) => addToast(e.message || 'Revert failed', 'error'),
-  });
-
-  const items: any[] = revisions || [];
-
-  return (
-    <div>
-      <p className="text-body-sm text-ink/60 mb-3">Snapshots are automatically saved when you publish. You can revert to any previous version.</p>
-      {isLoading ? (
-        <p className="text-body text-sm">Loading history...</p>
-      ) : items.length === 0 ? (
-        <p className="text-body text-sm text-ink/40">No revisions yet. Publish your website to create the first snapshot.</p>
-      ) : (
-        <div className="space-y-2">
-          {items.map((r: any) => (
-            <div key={r.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-canvas/50 transition-colors">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-ink truncate">{r.label || `Revision v${r.version}`}</p>
-                <p className="text-xs text-ink/40">
-                  {new Date(r.createdAt).toLocaleString()} · v{r.version}
-                </p>
-              </div>
-              <Button size="sm" variant="ghost" onClick={() => setReverting(r)}>
-                Revert
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
-      {reverting && (
-        <Dialog open onClose={() => setReverting(null)} title="Revert to Revision" size="sm">
-          <p className="text-sm text-ink/70 mb-1">
-            Revert the website config to <strong>{reverting.label || `v${reverting.version}`}</strong>?
-          </p>
-          <p className="text-xs text-ink/50 mb-3">
-            This will overwrite your current settings. A new revision will be saved automatically.
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setReverting(null)}>Cancel</Button>
-            <Button onClick={() => revertMutation.mutate(reverting.id)} isLoading={revertMutation.isPending}>Revert</Button>
           </DialogFooter>
         </Dialog>
       )}
