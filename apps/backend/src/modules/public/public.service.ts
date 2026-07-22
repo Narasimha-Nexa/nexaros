@@ -327,7 +327,27 @@ export class PublicService {
     const categories = await this.prisma.category.findMany({
       where: { tenantId: tenant.id, isActive: true },
       orderBy: { sortOrder: 'asc' },
-      select: { id: true, name: true, description: true },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        items: {
+          where: { isAvailable: true },
+          orderBy: { sortOrder: 'asc' },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            price: true,
+            image: true,
+            isVeg: true,
+            isAvailable: true,
+            isPopular: true,
+            isBestSeller: true,
+            tags: true,
+          },
+        },
+      },
     });
 
     const branches = await this.prisma.branch.findMany({

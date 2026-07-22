@@ -20,6 +20,12 @@ export class GalleryController {
     return this.galleryService.findAll(tenantId);
   }
 
+  @ApiOperation({ summary: 'Get gallery images for a tenant by slug' })
+  @Get('public/:slug')
+  getPublic(@Param('slug') slug: string) {
+    return this.galleryService.getPublicBySlug(slug);
+  }
+
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions('gallery:read')
@@ -51,11 +57,5 @@ export class GalleryController {
   @HttpCode(200)
   remove(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     return this.galleryService.remove(tenantId, id);
-  }
-
-  @ApiOperation({ summary: 'Get gallery images for a tenant by slug' })
-  @Get('public/:slug')
-  getPublic(@Param('slug') slug: string) {
-    return this.galleryService.getPublicBySlug(slug);
   }
 }

@@ -20,6 +20,12 @@ export class AnnouncementsController {
     return this.announcementsService.findAll(tenantId);
   }
 
+  @ApiOperation({ summary: 'Get active announcements for a tenant by slug' })
+  @Get('public/:slug')
+  getPublic(@Param('slug') slug: string) {
+    return this.announcementsService.getPublicBySlug(slug);
+  }
+
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions('announcements:read')
@@ -51,11 +57,5 @@ export class AnnouncementsController {
   @HttpCode(200)
   remove(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     return this.announcementsService.remove(tenantId, id);
-  }
-
-  @ApiOperation({ summary: 'Get active announcements for a tenant by slug' })
-  @Get('public/:slug')
-  getPublic(@Param('slug') slug: string) {
-    return this.announcementsService.getPublicBySlug(slug);
   }
 }

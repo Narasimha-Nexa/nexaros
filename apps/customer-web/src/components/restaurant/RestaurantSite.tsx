@@ -399,14 +399,26 @@ export function RestaurantSite({ data, gallery, testimonials, offers, announceme
             <h2 className="text-3xl sm:text-4xl font-bold mb-6" style={{ fontFamily: 'var(--r-font-display)', color: 'var(--r-secondary)' }}>Opening Hours</h2>
             <div className="space-y-2">
               {Object.entries(hours).map(([day, h]) => {
-                const isOpen = (h as { isOpen?: boolean }).isOpen !== false;
-                const open = (h as { open?: string }).open;
-                const close = (h as { close?: string }).close;
+                let isOpen = true;
+                let openTime = '';
+                let closeTime = '';
+
+                if (typeof h === 'string') {
+                  const parts = h.split(' - ');
+                  openTime = parts[0] || '';
+                  closeTime = parts[1] || '';
+                  isOpen = !!openTime;
+                } else if (h && typeof h === 'object') {
+                  isOpen = (h as any).isOpen !== false;
+                  openTime = (h as any).open || '';
+                  closeTime = (h as any).close || '';
+                }
+
                 return (
                   <div key={day} className="flex items-center justify-between py-2.5 border-b border-black/5">
                     <span className="font-medium capitalize text-neutral-700">{DAY_LABELS[day] || day}</span>
-                    <span className="text-sm" style={{ color: isOpen && open ? 'var(--r-primary)' : 'var(--r-secondary)' }}>
-                      {isOpen && open ? `${open} – ${close}` : 'Closed'}
+                    <span className="text-sm" style={{ color: isOpen && openTime ? 'var(--r-primary)' : 'var(--r-secondary)' }}>
+                      {isOpen && openTime ? `${openTime} – ${closeTime}` : 'Closed'}
                     </span>
                   </div>
                 );

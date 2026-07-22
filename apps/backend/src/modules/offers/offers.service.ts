@@ -118,6 +118,7 @@ export class OffersService {
       image: o.image,
       discountType: o.discountType,
       discountValue: Number(o.discountValue),
+      code: o.couponCode,
       couponCode: o.couponCode,
       startDate: o.startDate,
       endDate: o.endDate,

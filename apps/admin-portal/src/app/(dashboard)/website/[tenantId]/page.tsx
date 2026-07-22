@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
@@ -62,11 +62,32 @@ export default function WebsiteHub() {
     queryKey: ['admin-tenant', tenantId],
     queryFn: () => adminApi.getTenant(tenantId),
   });
-  const slug = (tenant?.slug || (tenant as any)?.data?.slug || '') as string;
+  const slug = (tenant as any)?.data?.slug || tenant?.slug || '' as string;
+
+  const isDirty = useRef(false);
+  const serverHash = useRef('');
 
   useEffect(() => {
-    if (data) setDraft({ ...data, slug });
+    if (data) {
+      setDraft({ ...data, slug });
+      serverHash.current = JSON.stringify(data);
+    }
   }, [data, slug]);
+
+  useEffect(() => {
+    isDirty.current = JSON.stringify(draft) !== serverHash.current;
+  }, [draft]);
+
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isDirty.current) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
 
   const set = (key: string, value: any) =>
     setDraft((d) => ({ ...d, [key]: value }));
@@ -77,6 +98,8 @@ export default function WebsiteHub() {
     mutationFn: (payload: Record<string, any>) => adminApi.updateWebsiteConfig(tenantId, sanitizeConfig(payload)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['website', tenantId] });
+      serverHash.current = JSON.stringify(draft);
+      isDirty.current = false;
       addToast('Website settings saved', 'success');
     },
     onError: (e: any) => addToast(e.message || 'Save failed', 'error'),
@@ -162,7 +185,7 @@ export default function WebsiteHub() {
             </div>
             <LivePreview config={draft} device={device} slug={slug} />
             <Button variant="outline" size="sm" className="mt-3 w-full"
-              onClick={() => window.open(`${process.env.NEXT_PUBLIC_CUSTOMER_SITE_URL || 'https://localhost:3001'}/${draft.slug || ''}`, '_blank')}>
+              onClick={() => window.open(`${process.env.NEXT_PUBLIC_CUSTOMER_SITE_URL || 'http://localhost:3001'}/restaurant/${draft.slug || ''}`, '_blank')}>
               Open Live Site ↗
             </Button>
           </Card>
@@ -175,7 +198,12 @@ export default function WebsiteHub() {
 /* ───────────── Tab panels ───────────── */
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="mb-4">{children}</div>;
+  return (
+    <div className="mb-4">
+      <label className="block text-xs font-medium text-ink/60 mb-1">{label}</label>
+      {children}
+    </div>
+  );
 }
 
 function BrandingTab({ draft, set, setJson }: any) {
@@ -247,6 +275,27 @@ function SocialHoursTab({ draft, setJson }: any) {
   const social = draft.socialLinks || {};
   const hours = draft.openingHours || {};
   const socialKeys = ['facebook', 'instagram', 'twitter', 'youtube', 'linkedin', 'website'];
+  const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+  const updateHours = (day: string, field: 'open' | 'close' | 'isOpen', value: any) => {
+    const current = hours[day] || {};
+    const isString = typeof current === 'string';
+    const base = isString ? { open: '9:00 AM', close: '10:00 PM', isOpen: true } : current;
+    setJson('openingHours', { [day]: { ...base, [field]: value } });
+  };
+
+  const getDayValue = (day: string, field: 'open' | 'close' | 'isOpen') => {
+    const h = hours[day];
+    if (!h) return field === 'isOpen' ? false : '';
+    if (typeof h === 'string') {
+      const parts = h.split(' - ');
+      if (field === 'open') return parts[0] || '';
+      if (field === 'close') return parts[1] || '';
+      return true;
+    }
+    return h[field] ?? (field === 'isOpen' ? false : '');
+  };
+
   return (
     <div className="grid lg:grid-cols-2 gap-6">
       <div>
@@ -259,10 +308,19 @@ function SocialHoursTab({ draft, setJson }: any) {
       </div>
       <div>
         <h3 className="font-semibold text-ink mb-3">Business Hours</h3>
-        {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((d) => (
-          <Field key={d} label={d.charAt(0).toUpperCase() + d.slice(1)}>
-            <Input value={hours[d] || ''} onChange={(e) => setJson('openingHours', { [d]: e.target.value })} placeholder="9:00 AM - 10:00 PM" />
-          </Field>
+        {days.map((d) => (
+          <div key={d} className="mb-3 border border-ink/10 rounded-lg p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium capitalize text-ink">{d}</span>
+              <Switch checked={getDayValue(d, 'isOpen') as boolean} onChange={(v) => updateHours(d, 'isOpen', v)} label="Open" />
+            </div>
+            {getDayValue(d, 'isOpen') && (
+              <div className="grid grid-cols-2 gap-2">
+                <Input value={getDayValue(d, 'open') as string} onChange={(e) => updateHours(d, 'open', e.target.value)} placeholder="9:00 AM" />
+                <Input value={getDayValue(d, 'close') as string} onChange={(e) => updateHours(d, 'close', e.target.value)} placeholder="10:00 PM" />
+              </div>
+            )}
+          </div>
         ))}
       </div>
     </div>

@@ -7,9 +7,28 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/website-primitives';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { DataTable, Pagination } from '@/components/ui/table';
+import { DataTable } from '@/components/ui/table';
 import { Dialog, DialogFooter } from '@/components/ui/dialog';
 import { StatusBadge } from '@/components/ui/badge';
+
+function ConfirmDeleteDialog({ open, onClose, onConfirm, title, isLoading }: {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  isLoading?: boolean;
+}) {
+  if (!open) return null;
+  return (
+    <Dialog open onClose={onClose} title="Confirm Delete" size="sm">
+      <p className="text-body text-sm">Are you sure you want to delete <strong>{title}</strong>? This action cannot be undone.</p>
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose}>Cancel</Button>
+        <Button variant="danger" onClick={onConfirm} isLoading={isLoading}>Delete</Button>
+      </DialogFooter>
+    </Dialog>
+  );
+}
 
 /* ───────────── Offers ───────────── */
 
@@ -18,6 +37,7 @@ export function OffersTab({ tenantId }: { tenantId: string }) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<any>({});
+  const [deleting, setDeleting] = useState<any>(null);
   const { data, isLoading } = useQuery({
     queryKey: ['admin-offers', tenantId],
     queryFn: () => adminApi.listOffers(tenantId),
@@ -36,7 +56,7 @@ export function OffersTab({ tenantId }: { tenantId: string }) {
 
   const remove = useMutation({
     mutationFn: (id: string) => adminApi.deleteOffer(tenantId, id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-offers', tenantId] }); addToast('Offer deleted', 'success'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-offers', tenantId] }); setDeleting(null); addToast('Offer deleted', 'success'); },
     onError: (e: any) => addToast(e.message || 'Failed', 'error'),
   });
 
@@ -57,7 +77,7 @@ export function OffersTab({ tenantId }: { tenantId: string }) {
           { key: 'actions', header: '', render: (_: any, r: any) => (
             <div className="flex gap-2 justify-end">
               <Button size="sm" variant="ghost" onClick={() => open(r)}>Edit</Button>
-              <Button size="sm" variant="danger" onClick={() => remove.mutate(r.id)}>Delete</Button>
+              <Button size="sm" variant="danger" onClick={() => setDeleting(r)}>Delete</Button>
             </div>
           ) },
         ]}
@@ -91,6 +111,7 @@ export function OffersTab({ tenantId }: { tenantId: string }) {
           </DialogFooter>
         </Dialog>
       )}
+      <ConfirmDeleteDialog open={!!deleting} onClose={() => setDeleting(null)} title={deleting?.title || ''} isLoading={remove.isPending} onConfirm={() => deleting && remove.mutate(deleting.id)} />
     </div>
   );
 }
@@ -102,6 +123,7 @@ export function AnnouncementsTab({ tenantId }: { tenantId: string }) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<any>({});
+  const [deleting, setDeleting] = useState<any>(null);
   const { data, isLoading } = useQuery({
     queryKey: ['admin-announcements', tenantId],
     queryFn: () => adminApi.listAnnouncements(tenantId),
@@ -120,7 +142,7 @@ export function AnnouncementsTab({ tenantId }: { tenantId: string }) {
 
   const remove = useMutation({
     mutationFn: (id: string) => adminApi.deleteAnnouncement(tenantId, id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-announcements', tenantId] }); addToast('Announcement deleted', 'success'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-announcements', tenantId] }); setDeleting(null); addToast('Announcement deleted', 'success'); },
     onError: (e: any) => addToast(e.message || 'Failed', 'error'),
   });
 
@@ -141,7 +163,7 @@ export function AnnouncementsTab({ tenantId }: { tenantId: string }) {
           { key: 'actions', header: '', render: (_: any, r: any) => (
             <div className="flex gap-2 justify-end">
               <Button size="sm" variant="ghost" onClick={() => open(r)}>Edit</Button>
-              <Button size="sm" variant="danger" onClick={() => remove.mutate(r.id)}>Delete</Button>
+              <Button size="sm" variant="danger" onClick={() => setDeleting(r)}>Delete</Button>
             </div>
           ) },
         ]}
@@ -167,6 +189,7 @@ export function AnnouncementsTab({ tenantId }: { tenantId: string }) {
           </DialogFooter>
         </Dialog>
       )}
+      <ConfirmDeleteDialog open={!!deleting} onClose={() => setDeleting(null)} title={deleting?.title || ''} isLoading={remove.isPending} onConfirm={() => deleting && remove.mutate(deleting.id)} />
     </div>
   );
 }
@@ -178,6 +201,7 @@ export function GalleryTab({ tenantId }: { tenantId: string }) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<any>({});
+  const [deleting, setDeleting] = useState<any>(null);
   const { data, isLoading } = useQuery({
     queryKey: ['admin-gallery', tenantId],
     queryFn: () => adminApi.listGallery(tenantId),
@@ -196,7 +220,7 @@ export function GalleryTab({ tenantId }: { tenantId: string }) {
 
   const remove = useMutation({
     mutationFn: (id: string) => adminApi.deleteGalleryImage(tenantId, id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-gallery', tenantId] }); addToast('Image deleted', 'success'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-gallery', tenantId] }); setDeleting(null); addToast('Image deleted', 'success'); },
     onError: (e: any) => addToast(e.message || 'Failed', 'error'),
   });
 
@@ -216,7 +240,7 @@ export function GalleryTab({ tenantId }: { tenantId: string }) {
                 <span className="text-xs truncate">{g.caption || 'No caption'}{g.isFeatured ? ' 🌟' : ''}</span>
                 <div className="flex gap-1">
                   <Button size="sm" variant="ghost" onClick={() => open(g)}>Edit</Button>
-                  <Button size="sm" variant="danger" onClick={() => remove.mutate(g.id)}>✕</Button>
+                  <Button size="sm" variant="danger" onClick={() => setDeleting(g)}>✕</Button>
                 </div>
               </div>
             </Card>
@@ -243,6 +267,7 @@ export function GalleryTab({ tenantId }: { tenantId: string }) {
           </DialogFooter>
         </Dialog>
       )}
+      <ConfirmDeleteDialog open={!!deleting} onClose={() => setDeleting(null)} title={deleting?.caption || deleting?.imageUrl || 'this image'} isLoading={remove.isPending} onConfirm={() => deleting && remove.mutate(deleting.id)} />
     </div>
   );
 }

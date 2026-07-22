@@ -12,6 +12,14 @@ import { CreateOfferDto, UpdateOfferDto } from './dto/create-offer.dto';
 export class OffersController {
   constructor(private readonly offersService: OffersService) {}
 
+  // ── Public (by slug, unauthenticated) ──
+
+  @ApiOperation({ summary: 'Get active offers for a tenant by slug' })
+  @Get('public/:slug')
+  getPublic(@Param('slug') slug: string) {
+    return this.offersService.getPublicBySlug(slug);
+  }
+
   // ── Owner (tenant-scoped, protected) ──
 
   @ApiBearerAuth()
@@ -53,13 +61,5 @@ export class OffersController {
   @HttpCode(200)
   remove(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     return this.offersService.remove(tenantId, id);
-  }
-
-  // ── Public (by slug, unauthenticated) ──
-
-  @ApiOperation({ summary: 'Get active offers for a tenant by slug' })
-  @Get('public/:slug')
-  getPublic(@Param('slug') slug: string) {
-    return this.offersService.getPublicBySlug(slug);
   }
 }
