@@ -8,13 +8,17 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v
 
 async function getJson<T>(path: string): Promise<T | null> {
   try {
-    const res = await fetch(`${API_BASE}/${path}`, {
-      // Always fetch fresh so owner edits show up; Next caches per-request otherwise.
+    const url = `${API_BASE}/${path}`;
+    const res = await fetch(url, {
       cache: 'no-store',
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error(`[restaurant-data] ${url} returned ${res.status}`);
+      return null;
+    }
     return (await res.json()) as T;
-  } catch {
+  } catch (err) {
+    console.error(`[restaurant-data] fetch failed for ${path}:`, err);
     return null;
   }
 }

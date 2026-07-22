@@ -6,7 +6,7 @@ const APP_ROUTES = [
   'gallery', 'events', 'blog', 'contact', 'faq', 'orders', 'track-order',
   'order-success', 'payment', 'forgot-password', 'reservations', 'profile',
   'privacy-policy', 'terms', 'refund-policy', 'cancellation-policy',
-  'cookie-policy', 'not-found',
+  'cookie-policy', 'not-found', 'restaurant',
 ];
 
 const nextConfig: NextConfig = {
