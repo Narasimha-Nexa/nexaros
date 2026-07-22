@@ -36,7 +36,7 @@ export function WebsiteBuilderLayout({
     sidebarCollapsed, toggleSidebar,
     propertiesPanelOpen, togglePropertiesPanel,
     undo, redo, canUndo, canRedo,
-    draft, isDirty, lastSavedAt, lastPublishedAt,
+    draft, isDirty, lastSavedAt, lastPublishedAt, autosave,
   } = useWebsiteBuilderStore();
 
   const deviceIcons = {
@@ -72,7 +72,8 @@ export function WebsiteBuilderLayout({
         </div>
         <div className="flex items-center gap-3">
           {isDirty && <span className="text-xs text-warning font-medium">Unsaved changes</span>}
-          {lastSavedAt && !isDirty && (
+          {autosave.isAutosaving && <span className="text-xs text-primary font-medium animate-pulse">Auto-saving…</span>}
+          {lastSavedAt && !isDirty && !autosave.isAutosaving && (
             <span className="text-xs text-ink/40">Saved {lastSavedAt.toLocaleTimeString()}</span>
           )}
           <Button size="sm" variant="outline" onClick={onSave} isLoading={isSaving}>

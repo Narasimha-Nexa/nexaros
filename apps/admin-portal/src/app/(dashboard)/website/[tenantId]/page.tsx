@@ -1,10 +1,11 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { useToastStore } from '@/stores/ui.store';
 import { useWebsiteBuilderStore } from '@/stores/website-builder.store';
+import { useWebsiteSocket } from '@/hooks/use-website-socket';
 import { Tabs } from '@/components/ui/website-primitives';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/page-header';
@@ -19,7 +20,7 @@ import {
   Tag, Megaphone, Images, Eye, Rocket, History, Star,
 } from 'lucide-react';
 import { Dialog, DialogFooter } from '@/components/ui/dialog';
-import { Card } from '@/components/ui/card';
+import { useAuthStore } from '@/stores/auth.store';
 
 type TabId =
   | 'branding' | 'theme' | 'typography' | 'seo' | 'social'
@@ -47,9 +48,12 @@ export default function WebsiteHub() {
   const { tenantId } = useParams<{ tenantId: string }>();
   const router = useRouter();
   const { addToast } = useToastStore();
+  const { token } = useAuthStore();
   const queryClient = useQueryClient();
   const store = useWebsiteBuilderStore();
   const [tab, setTab] = useState<TabId>('branding');
+
+  useWebsiteSocket({ tenantId: tenantId!, token: token!, enabled: !!token && !!tenantId });
 
   const { data, isLoading } = useQuery({
     queryKey: ['website', tenantId],
@@ -80,6 +84,23 @@ export default function WebsiteHub() {
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [isDirty]);
+
+  // Autosave effect
+  useEffect(() => {
+    if (!isDirty) return;
+    const timer = setTimeout(async () => {
+      const currentStore = useWebsiteBuilderStore.getState();
+      if (!currentStore.isDirty) return;
+      try {
+        await adminApi.updateWebsiteConfig(tenantId!, sanitizeConfig(currentStore.draft));
+        currentStore.markSaved(JSON.stringify(currentStore.draft));
+        console.log('[Autosave] Auto-saved at', new Date().toLocaleTimeString());
+      } catch (error: any) {
+        console.error('[Autosave] Failed:', error.message);
+      }
+    }, 30000);
+    return () => clearTimeout(timer);
+  }, [draft, tenantId]);
 
   const saveMutation = useMutation({
     mutationFn: (payload: Record<string, any>) => adminApi.updateWebsiteConfig(tenantId, sanitizeConfig(payload)),

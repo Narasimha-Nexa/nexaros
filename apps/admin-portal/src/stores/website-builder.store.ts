@@ -6,6 +6,13 @@ interface HistoryEntry {
   timestamp: number;
 }
 
+interface AutosaveState {
+  isAutosaving: boolean;
+  autosaveTimer: NodeJS.Timeout | null;
+  lastAutosaveAt: Date | null;
+  autosaveError: string | null;
+}
+
 interface WebsiteBuilderState {
   device: 'desktop' | 'tablet' | 'mobile';
   activeTab: string;
@@ -24,6 +31,8 @@ interface WebsiteBuilderState {
   lastSavedAt: Date | null;
   lastPublishedAt: Date | null;
 
+  autosave: AutosaveState;
+
   setDevice: (device: 'desktop' | 'tablet' | 'mobile') => void;
   setActiveTab: (tab: string) => void;
   setSelectedSection: (section: string | null) => void;
@@ -39,6 +48,9 @@ interface WebsiteBuilderState {
   markSaved: (hash: string) => void;
   markPublished: (at: Date) => void;
   initializeDraft: (data: Record<string, any>) => void;
+  triggerAutosave: (saveFn: (draft: Record<string, any>) => Promise<void>) => void;
+  cancelAutosave: () => void;
+  clearAutosaveError: () => void;
 }
 
 export const useWebsiteBuilderStore = create<WebsiteBuilderState>((set, get) => ({
@@ -58,6 +70,13 @@ export const useWebsiteBuilderStore = create<WebsiteBuilderState>((set, get) => 
   isDirty: false,
   lastSavedAt: null,
   lastPublishedAt: null,
+
+  autosave: {
+    isAutosaving: false,
+    autosaveTimer: null,
+    lastAutosaveAt: null,
+    autosaveError: null,
+  },
 
   setDevice: (device) => set({ device }),
   setActiveTab: (activeTab) => set({ activeTab }),
@@ -131,4 +150,55 @@ export const useWebsiteBuilderStore = create<WebsiteBuilderState>((set, get) => 
     history: [],
     historyIndex: -1,
   }),
+
+  triggerAutosave: (saveFn) => {
+    const state = get();
+    const { autosaveTimer } = state.autosave;
+
+    if (autosaveTimer) {
+      clearTimeout(autosaveTimer);
+    }
+
+    const timer = setTimeout(async () => {
+      const currentState = get();
+      if (!currentState.isDirty) return;
+
+      set((s) => ({
+        autosave: { ...s.autosave, isAutosaving: true, autosaveError: null },
+      }));
+
+      try {
+        await saveFn(currentState.draft);
+        const newHash = JSON.stringify(currentState.draft);
+        set((s) => ({
+          serverHash: newHash,
+          isDirty: false,
+          lastSavedAt: new Date(),
+          autosave: { ...s.autosave, isAutosaving: false, lastAutosaveAt: new Date(), autosaveError: null },
+        }));
+      } catch (error: any) {
+        set((s) => ({
+          autosave: { ...s.autosave, isAutosaving: false, autosaveError: error.message || 'Autosave failed' },
+        }));
+      }
+    }, 30000);
+
+    set((s) => ({
+      autosave: { ...s.autosave, autosaveTimer: timer },
+    }));
+  },
+
+  cancelAutosave: () => {
+    const { autosaveTimer } = get().autosave;
+    if (autosaveTimer) {
+      clearTimeout(autosaveTimer);
+      set((s) => ({
+        autosave: { ...s.autosave, autosaveTimer: null, isAutosaving: false },
+      }));
+    }
+  },
+
+  clearAutosaveError: () => set((s) => ({
+    autosave: { ...s.autosave, autosaveError: null },
+  })),
 }));
