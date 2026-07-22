@@ -196,6 +196,7 @@ model Tenant {
     whatsappCampaigns    WhatsAppBulkCampaign[]
     whatsappAutomations  WhatsAppAutomation[]
     whatsappAnalytics    WhatsAppAnalytics[]
+    mediaAssets          MediaAsset[]
 
   @@index([ownerProfileId])
   @@map("tenants")
@@ -2167,6 +2168,7 @@ model GalleryImage {
   thumbnailUrl   String?
   caption        String?
   altText        String?
+  category       String?
   displayOrder   Int      @default(0)
   isFeatured     Boolean  @default(false)
   imageMetadata  Json?
@@ -3863,4 +3865,30 @@ model WhatsAppAnalytics {
   @@index([date])
   @@index([accountId, date])
   @@map("whatsapp_analytics")
+}
+
+model MediaAsset {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  filename       String
+  originalName   String
+  mimeType       String
+  size           Int
+  url            String
+  thumbnailUrl   String?
+  folder         String   @default("/")
+  tags           String[]
+  width          Int?
+  height         Int?
+  metadata       Json?
+  deletedAt      DateTime?
+  createdBy      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([tenantId, folder])
+  @@index([tenantId, mimeType])
+  @@map("media_assets")
 }

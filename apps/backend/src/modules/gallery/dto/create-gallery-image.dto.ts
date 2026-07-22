@@ -23,6 +23,11 @@ export class CreateGalleryImageDto {
   @IsString()
   altText?: string;
 
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  category?: string;
+
   @ApiProperty({ required: false, type: Number, default: 0 })
   @IsOptional()
   @Type(() => Number)

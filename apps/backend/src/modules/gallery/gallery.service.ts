@@ -97,6 +97,7 @@ export class GalleryService {
       thumbnail: g.thumbnailUrl,
       caption: g.caption,
       alt: g.altText,
+      category: g.category,
       isFeatured: g.isFeatured,
     }));
 

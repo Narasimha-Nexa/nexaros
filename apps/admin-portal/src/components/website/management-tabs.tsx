@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { useToastStore } from '@/stores/ui.store';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/website-primitives';
+import { Textarea, MediaField } from '@/components/ui/website-primitives';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { DataTable } from '@/components/ui/table';
@@ -72,7 +72,16 @@ export function OffersTab({ tenantId }: { tenantId: string }) {
         keyExtractor={(r) => r.id}
         columns={[
           { key: 'title', header: 'Title', render: (v) => <span className="font-semibold text-ink">{v}</span> },
-          { key: 'discount', header: 'Discount', render: (_: any, r: any) => `${r.discountValue}${r.discountType === 'PERCENTAGE' ? '%' : ' ₹'}` },
+          { key: 'discount', header: 'Discount', render: (_: any, r: any) => {
+            const v = r.discountValue;
+            switch (r.discountType) {
+              case 'PERCENTAGE': return `${v}%`;
+              case 'FLAT': return `₹${v}`;
+              case 'BOGO': return 'Buy 1 Get 1';
+              case 'FREE_DELIVERY': return 'Free Delivery';
+              default: return v;
+            }
+          } },
           { key: 'status', header: 'Status', render: (_: any, r: any) => <StatusBadge status={r.status} label={r.status} /> },
           { key: 'actions', header: '', render: (_: any, r: any) => (
             <div className="flex gap-2 justify-end">
@@ -251,13 +260,10 @@ export function GalleryTab({ tenantId }: { tenantId: string }) {
       {editing && (
         <Dialog open onClose={() => setEditing(null)} title={editing.id ? 'Edit Image' : 'Add Image'} size="lg">
           <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-            <Input label="Image URL" value={form.imageUrl || ''} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder="https://..." />
-            {form.imageUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={form.imageUrl} alt="" className="h-32 w-full object-cover rounded-lg" />
-            )}
+            <MediaField value={form.imageUrl} onChange={(v) => setForm({ ...form, imageUrl: v })} label="Gallery Image" aspect="aspect-video" tenantId={tenantId} folder="gallery" />
             <Input label="Caption" value={form.caption || ''} onChange={(e) => setForm({ ...form, caption: e.target.value })} />
             <Input label="Alt Text" value={form.altText || ''} onChange={(e) => setForm({ ...form, altText: e.target.value })} />
+            <Input label="Category" value={form.category || ''} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="e.g. Interior, Food, Events" />
             <Input label="Display Order" type="number" value={form.displayOrder ?? 0} onChange={(e) => setForm({ ...form, displayOrder: Number(e.target.value) })} />
             <label className="flex items-center gap-2"><input type="checkbox" checked={!!form.isFeatured} onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })} /><span className="text-body-sm">Featured image</span></label>
           </div>

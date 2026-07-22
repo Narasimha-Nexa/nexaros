@@ -123,12 +123,6 @@ export class CmsService {
     return updated;
   }
 
-  async getPublicConfig(slug: string) {
-    const tenant = await this.prisma.tenant.findUnique({ where: { slug } });
-    if (!tenant) throw new NotFoundException('Tenant not found');
-    return this.getConfig(tenant.id);
-  }
-
   /**
    * Single source of truth for post-mutation side effects:
    *  - Emit Socket.IO events to the tenant (owner/staff) and public (customers) rooms

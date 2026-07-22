@@ -58,3 +58,6 @@ apps/backend/prisma/migrations/**/migration_lock.toml
 # Misc
 *.tgz
 .cache/
+
+# Uploads
+apps/backend/uploads/

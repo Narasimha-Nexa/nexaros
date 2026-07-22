@@ -159,7 +159,7 @@ export default function WebsiteHub() {
         <Card className="p-5">
           <Tabs tabs={tabs} active={tab} onChange={setTab} />
           <div className="min-h-[420px]">
-            {tab === 'branding' && <BrandingTab draft={draft} set={set} setJson={setJson} />}
+            {tab === 'branding' && <BrandingTab tenantId={tenantId} draft={draft} set={set} setJson={setJson} />}
             {tab === 'theme' && <ThemeTab draft={draft} set={set} />}
             {tab === 'typography' && <TypographyTab draft={draft} set={set} />}
             {tab === 'seo' && <SeoTab tenantId={tenantId} draft={draft} setJson={setJson} />}
@@ -206,13 +206,13 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function BrandingTab({ draft, set, setJson }: any) {
+function BrandingTab({ tenantId, draft, set, setJson }: any) {
   return (
     <div>
       <Field label="Restaurant Name"><Input value={draft.restaurantName || ''} onChange={(e) => set('restaurantName', e.target.value)} /></Field>
       <Field label="Tagline"><Input value={draft.tagline || ''} onChange={(e) => set('tagline', e.target.value)} /></Field>
-      <Field label="Logo"><MediaField value={draft.logo} onChange={(v) => set('logo', v)} label="Logo" aspect="aspect-square" /></Field>
-      <Field label="Favicon"><MediaField value={draft.favicon} onChange={(v) => set('favicon', v)} label="Favicon" aspect="aspect-square" /></Field>
+      <Field label="Logo"><MediaField value={draft.logo} onChange={(v) => set('logo', v)} label="Logo" aspect="aspect-square" tenantId={tenantId} folder="branding" /></Field>
+      <Field label="Favicon"><MediaField value={draft.favicon} onChange={(v) => set('favicon', v)} label="Favicon" aspect="aspect-square" tenantId={tenantId} folder="branding" /></Field>
     </div>
   );
 }
@@ -263,7 +263,7 @@ function SeoTab({ tenantId, draft, setJson }: any) {
       <Field label="Keywords (comma separated)">
         <Input value={(seo.keywords || []).join(', ')} onChange={(e) => setJson('seo', { keywords: e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean) })} />
       </Field>
-      <Field label="OG Image"><MediaField value={seo.ogImage} onChange={(v) => setJson('seo', { ogImage: v })} label="Social Preview" /></Field>
+      <Field label="OG Image"><MediaField value={seo.ogImage} onChange={(v) => setJson('seo', { ogImage: v })} label="Social Preview" tenantId={tenantId} folder="seo" /></Field>
       <Field label="Robots Index">
         <Switch checked={seo.robots?.index !== false} onChange={(v) => setJson('seo', { robots: { ...(seo.robots || {}), index: v } })} />
       </Field>

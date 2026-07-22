@@ -916,16 +916,51 @@ class AdminApiClient {
 }
 
 /**
- * MediaService abstraction. Phase 4 stores image URLs directly; the upload
- * method is a stub that will be implemented with MinIO/S3 in Phase 6 without
- * changing this interface or the UI components that consume it.
+ * MediaService — real file upload via the backend /media/upload endpoint.
  */
 export const mediaService = {
-  async upload(_file: File): Promise<{ url: string }> {
-    throw new Error('Media upload is not available yet (Phase 6). Use a direct image URL.');
+  async upload(file: File, tenantId: string, folder?: string): Promise<{ url: string; id: string }> {
+    const token = localStorage.getItem('admin_token');
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('tenantId', tenantId);
+    if (folder) formData.append('folder', folder);
+
+    const res = await fetch(`${API_BASE}/media/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: 'Upload failed' }));
+      throw new Error(err.message || `Upload failed (${res.status})`);
+    }
+    const result = await res.json();
+    return { url: result.data.url, id: result.data.id };
   },
   async uploadUrl(url: string): Promise<{ url: string }> {
     return { url };
+  },
+  async list(tenantId: string, opts?: { folder?: string; search?: string; page?: number }) {
+    const token = localStorage.getItem('admin_token');
+    const params = new URLSearchParams({ tenantId });
+    if (opts?.folder) params.set('folder', opts.folder);
+    if (opts?.search) params.set('search', opts.search);
+    if (opts?.page) params.set('page', String(opts.page));
+    const res = await fetch(`${API_BASE}/media?${params}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to list media');
+    return res.json();
+  },
+  async remove(id: string, tenantId: string) {
+    const token = localStorage.getItem('admin_token');
+    const res = await fetch(`${API_BASE}/media/${id}?tenantId=${tenantId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to delete media');
+    return res.json();
   },
 };
 

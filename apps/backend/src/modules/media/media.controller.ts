@@ -1,42 +1,78 @@
 import {
-  Controller, Post, Delete, Param, Body, UseGuards, HttpCode, HttpStatus,
+  Controller, Post, Get, Delete, Param, Query, UseGuards, UseInterceptors,
+  UploadedFile, HttpCode, HttpStatus, Body,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
 import { AdminRolesGuard, AdminRoles } from '../../common/guards/admin-roles.guard';
+import { MediaService } from './media.service';
 
-/**
- * Generic media API contract. The upload implementation is intentionally a stub
- * in Phase 4 — the Website Management UI stores image URLs directly. In Phase 6
- * this controller's internals will be swapped to MinIO/S3 without changing the
- * route contract or the frontend MediaService interface.
- */
 @ApiTags('media')
 @ApiBearerAuth()
+@UseGuards(AdminAuthGuard, AdminRolesGuard)
 @Controller('media')
 export class MediaController {
-  @ApiOperation({ summary: 'Upload a media asset (stub — MinIO arrives in Phase 6)' })
-  @UseGuards(AdminAuthGuard, AdminRolesGuard)
+  constructor(private readonly mediaService: MediaService) {}
+
+  @ApiOperation({ summary: 'Upload a media asset' })
   @AdminRoles('SUPER_ADMIN', 'ADMIN')
   @Post('upload')
-  @HttpCode(HttpStatus.NOT_IMPLEMENTED)
-  upload() {
-    return {
-      error: 'NOT_IMPLEMENTED',
-      message:
-        'Media upload is not yet available. Store image URLs directly; MinIO/S3 integration arrives in Phase 6.',
-    };
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        tenantId: { type: 'string' },
+        folder: { type: 'string' },
+        tags: { type: 'string' },
+      },
+      required: ['file', 'tenantId'],
+    },
+  })
+  async upload(
+    @UploadedFile() file: Express.Multer.File,
+    @Body('tenantId') tenantId: string,
+    @Body('folder') folder?: string,
+    @Body('tags') tags?: string,
+  ) {
+    const tagList = tags ? tags.split(',').map((t) => t.trim()).filter(Boolean) : [];
+    const asset = await this.mediaService.upload(tenantId, file, folder, tagList);
+    return { data: asset };
   }
 
-  @ApiOperation({ summary: 'Delete a media asset (stub)' })
-  @UseGuards(AdminAuthGuard, AdminRolesGuard)
+  @ApiOperation({ summary: 'List media assets' })
+  @AdminRoles('SUPER_ADMIN', 'ADMIN')
+  @Get()
+  async findAll(
+    @Query('tenantId') tenantId: string,
+    @Query('folder') folder?: string,
+    @Query('mime') mime?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.mediaService.findAll(tenantId, {
+      folder, mime, search,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 50,
+    });
+  }
+
+  @ApiOperation({ summary: 'Get media folders' })
+  @AdminRoles('SUPER_ADMIN', 'ADMIN')
+  @Get('folders')
+  async getFolders(@Query('tenantId') tenantId: string) {
+    return this.mediaService.getFolders(tenantId);
+  }
+
+  @ApiOperation({ summary: 'Delete a media asset' })
   @AdminRoles('SUPER_ADMIN', 'ADMIN')
   @Delete(':id')
-  @HttpCode(HttpStatus.NOT_IMPLEMENTED)
-  remove(@Param('id') _id: string) {
-    return {
-      error: 'NOT_IMPLEMENTED',
-      message: 'Media delete is not yet available (Phase 6).',
-    };
+  @HttpCode(HttpStatus.OK)
+  async remove(@Param('id') id: string, @Query('tenantId') tenantId: string) {
+    return this.mediaService.remove(tenantId, id);
   }
 }
