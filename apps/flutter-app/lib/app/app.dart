@@ -1,25 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/theme/app_theme.dart';
+import '../core/providers/riverpod_providers.dart';
 import '../core/i18n/app_localizations.dart';
-import '../features/auth/presentation/login_screen.dart';
-import 'shells/mobile_shell.dart';
-import 'shells/desktop_shell.dart';
-import 'shells/tablet_shell.dart';
+import 'router/app_router.dart';
 
-class NexaROSApp extends StatelessWidget {
+class NexaROSApp extends ConsumerWidget {
   const NexaROSApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authProvider);
+    final themeMode = ref.watch(themeProvider).themeMode;
+    final router = createRouter(authState);
+
+    return MaterialApp.router(
       title: 'NexaROS',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system,
+      themeMode: themeMode,
+      routerConfig: router,
       localizationsDelegates: [
-        AppLocalizations.delegate,
+        const AppLocalizationsDelegate(),
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
@@ -29,6 +33,9 @@ class NexaROSApp extends StatelessWidget {
         const Locale('hi', ''),
         const Locale('kn', ''),
         const Locale('te', ''),
+        const Locale('ta', ''),
+        const Locale('ml', ''),
+        const Locale('ar', ''),
       ],
       localeResolutionCallback: (locale, supportedLocales) {
         if (locale == null) return supportedLocales.first;
@@ -38,26 +45,6 @@ class NexaROSApp extends StatelessWidget {
           }
         }
         return supportedLocales.first;
-      },
-      home: const LoginScreen(),
-    );
-  }
-}
-
-class ResponsiveShell extends StatelessWidget {
-  final Widget child;
-  const ResponsiveShell({super.key, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth > 1400) {
-          return const DesktopShell();
-        } else if (constraints.maxWidth > 900) {
-          return const TabletShell();
-        }
-        return const MobileShell();
       },
     );
   }

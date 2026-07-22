@@ -11,12 +11,13 @@ import * as crypto from 'crypto';
 export class CsrfMiddleware implements NestMiddleware {
   private readonly logger = new Logger('CSRF');
   private readonly excludedPaths = [
-    '/api/auth/login',
-    '/api/auth/register',
-    '/api/auth/forgot-password',
-    '/api/auth/reset-password',
-    '/api/health',
-    '/api/public',
+    '/api/v1/auth/login',
+    '/api/v1/auth/register',
+    '/api/v1/auth/forgot-password',
+    '/api/v1/auth/reset-password',
+    '/api/v1/admin/auth/login',
+    '/api/v1/health',
+    '/api/v1/public',
     '/docs',
   ];
 

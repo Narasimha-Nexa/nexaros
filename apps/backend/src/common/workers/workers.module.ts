@@ -5,9 +5,10 @@ import { ReportWorker } from './report.worker';
 import { OrderWorker } from './order.worker';
 import { SubscriptionWorker } from './subscription.worker';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { NotificationsModule } from '../../modules/notifications/notifications.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, NotificationsModule],
   providers: [
     NotificationWorker,
     InvoiceWorker,

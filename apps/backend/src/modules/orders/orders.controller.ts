@@ -7,6 +7,7 @@ import { OrdersService } from './orders.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { BranchScopeGuard } from '../../common/guards/branch-scope.guard';
 import { EntitlementsGuard } from '../../common/guards/entitlements.guard';
+import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { AddItemDto } from './dto/add-item.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
@@ -41,8 +42,8 @@ export class OrdersController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get order details' })
-  findOne(@Param('id') id: string) {
-    return this.ordersService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentTenant() tenantId: string) {
+    return this.ordersService.findOne(id, tenantId);
   }
 
   @Post()
@@ -54,14 +55,14 @@ export class OrdersController {
 
   @Post(':id/items')
   @ApiOperation({ summary: 'Add item to existing order' })
-  addItem(@Param('id') id: string, @Body() data: AddItemDto) {
-    return this.ordersService.addItem(id, data);
+  addItem(@Param('id') id: string, @Body() data: AddItemDto, @CurrentTenant() tenantId: string) {
+    return this.ordersService.addItem(id, data, tenantId);
   }
 
   @Delete(':id/items/:itemId')
   @ApiOperation({ summary: 'Remove item from order' })
-  removeItem(@Param('id') id: string, @Param('itemId') itemId: string) {
-    return this.ordersService.removeItem(id, itemId);
+  removeItem(@Param('id') id: string, @Param('itemId') itemId: string, @CurrentTenant() tenantId: string) {
+    return this.ordersService.removeItem(id, itemId, tenantId);
   }
 
   @Patch(':id/status')
@@ -69,19 +70,20 @@ export class OrdersController {
   updateStatus(
     @Param('id') id: string,
     @Body() data: UpdateOrderStatusDto,
+    @CurrentTenant() tenantId: string,
   ) {
-    return this.ordersService.updateStatus(id, data.status, data.notes);
+    return this.ordersService.updateStatus(id, data.status, data.notes, tenantId);
   }
 
   @Post(':id/kot')
   @ApiOperation({ summary: 'Print KOT (Kitchen Order Ticket)' })
-  printKot(@Param('id') id: string) {
-    return this.ordersService.printKot(id);
+  printKot(@Param('id') id: string, @CurrentTenant() tenantId: string) {
+    return this.ordersService.printKot(id, tenantId);
   }
 
   @Post(':id/cancel')
   @ApiOperation({ summary: 'Cancel an order' })
-  cancel(@Param('id') id: string, @Body('notes') notes?: string) {
-    return this.ordersService.cancel(id, notes);
+  cancel(@Param('id') id: string, @Body('notes') notes?: string, @CurrentTenant() tenantId?: string) {
+    return this.ordersService.cancel(id, notes, tenantId);
   }
 }

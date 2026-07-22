@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { GatewayService } from '../websockets/gateway.service';
+import { EventBusService } from '../../common/event-bus/event-bus.service';
 import { CreateTableDto } from './dto/create-table.dto';
 import { randomBytes } from 'crypto';
 
@@ -8,10 +8,31 @@ import { randomBytes } from 'crypto';
 export class TablesService {
   constructor(
     private prisma: PrismaService,
-    private gateway: GatewayService,
+    private eventBus: EventBusService,
   ) {}
 
-  async findAll(branchId: string) {
+  private async validateBranch(branchId: string, tenantId: string) {
+    const branch = await this.prisma.branch.findFirst({
+      where: { id: branchId, tenantId, isActive: true },
+      select: { id: true },
+    });
+    if (!branch) throw new NotFoundException('Branch not found or does not belong to this tenant');
+    return branch;
+  }
+
+  private async findOneWithTenantValidation(id: string, tenantId: string) {
+    const table = await this.prisma.restaurantTable.findFirst({
+      where: { id, branch: { tenantId } },
+      include: {
+        branch: { select: { id: true, tenantId: true } },
+      },
+    });
+    if (!table) throw new NotFoundException('Table not found or does not belong to this tenant');
+    return table;
+  }
+
+  async findAll(branchId: string, tenantId: string) {
+    await this.validateBranch(branchId, tenantId);
     return this.prisma.restaurantTable.findMany({
       where: { branchId },
       include: {
@@ -28,8 +49,9 @@ export class TablesService {
     });
   }
 
-  async findOne(id: string) {
-    const table = await this.prisma.restaurantTable.findUnique({
+  async findOne(id: string, tenantId: string) {
+    const table = await this.findOneWithTenantValidation(id, tenantId);
+    const fullTable = await this.prisma.restaurantTable.findUnique({
       where: { id },
       include: {
         orders: {
@@ -40,45 +62,43 @@ export class TablesService {
         },
       },
     });
-    if (!table) throw new NotFoundException('Table not found');
-    return table;
+    return fullTable;
   }
 
-  async create(branchId: string, dto: CreateTableDto) {
+  async create(branchId: string, dto: CreateTableDto, tenantId: string) {
+    await this.validateBranch(branchId, tenantId);
     return this.prisma.restaurantTable.create({
       data: { ...dto, branchId },
     });
   }
 
-  async update(id: string, data: { name?: string; capacity?: number }) {
-    const table = await this.prisma.restaurantTable.findUnique({ where: { id } });
-    if (!table) throw new NotFoundException('Table not found');
-
+  async update(id: string, data: { name?: string; capacity?: number }, tenantId: string) {
+    await this.findOneWithTenantValidation(id, tenantId);
     return this.prisma.restaurantTable.update({
       where: { id },
       data,
     });
   }
 
-  async updateStatus(id: string, status: string) {
-    const table = await this.prisma.restaurantTable.update({
+  async updateStatus(id: string, status: string, tenantId: string) {
+    const table = await this.findOneWithTenantValidation(id, tenantId);
+    const updated = await this.prisma.restaurantTable.update({
       where: { id },
       data: { status: status as any },
     });
-    this.gateway.emitToBranch(table.branchId, 'table:status-changed', {
-      tableId: table.id,
-      tableNumber: table.number,
-      status: table.status,
+    this.eventBus.emitToBranch(table.branch.id, 'table:status-changed', {
+      tableId: updated.id,
+      tableNumber: updated.number,
+      status: updated.status,
     });
-    return table;
+    return updated;
   }
 
-  async generateQrCode(id: string) {
-    const table = await this.prisma.restaurantTable.findUnique({ where: { id } });
-    if (!table) throw new NotFoundException('Table not found');
+  async generateQrCode(id: string, tenantId: string) {
+    const table = await this.findOneWithTenantValidation(id, tenantId);
 
     const qrToken = randomBytes(16).toString('hex');
-    const qrUrl = `${process.env.APP_URL || 'http://localhost:3000'}/order/${table.branchId}/${table.id}?token=${qrToken}`;
+    const qrUrl = `${process.env.APP_URL || 'http://localhost:3000'}/order/${table.branch.id}/${table.id}?token=${qrToken}`;
 
     const updated = await this.prisma.restaurantTable.update({
       where: { id },
@@ -88,11 +108,13 @@ export class TablesService {
     return { tableId: id, tableNumber: table.number, qrCode: qrUrl };
   }
 
-  async remove(id: string) {
+  async remove(id: string, tenantId: string) {
+    await this.findOneWithTenantValidation(id, tenantId);
     return this.prisma.restaurantTable.delete({ where: { id } });
   }
 
-  async getFloorPlan(branchId: string) {
+  async getFloorPlan(branchId: string, tenantId: string) {
+    await this.validateBranch(branchId, tenantId);
     const tables = await this.prisma.restaurantTable.findMany({
       where: { branchId, isActive: true },
       select: {

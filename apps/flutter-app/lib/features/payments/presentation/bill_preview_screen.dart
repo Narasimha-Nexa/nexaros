@@ -1,19 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/providers/riverpod_providers.dart';
 import '../../payments/presentation/payment_screen.dart';
+import '../../../shared/widgets/shared_widgets.dart';
 
-class BillPreviewScreen extends StatefulWidget {
+class BillPreviewScreen extends ConsumerStatefulWidget {
   final String orderId;
   const BillPreviewScreen({super.key, required this.orderId});
 
   @override
-  State<BillPreviewScreen> createState() => _BillPreviewScreenState();
+  ConsumerState<BillPreviewScreen> createState() => _BillPreviewScreenState();
 }
 
-class _BillPreviewScreenState extends State<BillPreviewScreen> {
-  final _api = ApiClient();
+class _BillPreviewScreenState extends ConsumerState<BillPreviewScreen> {
+  late final ApiClient _api;
   Map<String, dynamic>? _order;
   Map<String, dynamic>? _paymentInfo;
   bool _isLoading = true;
@@ -21,6 +24,7 @@ class _BillPreviewScreenState extends State<BillPreviewScreen> {
   @override
   void initState() {
     super.initState();
+    _api = ref.read(appStateProvider).api;
     _loadBill();
   }
 
@@ -46,7 +50,7 @@ class _BillPreviewScreenState extends State<BillPreviewScreen> {
     return Scaffold(
       appBar: AppBar(title: Text('Bill Preview', style: GoogleFonts.inter(fontWeight: FontWeight.w600))),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: NxFullScreenLoader())
           : _order == null
               ? const Center(child: Text('Order not found'))
               : _buildBillContent(),

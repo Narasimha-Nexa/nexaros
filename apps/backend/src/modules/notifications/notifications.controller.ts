@@ -17,21 +17,40 @@ export class NotificationsController {
   @ApiOperation({ summary: 'List notifications' })
   findAll(
     @CurrentTenant() tenantId: string,
+    @CurrentUser() user: any,
     @Query('branchId') branchId?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.notificationsService.findAll(tenantId, branchId, limit ? parseInt(limit) : 50);
+    return this.notificationsService.findAll(tenantId, user?.id, branchId, limit ? parseInt(limit) : 50);
   }
 
   @Get('unread-count')
   @ApiOperation({ summary: 'Get unread notification count' })
-  getUnreadCount(@CurrentTenant() tenantId: string, @CurrentUser() userId: string) {
-    return this.notificationsService.getUnreadCount(tenantId, userId);
+  getUnreadCount(@CurrentTenant() tenantId: string, @CurrentUser() user: any) {
+    return this.notificationsService.getUnreadCount(tenantId, user?.id);
+  }
+
+  @Post(':id/read')
+  @ApiOperation({ summary: 'Mark notification as read' })
+  markRead(@CurrentTenant() tenantId: string, @CurrentUser() user: any, @Param('id') id: string) {
+    return this.notificationsService.markRead(tenantId, id, user?.id);
+  }
+
+  @Post('read-all')
+  @ApiOperation({ summary: 'Mark all notifications as read' })
+  markAllRead(@CurrentTenant() tenantId: string, @CurrentUser() user: any) {
+    return this.notificationsService.markAllRead(tenantId, user?.id);
   }
 
   @Post('send')
   @ApiOperation({ summary: 'Send a notification (in-app, email, or SMS)' })
   send(@CurrentTenant() tenantId: string, @Body() dto: CreateNotificationDto) {
     return this.notificationsService.send(tenantId, dto);
+  }
+
+  @Post(':id/delete')
+  @ApiOperation({ summary: 'Soft-delete a notification' })
+  delete(@CurrentTenant() tenantId: string, @CurrentUser() user: any, @Param('id') id: string) {
+    return this.notificationsService.delete(tenantId, id, user?.id);
   }
 }

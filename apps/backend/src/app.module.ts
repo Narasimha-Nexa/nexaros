@@ -36,11 +36,37 @@ import { PlatformModule } from './modules/platform/platform.module';
 import { RedisModule } from './common/redis/redis.module';
 import { QueueModule } from './common/queue/queue.module';
 import { WorkersModule } from './common/workers/workers.module';
+import { CrmModule } from './modules/crm/crm.module';
+import { CmsModule } from './modules/cms/cms.module';
+import { OffersModule } from './modules/offers/offers.module';
+import { AnnouncementsModule } from './modules/announcements/announcements.module';
+import { GalleryModule } from './modules/gallery/gallery.module';
+import { MediaModule } from './modules/media/media.module';
+import { MarketingModule } from './modules/marketing/marketing.module';
+import { OmnichannelModule } from './modules/omnichannel/omnichannel.module';
+import { ApiKeysModule } from './modules/api-keys/api-keys.module';
+import { WebhooksModule } from './modules/webhooks/webhooks.module';
+import { WorkflowsModule } from './modules/workflows/workflows.module';
+import { BackupsModule } from './modules/backups/backups.module';
+import { BiModule } from './modules/bi/bi.module';
+import { ForecastModule } from './modules/forecast/forecast.module';
+import { AiChatModule } from './modules/ai-chat/ai-chat.module';
+import { OnboardingModule } from './modules/onboarding/onboarding.module';
+import { ProvisioningModule } from './modules/provisioning/provisioning.module';
+import { OwnerProfileModule } from './modules/owner-profile/owner-profile.module';
+import { DiningModule } from './modules/dining/dining.module';
+import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
+import { DeliveryModule } from './modules/delivery/delivery.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { PosModule } from './modules/pos/pos.module';
+import { FinanceModule } from './modules/finance/finance.module';
 import { EventBusModule } from './common/event-bus/event-bus.module';
+import { NotificationProviderModule } from './common/providers/notification-provider.module';
 import { RateLimitMiddleware } from './common/middleware/rate-limit.middleware';
 import { LoginRateLimitMiddleware } from './common/middleware/login-rate-limit.middleware';
 import { CsrfMiddleware } from './common/middleware/csrf.middleware';
 import { PublicRateLimitMiddleware } from './common/middleware/public-rate-limit.middleware';
+import { RequestContextMiddleware } from './common/middleware/request-context.middleware';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -53,6 +79,7 @@ import { HealthController } from './health.controller';
     QueueModule,
     WorkersModule,
     EventBusModule,
+    NotificationProviderModule,
     PrismaModule,
     AuthModule,
     TenantsModule,
@@ -86,25 +113,53 @@ import { HealthController } from './health.controller';
     DemoRequestsModule,
     SupportModule,
     PlatformModule,
+    CrmModule,
+    CmsModule,
+    MediaModule,
+    OffersModule,
+    AnnouncementsModule,
+    GalleryModule,
+    DeliveryModule,
+    DashboardModule,
+    PosModule,
+    FinanceModule,
+    MarketingModule,
+    OmnichannelModule,
+    ApiKeysModule,
+    WebhooksModule,
+    WorkflowsModule,
+    BackupsModule,
+    BiModule,
+    ForecastModule,
+    AiChatModule,
+    OnboardingModule,
+    ProvisioningModule,
+    OwnerProfileModule,
+    DiningModule,
+    WhatsAppModule,
   ],
   controllers: [HealthController],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
+      .apply(RequestContextMiddleware)
+      .forRoutes('{*splat}');
+
+    consumer
       .apply(RateLimitMiddleware)
-      .forRoutes('*');
+      .forRoutes('{*splat}');
 
     consumer
       .apply(PublicRateLimitMiddleware)
-      .forRoutes('api/public');
+      .forRoutes('/api/v1/public');
 
     consumer
       .apply(LoginRateLimitMiddleware)
-      .forRoutes('/api/auth/login', '/api/admin/login');
+      .forRoutes('/api/v1/auth/login', '/api/v1/admin/auth/login');
 
     consumer
       .apply(CsrfMiddleware)
-      .forRoutes('*');
+      .forRoutes('{*splat}');
   }
 }

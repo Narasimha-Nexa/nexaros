@@ -82,14 +82,23 @@ export class CouponsService {
     return { discount, finalAmount: Math.max(amount - discount, 0) };
   }
 
-  async findAll(page = 1, limit = 50) {
+  async findAll(page = 1, limit = 50, search?: string) {
+    const where: any = {};
+    if (search) {
+      where.OR = [
+        { code: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { festivalTag: { contains: search, mode: 'insensitive' } },
+      ];
+    }
     const [coupons, total] = await Promise.all([
       this.prisma.coupon.findMany({
+        where,
         orderBy: { createdAt: 'desc' },
         take: limit,
         skip: (page - 1) * limit,
       }),
-      this.prisma.coupon.count(),
+      this.prisma.coupon.count({ where }),
     ]);
     return { coupons, total, page, pages: Math.ceil(total / limit) };
   }

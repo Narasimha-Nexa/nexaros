@@ -1,22 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/providers/app_state.dart';
-import '../../../core/providers/subscription_provider.dart';
-import '../../../core/providers/branch_provider.dart';
-import '../../auth/providers/auth_provider.dart';
-import '../../../app/shells/mobile_shell.dart';
-import '../../../app/shells/desktop_shell.dart';
+import '../../../core/providers/riverpod_providers.dart';
+import '../providers/auth_provider.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController(text: 'admin@demo.com');
   final _passwordController = TextEditingController(text: 'password123');
   bool _obscurePassword = true;
@@ -37,16 +34,25 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final provider = Provider.of<AuthProvider>(context, listen: false);
+      final provider = ref.read(authProvider.notifier);
       await provider.login(_emailController.text, _passwordController.text);
 
       if (provider.state.status == AuthStatus.authenticated && mounted) {
+        // Initialize role from login response + JWT
+        try {
+          final roleProv = ref.read(roleProvider.notifier);
+          roleProv.setFromLogin(
+            provider.state.user ?? {},
+            ref.read(appStateProvider).api.accessToken ?? '',
+          );
+        } catch (_) {}
+
         // Load branches via BranchProvider
         try {
-          final appState = context.read<AppState>();
-          final branchProvider = context.read<BranchProvider>();
-          await branchProvider.loadBranches();
-          final branchId = branchProvider.selectedBranchId;
+          final appState = ref.read(appStateProvider);
+          final branchProv = ref.read(branchProvider.notifier);
+          await branchProv.loadBranches();
+          final branchId = branchProv.selectedBranchId;
           if (branchId != null) {
             appState.onLogin(branchId);
             appState.api.setBranchId(branchId);
@@ -56,16 +62,14 @@ class _LoginScreenState extends State<LoginScreen> {
         // Load subscription entitlements after login
         if (mounted) {
           try {
-            final subscription = context.read<SubscriptionProvider>();
+            final subscription = ref.read(subscriptionProvider.notifier);
             await subscription.loadEntitlements();
             subscription.startPeriodicRefresh();
           } catch (_) {}
         }
 
         if (!mounted) return;
-        final width = MediaQuery.of(context).size.width;
-        final shell = width > 900 ? const DesktopShell() : const MobileShell();
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => shell));
+        context.go('/shell/dashboard');
       } else if (mounted) {
         setState(() => _error = provider.state.error ?? 'Login failed');
       }
@@ -93,7 +97,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Text(
                   'NexaROS',
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.gray900),
+                  style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -108,11 +112,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     margin: const EdgeInsets.only(bottom: 16),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.red.shade50,
+                      color: AppColors.danger.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red.shade200),
+                      border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
                     ),
-                    child: Text(_error!, style: TextStyle(color: Colors.red.shade700, fontSize: 13)),
+                    child: Text(_error!, style: TextStyle(color: AppColors.danger, fontSize: 13)),
                   ),
 
                 TextField(
@@ -141,7 +145,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _handleLogin,
                     child: _isLoading
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.white))
                         : const Text('Sign In'),
                   ),
                 ),

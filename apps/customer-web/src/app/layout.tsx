@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from 'next';
-import Script from 'next/script';
 import { Inter, Playfair_Display } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
+import { ErrorBoundary } from '@/components/error-boundary';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -96,43 +96,8 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <Script
-          id="jsonld-schema"
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              '@context': 'https://schema.org',
-              '@type': 'Restaurant',
-              name: 'Spice Garden',
-              image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&h=800&fit=crop',
-              description: 'Premium Indian restaurant in Bengaluru offering fine dining, takeaway, and delivery.',
-              servesCuisine: 'Indian',
-              priceRange: '₹₹₹',
-              address: {
-                '@type': 'PostalAddress',
-                streetAddress: '42, MG Road, Indiranagar',
-                addressLocality: 'Bengaluru',
-                addressRegion: 'Karnataka',
-                postalCode: '560038',
-                addressCountry: 'IN',
-              },
-              telephone: '+91 1800-123-4567',
-              openingHoursSpecification: [
-                { '@type': 'OpeningHoursSpecification', dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'], opens: '10:00', closes: '23:00' },
-                { '@type': 'OpeningHoursSpecification', dayOfWeek: ['Saturday', 'Sunday'], opens: '09:00', closes: '00:00' },
-              ],
-              aggregateRating: {
-                '@type': 'AggregateRating',
-                ratingValue: '4.7',
-                reviewCount: '2345',
-              },
-            }),
-          }}
-        />
-      </head>
       <body className={`min-h-screen bg-bg text-ink antialiased ${inter.variable} ${playfair.variable}`}>
-        <Providers>{children}</Providers>
+        <Providers><ErrorBoundary>{children}</ErrorBoundary></Providers>
       </body>
     </html>
   );

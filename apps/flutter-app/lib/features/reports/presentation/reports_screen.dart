@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/providers/riverpod_providers.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_colors.dart';
 import 'report_charts.dart';
 
-class ReportsScreen extends StatefulWidget {
+class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
 
   @override
-  State<ReportsScreen> createState() => _ReportsScreenState();
+  ConsumerState<ReportsScreen> createState() => _ReportsScreenState();
 }
 
-class _ReportsScreenState extends State<ReportsScreen>
+class _ReportsScreenState extends ConsumerState<ReportsScreen>
     with SingleTickerProviderStateMixin {
-  final _api = ApiClient();
+  late final ApiClient _api;
   late TabController _tabController;
   bool _isLoading = true;
   String? _error;
@@ -34,6 +36,7 @@ class _ReportsScreenState extends State<ReportsScreen>
   @override
   void initState() {
     super.initState();
+    _api = ref.read(appStateProvider).api;
     _tabController = TabController(length: 5, vsync: this);
     _loadAllReports();
   }

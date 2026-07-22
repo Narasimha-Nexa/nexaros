@@ -37,6 +37,11 @@ const nextConfig: NextConfig = {
         source: '/:slug/order/:orderId',
         destination: '/restaurant/:slug/order/:orderId',
       },
+      // Forward any other slug sub-path (policies, etc.) to the tenant site
+      {
+        source: '/:slug/:path*',
+        destination: '/restaurant/:slug/:path*',
+      },
     ];
   },
 

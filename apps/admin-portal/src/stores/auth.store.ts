@@ -9,22 +9,37 @@ interface AdminUser {
   role: string;
 }
 
+interface ImpersonationTarget {
+  id: string;
+  email: string;
+  name: string;
+  tenantId: string;
+  token: string;
+  expiresAt: string;
+}
+
 interface AuthState {
   user: AdminUser | null;
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isImpersonating: boolean;
+  impersonationTarget: ImpersonationTarget | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   setUser: (user: AdminUser) => void;
   initialize: () => void;
+  startImpersonation: (tenantId: string, userId: string) => Promise<void>;
+  stopImpersonation: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: null,
   isAuthenticated: false,
   isLoading: true,
+  isImpersonating: false,
+  impersonationTarget: null,
 
   login: async (email: string, password: string) => {
     const result = await adminApi.login(email, password);
@@ -34,7 +49,13 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: () => {
     adminApi.clearToken();
-    set({ user: null, token: null, isAuthenticated: false });
+    set({
+      user: null,
+      token: null,
+      isAuthenticated: false,
+      isImpersonating: false,
+      impersonationTarget: null,
+    });
     window.location.href = '/login';
   },
 
@@ -58,5 +79,32 @@ export const useAuthStore = create<AuthState>((set) => ({
     } else {
       set({ isLoading: false });
     }
+  },
+
+  startImpersonation: async (tenantId: string, userId: string) => {
+    const result = await adminApi.impersonate(tenantId, userId);
+    set({
+      isImpersonating: true,
+      impersonationTarget: {
+        id: result.user.id,
+        email: result.user.email,
+        name: result.user.name,
+        tenantId,
+        token: result.token,
+        expiresAt: result.expiresAt,
+      },
+    });
+  },
+
+  stopImpersonation: async () => {
+    try {
+      await adminApi.exitImpersonation();
+    } catch {
+      // Exit even if the API call fails
+    }
+    set({
+      isImpersonating: false,
+      impersonationTarget: null,
+    });
   },
 }));

@@ -192,7 +192,7 @@ class SubscriptionProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final tenantId = _api.branchId;
+      final tenantId = _api.tenantId;
       if (tenantId == null) {
         _info = SubscriptionInfo.empty();
         _isLoading = false;

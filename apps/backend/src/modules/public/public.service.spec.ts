@@ -1,13 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PublicService } from './public.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { GatewayService } from '../websockets/gateway.service';
+import { EventBusService } from '../../common/event-bus/event-bus.service';
+import { RedisService } from '../../common/redis/redis.service';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 
 describe('PublicService', () => {
   let service: PublicService;
   let prisma: jest.Mocked<PrismaService>;
-  let gateway: jest.Mocked<GatewayService>;
+  let eventBus: jest.Mocked<EventBusService>;
+  let redis: jest.Mocked<RedisService>;
 
   const mockTenant = {
     id: 'tenant-1',
@@ -23,7 +25,7 @@ describe('PublicService', () => {
 
   const mockPrisma = {
     tenant: { findUnique: jest.fn() },
-    branch: { findMany: jest.fn() },
+    branch: { findMany: jest.fn(), findUnique: jest.fn() },
     category: { findMany: jest.fn() },
     menuItem: { findMany: jest.fn() },
     restaurantTable: { findFirst: jest.fn(), update: jest.fn() },
@@ -31,11 +33,22 @@ describe('PublicService', () => {
     platformPlan: { findMany: jest.fn() },
   };
 
-  const mockGatewayService = {
+  const mockEventBus = {
     emitToBranch: jest.fn(),
     emitToTenant: jest.fn(),
     emitToRoom: jest.fn(),
-    emitToOrder: jest.fn(),
+    orderCreated: jest.fn(),
+    orderTrackingEvent: jest.fn(),
+    menuUpdated: jest.fn(),
+    emitToTenantPublicBySlug: jest.fn(),
+    emitToRoomPublic: jest.fn(),
+  };
+
+  const mockRedis = {
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue(undefined),
+    del: jest.fn().mockResolvedValue(undefined),
+    delPattern: jest.fn().mockResolvedValue(undefined),
   };
 
   beforeEach(async () => {
@@ -45,13 +58,15 @@ describe('PublicService', () => {
       providers: [
         PublicService,
         { provide: PrismaService, useValue: mockPrisma },
-        { provide: GatewayService, useValue: mockGatewayService },
+        { provide: EventBusService, useValue: mockEventBus },
+        { provide: RedisService, useValue: mockRedis },
       ],
     }).compile();
 
     service = module.get<PublicService>(PublicService);
     prisma = module.get(PrismaService) as jest.Mocked<PrismaService>;
-    gateway = module.get(GatewayService) as jest.Mocked<GatewayService>;
+    eventBus = module.get(EventBusService) as jest.Mocked<EventBusService>;
+    redis = module.get(RedisService) as jest.Mocked<RedisService>;
   });
 
   describe('getTenantBySlug', () => {
@@ -217,9 +232,9 @@ describe('PublicService', () => {
         data: { status: 'OCCUPIED' },
       });
 
-      expect(gateway.emitToBranch).toHaveBeenCalledWith(
+      expect(eventBus.orderCreated).toHaveBeenCalledWith(
+        expect.any(String),
         'branch-1',
-        'order:created',
         expect.objectContaining({ orderNumber: 1 }),
       );
     });

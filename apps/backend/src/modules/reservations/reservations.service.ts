@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { GatewayService } from '../websockets/gateway.service';
+import { EventBusService } from '../../common/event-bus/event-bus.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 
@@ -8,7 +8,7 @@ import { UpdateReservationDto } from './dto/update-reservation.dto';
 export class ReservationsService {
   constructor(
     private prisma: PrismaService,
-    private gateway: GatewayService,
+    private eventBus: EventBusService,
   ) {}
 
   async findAll(tenantId: string, query: { date?: string; status?: string; branchId?: string }) {
@@ -98,7 +98,7 @@ export class ReservationsService {
     }
 
     // Broadcast via WebSocket
-    this.gateway.emitToTenant(tenantId, 'reservation:created', {
+    this.eventBus.emitToTenant(tenantId, 'reservation:created', {
       id: reservation.id,
       customerName: reservation.customerName,
       date: reservation.date,
@@ -161,7 +161,7 @@ export class ReservationsService {
     }
 
     // Broadcast via WebSocket
-    this.gateway.emitToTenant(tenantId, 'reservation:updated', {
+    this.eventBus.emitToTenant(tenantId, 'reservation:updated', {
       id: reservation.id,
       status: reservation.status,
       customerName: reservation.customerName,
@@ -183,7 +183,7 @@ export class ReservationsService {
 
     await this.prisma.reservation.delete({ where: { id } });
 
-    this.gateway.emitToTenant(tenantId, 'reservation:deleted', { id });
+    this.eventBus.emitToTenant(tenantId, 'reservation:deleted', { id });
 
     return { message: 'Reservation deleted' };
   }

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowLeft, CalendarDays, Clock, User, Tag, ChevronLeft } from 'lucide-react';
 import { Button, Card, Badge } from '@/components/ui';
+import DOMPurify from 'isomorphic-dompurify';
 import { cn, formatDate } from '@/lib/utils';
 import { api } from '@/lib/api';
 import type { BlogPost } from '@/types';
@@ -41,7 +42,8 @@ export default function BlogPostPage() {
   if (!post) return notFound();
 
   const renderContent = (content: string) => {
-    return content.split('\n').map((line, i) => {
+    const sanitized = DOMPurify.sanitize(content, { ALLOWED_TAGS: ['h2', 'h3', 'h4', 'p', 'a', 'strong', 'em', 'ul', 'ol', 'li', 'br', 'img', 'blockquote', 'pre', 'code'], ALLOWED_ATTR: ['href', 'src', 'alt', 'className'] });
+    return sanitized.split('\n').map((line, i) => {
       if (line.startsWith('## ')) {
         return <h2 key={i} className="text-xl font-bold text-ink mt-8 mb-3">{line.replace('## ', '')}</h2>;
       }

@@ -1,4 +1,4 @@
-import { Controller, Get, Inject } from '@nestjs/common';
+import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { PrismaClient } from '@prisma/client';
 import { RedisService } from './common/redis/redis.service';
@@ -8,7 +8,7 @@ import { QueueService } from './common/queue/queue.service';
 @Controller('health')
 export class HealthController {
   constructor(
-    @Inject('REDIS_CLIENT') private readonly redis: RedisService,
+    private readonly redis: RedisService,
     private readonly queueService: QueueService,
   ) {}
 

@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { Copy, Clock, Tag, Gift, Zap, Sparkles, Check } from 'lucide-react';
 import { Button, Card, Badge, SectionHeader, EmptyState } from '@/components/ui';
 import { cn, formatPrice } from '@/lib/utils';
-import { api } from '@/lib/api';
+import { api, getCurrentTenantSlug } from '@/lib/api';
+import { useTenantSocket } from '@/lib/socket';
 import type { Offer } from '@/types';
 
 export default function OffersPage() {
@@ -13,12 +14,26 @@ export default function OffersPage() {
   const [loading, setLoading] = useState(true);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadOffers = useCallback(async () => {
     api.getOffers().then((data) => {
       setOffers(data);
       setLoading(false);
     });
   }, []);
+
+  useEffect(() => {
+    loadOffers();
+  }, [loadOffers]);
+
+  // ── Real-time offer updates ──
+  // When the restaurant owner creates/updates/expires offers,
+  // reload the offers list so customers see changes instantly.
+  useTenantSocket({
+    slug: getCurrentTenantSlug(),
+    onOfferUpdated: () => {
+      loadOffers();
+    },
+  });
 
   const handleCopyCode = (code: string) => {
     navigator.clipboard.writeText(code);

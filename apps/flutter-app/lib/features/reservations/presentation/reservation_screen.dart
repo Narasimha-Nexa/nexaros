@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
-import '../../../core/network/api_client.dart';
-import '../../../core/providers/app_state.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/providers/riverpod_providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/shared_widgets.dart';
 import 'package:flutter/services.dart';
 
-class ReservationScreen extends StatefulWidget {
+class ReservationScreen extends ConsumerStatefulWidget {
   const ReservationScreen({super.key});
 
   @override
-  State<ReservationScreen> createState() => _ReservationScreenState();
+  ConsumerState<ReservationScreen> createState() => _ReservationScreenState();
 }
 
-class _ReservationScreenState extends State<ReservationScreen> {
-  final _api = ApiClient();
+class _ReservationScreenState extends ConsumerState<ReservationScreen> {
+  late final _api;
   List<dynamic> _reservations = [];
   List<dynamic> _tables = [];
   bool _isLoading = true;
@@ -25,14 +25,15 @@ class _ReservationScreenState extends State<ReservationScreen> {
   @override
   void initState() {
     super.initState();
+    _api = ref.read(appStateProvider).api;
     _loadData();
   }
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      final branchId = context.read<AppState>().branchId;
-      final results = await Future.wait([
+      final branchId = ref.read(appStateProvider).branchId;
+      final results = await Future.wait<dynamic>([
         _api.getReservations(
           date: DateFormat('yyyy-MM-dd').format(_selectedDate),
           branchId: branchId,
@@ -271,23 +272,13 @@ class _ReservationScreenState extends State<ReservationScreen> {
           // Reservation list
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const NxFullScreenLoader()
                 : filtered.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.event_busy, size: 64, color: AppColors.gray300),
-                            const SizedBox(height: 12),
-                            Text('No reservations for this date', style: GoogleFonts.inter(color: AppColors.gray500)),
-                            const SizedBox(height: 8),
-                            TextButton.icon(
-                              onPressed: _showCreateDialog,
-                              icon: const Icon(Icons.add),
-                              label: const Text('Add Reservation'),
-                            ),
-                          ],
-                        ),
+                    ? NxEmptyState(
+                        icon: Icons.event_busy,
+                        title: 'No reservations for this date',
+                        actionLabel: 'Add Reservation',
+                        onAction: _showCreateDialog,
                       )
                     : RefreshIndicator(
                         onRefresh: _loadData,

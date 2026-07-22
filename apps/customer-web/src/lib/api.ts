@@ -10,24 +10,6 @@
  * richer frontend types used across all pages.
  */
 import { apiClient } from './api-client';
-import {
-  TENANT_INFO,
-  OFFERS,
-  TESTIMONIALS,
-  TEAM_MEMBERS,
-  BLOG_POSTS,
-  EVENTS,
-  GALLERY_IMAGES,
-  FAQS,
-  PROFILE_DATA,
-  SAVED_ADDRESSES,
-  SAVED_PAYMENTS,
-  MOCK_ORDER_HISTORY,
-  MOCK_REVIEWS,
-  NOTIFICATIONS,
-  MENU_ITEMS as MENU_ITEMS_RICH,
-  MENU_CATEGORIES as MENU_ITEMS_RICH_CATEGORIES,
-} from './data/mock-data';
 import type {
   MenuItem,
   MenuCategory,
@@ -58,12 +40,38 @@ export const DEFAULT_TENANT_SLUG = 'spice-garden';
 /** Current active tenant slug — set by pages that know the slug */
 let currentTenantSlug = DEFAULT_TENANT_SLUG;
 
+/** Resolve tenant slug from hostname (for *.nexaros.in subdomain routing) */
+function detectSubdomainFromHostname(): string | null {
+  if (typeof window === 'undefined') return null;
+  const hostname = window.location.hostname;
+  // Match pattern: {subdomain}.nexaros.in or {subdomain}.localhost
+  const match = hostname.match(/^([a-z0-9-]+)\.(nexaros\.in|localhost)$/);
+  if (match) return match[1];
+  return null;
+}
+
 export function setCurrentTenantSlug(slug: string) {
   currentTenantSlug = slug;
 }
 
 export function getCurrentTenantSlug(): string {
   return currentTenantSlug;
+}
+
+/** Auto-detect subdomain from browser hostname and set current tenant slug */
+export async function initTenantFromSubdomain(): Promise<boolean> {
+  const subdomain = detectSubdomainFromHostname();
+  if (!subdomain) return false;
+  try {
+    const data = await apiClient.get<any>(`public/tenant/subdomain/${subdomain}`);
+    if (data?.slug) {
+      currentTenantSlug = data.slug;
+      return true;
+    }
+  } catch {
+    // Subdomain not found — fall back to default
+  }
+  return false;
 }
 
 // ── Cached menu data ──
@@ -84,7 +92,12 @@ function isCacheValid(): boolean {
   return !!menuCache && Date.now() - menuCache.fetchedAt < CACHE_TTL;
 }
 
-function invalidateMenuCache() {
+/**
+ * Invalidate the menu cache so the next fetchFullMenu call will
+ * hit the backend instead of serving stale data.
+ * This is called automatically when the WebSocket receives a menu:updated event.
+ */
+export function invalidateMenuCache() {
   menuCache = null;
 }
 
@@ -299,12 +312,16 @@ export const api = {
 
   async getTenantInfo(slug?: string): Promise<TenantInfo> {
     const s = slug || currentTenantSlug;
+    const data = await apiClient.get<Record<string, unknown>>(`public/tenant/${s}`);
+    return transformTenantInfo(data);
+  },
+
+  async getWebsiteConfig(slug?: string): Promise<any> {
+    const s = slug || currentTenantSlug;
     try {
-      const data = await apiClient.get<Record<string, unknown>>(`public/tenant/${s}`);
-      return transformTenantInfo(data);
+      return await apiClient.get<any>(`public/website/${s}`);
     } catch {
-      // Fallback to mock
-      return { ...TENANT_INFO };
+      return null;
     }
   },
 
@@ -325,21 +342,20 @@ export const api = {
       menuCache = transformMenuResponse(data);
       return menuCache;
     } catch {
-      // Fallback: use mock data
-      const mockCategories = [...MENU_ITEMS_RICH_CATEGORIES];
-      const mockItems = [...MENU_ITEMS_RICH]; // from mock-data
+      // Graceful empty-state fallback when the menu API is unavailable.
       menuCache = {
-        tenant: { ...TENANT_INFO },
-        defaultBranch: { id: 'branch_1', name: 'Main Branch' },
-        categories: mockCategories.map((c) => ({
-          ...c,
-          items: mockItems.filter((i) => i.categoryId === c.id),
-        })),
-        items: mockItems,
-        totalItems: mockItems.length,
+        tenant: {
+          id: '', name: '', slug: s, tagline: '', description: '', logo: '', coverImage: '',
+          cuisine: [], address: '', city: '', state: '', country: '', phone: '', email: '', gstin: '',
+          isOpen: false, openingHours: { weekdays: '09:00-22:00', weekends: '09:00-23:00' }, social: {},
+        } as any,
+        defaultBranch: { id: '', name: '' },
+        categories: [],
+        items: [],
+        totalItems: 0,
         fetchedAt: Date.now(),
       };
-      return menuCache;
+      return menuCache as MenuCache;
     }
   },
 
@@ -410,30 +426,40 @@ export const api = {
   // ── Offers & Coupons ──
 
   async getOffers(): Promise<Offer[]> {
-    return [...OFFERS];
+    try {
+      const slug = getCurrentTenantSlug();
+      const data = await apiClient.get<Offer[]>(`public/offers/${slug}`);
+      return data || [];
+    } catch {
+      return [];
+    }
   },
 
   async validateCoupon(code: string): Promise<Offer | null> {
-    // Try the backend endpoint first
     try {
-      const result = await apiClient.post<{ valid: boolean; coupon?: Record<string, unknown> }>(
-        'coupons/validate',
-        { code, tenantId: TENANT_INFO.id },
-      );
-      if (result.valid && result.coupon) {
-        const c = result.coupon;
+      const slug = getCurrentTenantSlug();
+      const result = await apiClient.get<{
+        valid: boolean;
+        code: string;
+        type: string;
+        value: number;
+        maxDiscount: number | null;
+        discount: number;
+        festivalTag: string | null;
+      }>(`public/coupons/${slug}/validate`, { code });
+      if (result.valid) {
         return {
-          id: (c.id as string) || '',
-          title: (c.description as string) || code,
-          description: (c.description as string) || '',
-          code: code.toUpperCase(),
-          discountType: ((c.type as string) === 'PERCENTAGE' ? 'percentage' : 'flat') as 'percentage' | 'flat',
-          discountValue: Number(c.value) || 0,
-          minOrder: Number(c.minPlanPrice) || 0,
-          maxDiscount: Number(c.maxDiscount) || Number(c.value) || 0,
+          id: '',
+          title: result.festivalTag || code,
+          description: `${result.type === 'PERCENTAGE' ? result.value + '%' : '₹' + result.value} off`,
+          code: result.code,
+          discountType: (result.type === 'PERCENTAGE' ? 'percentage' : 'flat') as 'percentage' | 'flat',
+          discountValue: result.value,
+          minOrder: 0,
+          maxDiscount: result.maxDiscount || result.value,
           validFrom: '',
-          validTo: (c.expiry as string) || '',
-          isActive: (c.isActive as boolean) ?? true,
+          validTo: '',
+          isActive: true,
           image: '',
           terms: [],
           type: 'coupon',
@@ -441,8 +467,7 @@ export const api = {
       }
       return null;
     } catch {
-      // Fallback to mock
-      return OFFERS.find((o) => o.code === code.toUpperCase() && o.isActive) || null;
+      return null;
     }
   },
 
@@ -459,6 +484,7 @@ export const api = {
     instructions?: string;
     couponCode?: string;
     tip?: number;
+    paymentMethod?: string;
     packagingPreference?: string;
   }): Promise<Order> {
     try {
@@ -530,49 +556,7 @@ export const api = {
         updatedAt: new Date().toISOString(),
       };
     } catch (error) {
-      // Fallback to mock order
-      const totalAmount = data.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
-      return {
-        id: 'ord_' + generateId(),
-        orderNumber: Math.floor(1200 + Math.random() * 300),
-        status: 'PENDING',
-        type: (data.type as Order['type']) || 'DELIVERY',
-        items: data.items.map((i, idx) => ({
-          id: 'oi_' + idx,
-          name: i.name,
-          quantity: i.quantity,
-          unitPrice: i.unitPrice,
-          totalPrice: i.unitPrice * i.quantity,
-          status: 'PENDING',
-          image: '',
-          isVeg: true,
-          addOns: [],
-          instructions: data.instructions || '',
-        })),
-        totalAmount,
-        subtotal: totalAmount,
-        deliveryCharge: 40,
-        packagingCharge: 10,
-        tip: data.tip || 0,
-        discount: 0,
-        tax: Math.round(totalAmount * 0.05),
-        couponCode: data.couponCode,
-        customerName: data.customerName || '',
-        customerPhone: data.customerPhone || '',
-        customerEmail: data.customerEmail || '',
-        instructions: data.instructions || '',
-        estimatedMinutes: 30,
-        statusHistory: [
-          {
-            status: 'PENDING',
-            label: 'Order Placed',
-            notes: 'Your order has been received',
-            createdAt: new Date().toISOString(),
-          },
-        ],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+      throw error;
     }
   },
 
@@ -581,15 +565,18 @@ export const api = {
       const data = await apiClient.get<Record<string, unknown>>(`public/orders/${orderId}/track`);
       return transformTrackedOrder(data);
     } catch {
-      // Fallback to mock
-      const order = MOCK_ORDER_HISTORY.find((o) => o.id === orderId);
-      if (order) return { ...order };
       return null;
     }
   },
 
   async getOrderHistory(): Promise<Order[]> {
-    return [...MOCK_ORDER_HISTORY];
+    try {
+      const slug = getCurrentTenantSlug();
+      const data = await apiClient.get<Order[]>(`public/orders/${slug}/history`);
+      return data || [];
+    } catch {
+      return [];
+    }
   },
 
   async trackOrder(orderId: string): Promise<Order | null> {
@@ -605,34 +592,51 @@ export const api = {
     occasion?: string;
     specialRequests?: string;
   }): Promise<Reservation> {
-    // No public reservation endpoint yet — use mock
-    await delay(500);
-    return {
-      id: 'res_' + generateId(),
-      date: data.date,
-      time: data.time,
-      guestCount: data.guestCount,
-      occasion: data.occasion || '',
-      specialRequests: data.specialRequests || '',
-      status: 'confirmed',
-      tableNumber: Math.floor(Math.random() * 30) + 1,
-      deposit: 0,
-      qrCode:
-        'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=spice-garden-reservation',
-      createdAt: new Date().toISOString(),
-    };
+    try {
+      const slug = getCurrentTenantSlug();
+      const result = await apiClient.post<any>(`public/reservations/${slug}`, {
+        customerName: 'Customer',
+        customerPhone: '',
+        date: data.date,
+        time: data.time,
+        guestCount: data.guestCount,
+        occasion: data.occasion,
+        specialRequests: data.specialRequests,
+      });
+      return {
+        id: result.id,
+        date: result.date,
+        time: result.time,
+        guestCount: result.guestCount,
+        occasion: data.occasion || '',
+        specialRequests: data.specialRequests || '',
+        status: result.status || 'confirmed',
+        tableNumber: result.tableNumber || 0,
+        deposit: 0,
+        qrCode: '',
+        createdAt: new Date().toISOString(),
+      };
+    } catch (error) {
+      throw error;
+    }
   },
 
-  async getAvailableSlots(_date: string): Promise<string[]> {
-    await delay();
-    const slots: string[] = [];
-    for (let h = 11; h <= 22; h++) {
-      const hour = h > 12 ? h - 12 : h;
-      const ampm = h < 12 ? 'AM' : 'PM';
-      slots.push(`${hour}:00 ${ampm}`);
-      if (h !== 22) slots.push(`${hour}:30 ${ampm}`);
+  async getAvailableSlots(date: string): Promise<string[]> {
+    try {
+      const slug = getCurrentTenantSlug();
+      const result = await apiClient.get<string[]>(`public/reservations/${slug}/slots?date=${date}`);
+      return result || [];
+    } catch {
+      await delay();
+      const slots: string[] = [];
+      for (let h = 11; h <= 22; h++) {
+        const hour = h > 12 ? h - 12 : h;
+        const ampm = h < 12 ? 'AM' : 'PM';
+        slots.push(`${hour}:00 ${ampm}`);
+        if (h !== 22) slots.push(`${hour}:30 ${ampm}`);
+      }
+      return slots;
     }
-    return slots;
   },
 
   // ── Profile ──
@@ -662,63 +666,178 @@ export const api = {
         totalSpent: 0,
       };
     } catch {
-      return { ...PROFILE_DATA };
+      return {
+        id: '',
+        name: '',
+        email: '',
+        phone: '',
+        avatar: '',
+        dob: '',
+        anniversary: '',
+        preferences: {
+          darkMode: false,
+          language: 'en',
+          notifications: { email: true, sms: true, push: true, offers: true },
+          dietaryPreferences: [],
+          allergies: [],
+        },
+        loyaltyPoints: 0,
+        loyaltyTier: 'bronze',
+        membershipSince: '',
+        totalOrders: 0,
+        totalSpent: 0,
+      };
     }
   },
 
   async updateProfile(data: Partial<UserProfile>): Promise<UserProfile> {
-    await delay();
-    return { ...PROFILE_DATA, ...data };
+    const result = await apiClient.patch<UserProfile>('auth/profile', data);
+    return result;
   },
 
   async getAddresses(): Promise<Address[]> {
-    return [...SAVED_ADDRESSES];
+    try {
+      const data = await apiClient.get<Address[]>('auth/addresses');
+      return data || [];
+    } catch {
+      return [];
+    }
   },
 
   async getPayments(): Promise<PaymentMethod[]> {
-    return [...SAVED_PAYMENTS];
+    try {
+      const data = await apiClient.get<PaymentMethod[]>('auth/payments');
+      return data || [];
+    } catch {
+      return [];
+    }
   },
 
   async getReviews(): Promise<Review[]> {
-    return [...MOCK_REVIEWS];
+    try {
+      const slug = getCurrentTenantSlug();
+      const data = await apiClient.get<Review[]>(`public/reviews/${slug}`);
+      return data || [];
+    } catch {
+      return [];
+    }
   },
 
-  // ── Content (all mock-based for now) ──
+  // ── Content (try API first, fallback to mock) ──
 
   async getBlogPosts(): Promise<BlogPost[]> {
-    return [...BLOG_POSTS];
+    try {
+      const slug = getCurrentTenantSlug();
+      const data = await apiClient.get<any[]>(`public/cms/${slug}/blog`);
+      if (data && data.length > 0) return data.map((p: any) => ({
+        id: p.id || p.slug, slug: p.slug, title: p.title,
+        excerpt: p.excerpt || p.description || "", content: p.content || "",
+        image: p.image || "", author: p.author || "Admin",
+        category: p.category || "General",
+        tags: p.tags || [], publishedAt: p.publishedAt || p.createdAt || new Date().toISOString(),
+        readTime: p.readTime || 5, featured: p.featured || false,
+      })) as BlogPost[];
+    } catch {}
+    return [];
   },
 
   async getBlogPost(slug: string): Promise<BlogPost | null> {
-    return BLOG_POSTS.find((p) => p.slug === slug) || null;
+    try {
+      const tenantSlug = getCurrentTenantSlug();
+      const p = await apiClient.get<any>(`public/cms/${tenantSlug}/blog/${slug}`);
+      if (p) return {
+        id: p.id || p.slug, slug: p.slug, title: p.title,
+        excerpt: p.excerpt || p.description || "", content: p.content || "",
+        image: p.image || "", author: p.author || "Admin",
+        category: p.category || "General",
+        tags: p.tags || [], publishedAt: p.publishedAt || p.createdAt || new Date().toISOString(),
+        readTime: p.readTime || 5, featured: p.featured || false,
+      } as unknown as BlogPost;
+    } catch {}
+    return null;
   },
 
   async getEvents(): Promise<Event[]> {
-    return [...EVENTS];
+    try {
+      const slug = getCurrentTenantSlug();
+      const data = await apiClient.get<any[]>(`public/cms/${slug}/events`);
+      if (data && data.length > 0) return data.map((e: any) => ({
+        id: e.id, title: e.title, description: e.description || "",
+        image: e.image || "", date: e.date || new Date().toISOString(),
+        time: e.time || "", location: e.location || "",
+        category: e.category || "special", price: e.price || 0,
+        capacity: e.capacity || 0, attendees: e.attendees || 0,
+        featured: e.featured || false, status: e.status || "upcoming",
+      })) as unknown as Event[];
+    } catch {}
+    return [];
   },
 
   async getEvent(id: string): Promise<Event | null> {
-    return EVENTS.find((e) => e.id === id) || null;
+    try {
+      const slug = getCurrentTenantSlug();
+      const e = await apiClient.get<any>(`public/cms/${slug}/events/${id}`);
+      if (e) return {
+        id: e.id, title: e.title, description: e.description || "",
+        image: e.image || "", date: e.date || new Date().toISOString(),
+        time: e.time || "", location: e.location || "",
+        category: e.category || "special", price: e.price || 0,
+        capacity: e.capacity || 0, attendees: e.attendees || 0,
+        featured: e.featured || false, status: e.status || "upcoming",
+      } as unknown as Event;
+    } catch {}
+    return null;
   },
 
   async getGalleryImages(): Promise<GalleryImage[]> {
-    return [...GALLERY_IMAGES];
+    try {
+      const slug = getCurrentTenantSlug();
+      const data = await apiClient.get<any[]>(`public/cms/${slug}/gallery`);
+      if (data && data.length > 0) return data.map((img: any) => ({
+        id: img.id, url: img.url, alt: img.alt || "",
+        category: img.category || "food", caption: img.caption || "",
+        featured: img.featured || false,
+      })) as unknown as GalleryImage[];
+    } catch {}
+    return [];
   },
 
   async getFAQs(): Promise<FAQ[]> {
-    return [...FAQS];
+    try {
+      const slug = getCurrentTenantSlug();
+      const data = await apiClient.get<any[]>(`public/cms/${slug}/faqs`);
+      if (data && data.length > 0) return data.map((f: any) => ({
+        id: f.id, question: f.question, answer: f.answer,
+        category: f.category || "General", sortOrder: f.sortOrder || 0,
+      })) as unknown as FAQ[];
+    } catch {}
+    return [];
   },
 
   async getTestimonials(): Promise<Testimonial[]> {
-    return [...TESTIMONIALS];
+    try {
+      const slug = getCurrentTenantSlug();
+      const data = await apiClient.get<any[]>(`public/cms/${slug}/testimonials`);
+      if (data && data.length > 0) return data.map((t: any) => ({
+        id: t.id, name: t.name, avatar: t.avatar || "",
+        rating: t.rating || 5, text: t.text || t.content || "",
+        date: t.date || t.createdAt || "", source: t.source || "",
+      })) as unknown as Testimonial[];
+    } catch {}
+    return [];
   },
 
   async getTeamMembers(): Promise<TeamMember[]> {
-    return [...TEAM_MEMBERS];
+    return [];
   },
 
-  async getNotifications(): Promise<typeof NOTIFICATIONS> {
-    return [...NOTIFICATIONS];
+  async getNotifications(): Promise<Notification[]> {
+    try {
+      const data = await apiClient.get<Notification[]>('auth/notifications');
+      return data || [];
+    } catch {
+      return [];
+    }
   },
 };
 
@@ -738,6 +857,7 @@ export const createOrder = async (data: {
   instructions?: string;
   couponCode?: string;
   tip?: number;
+  paymentMethod?: string;
   packagingPreference?: string;
 }) => {
   return api.createOrder(data);
@@ -758,6 +878,67 @@ export const getTenantMenu = async (slug?: string) => {
     })),
     totalItems: cache.totalItems,
   };
+};
+
+// ── Dining Sessions (Shared Table Ordering) ──
+
+export const diningApi = {
+  scanQr: (qrCode: string) =>
+    apiClient.get<any>(`public/dining/qr/${qrCode}`),
+
+  joinSession: (sessionId: string, data: {
+    guestToken: string;
+    guestName?: string;
+    guestNumber?: number;
+    avatarColor?: string;
+    deviceFingerprint?: string;
+  }) => apiClient.post<any>(`public/dining/sessions/${sessionId}/join`, data),
+
+  getGuestSession: (guestToken: string) =>
+    apiClient.get<any>(`public/dining/guest/${guestToken}`),
+
+  updateGuestProfile: (guestToken: string, data: { guestName?: string; avatarColor?: string }) =>
+    apiClient.patch<any>(`public/dining/guest/${guestToken}/profile`, data),
+
+  touchActivity: (guestToken: string) =>
+    apiClient.patch<any>(`public/dining/guest/${guestToken}/touch`),
+
+  getCart: (guestSessionId: string) =>
+    apiClient.get<any>(`public/dining/guest/${guestSessionId}/cart`),
+
+  addToCart: (guestSessionId: string, item: {
+    menuItemId: string;
+    name: string;
+    unitPrice: number;
+    quantity: number;
+    variantId?: string;
+    notes?: string;
+  }) => apiClient.post<any>(`public/dining/guest/${guestSessionId}/cart`, item),
+
+  updateCartItem: (guestSessionId: string, cartItemId: string, data: { quantity?: number; notes?: string }) =>
+    apiClient.patch<any>(`public/dining/guest/${guestSessionId}/cart/${cartItemId}`, data),
+
+  removeFromCart: (guestSessionId: string, cartItemId: string) =>
+    apiClient.patch<any>(`public/dining/guest/${guestSessionId}/cart/${cartItemId}/remove`),
+
+  placeOrder: (guestSessionId: string) =>
+    apiClient.post<any>(`public/dining/guest/${guestSessionId}/order`),
+
+  getSession: (sessionId: string) =>
+    apiClient.get<any>(`public/dining/sessions/${sessionId}`),
+
+  getBill: (sessionId: string) =>
+    apiClient.get<any>(`public/dining/sessions/${sessionId}/bill`),
+
+  getSharedItems: (sessionId: string) =>
+    apiClient.get<any>(`public/dining/sessions/${sessionId}/shared`),
+
+  payGuestShare: (sessionId: string, data: {
+    guestSessionId: string;
+    method: string;
+    amount: number;
+    reference?: string;
+  }) => apiClient.post<any>(`public/dining/sessions/${sessionId}/pay`, data),
 };
 
 export const scanTableQr = async (qrCode: string) => {

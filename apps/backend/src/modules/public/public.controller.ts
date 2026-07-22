@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { PublicService } from './public.service';
 import { CreatePublicOrderDto } from './dto/public-order.dto';
@@ -12,6 +12,24 @@ export class PublicController {
   @ApiOperation({ summary: 'Get restaurant menu by tenant slug (public)' })
   getMenu(@Param('slug') slug: string) {
     return this.publicService.getTenantMenu(slug);
+  }
+
+  @Get('offers/:slug')
+  @ApiOperation({ summary: 'Get active offers for a tenant by slug (public)' })
+  getOffers(@Param('slug') slug: string) {
+    return this.publicService.getPublicOffers(slug);
+  }
+
+  @Get('announcements/:slug')
+  @ApiOperation({ summary: 'Get active announcements for a tenant by slug (public)' })
+  getAnnouncements(@Param('slug') slug: string) {
+    return this.publicService.getPublicAnnouncements(slug);
+  }
+
+  @Get('gallery/:slug')
+  @ApiOperation({ summary: 'Get gallery images for a tenant by slug (public)' })
+  getGallery(@Param('slug') slug: string) {
+    return this.publicService.getPublicGallery(slug);
   }
 
   @Get('table/qr/:qrCode')
@@ -44,6 +62,24 @@ export class PublicController {
     return this.publicService.getTenantBySlug(slug);
   }
 
+  @Get('tenant/subdomain/:subdomain')
+  @ApiOperation({ summary: 'Get tenant by subdomain (for *.nexaros.in routing)' })
+  getTenantBySubdomain(@Param('subdomain') subdomain: string) {
+    return this.publicService.getTenantBySubdomain(subdomain);
+  }
+
+  @Get('website/:slug')
+  @ApiOperation({ summary: 'Get full website config (branding, menu, tables, sections) for customer-facing site' })
+  getWebsiteConfig(@Param('slug') slug: string) {
+    return this.publicService.getWebsiteConfig(slug);
+  }
+
+  @Get('website/subdomain/:subdomain')
+  @ApiOperation({ summary: 'Get website config by subdomain (for *.nexaros.in routing)' })
+  getWebsiteConfigBySubdomain(@Param('subdomain') subdomain: string) {
+    return this.publicService.getWebsiteConfigBySubdomain(subdomain);
+  }
+
   @Get('plans')
   @ApiOperation({ summary: 'List available subscription plans (public)' })
   getPlans() {
@@ -52,7 +88,51 @@ export class PublicController {
 
   @Post('contact')
   @ApiOperation({ summary: 'Submit a contact message (public)' })
-  submitContact(@Body() dto: { name: string; email: string; message: string }) {
+  submitContact(
+    @Body() dto: {
+      name: string;
+      email: string;
+      message: string;
+      phone?: string;
+      subject?: string;
+      tenantId?: string;
+    },
+  ) {
     return this.publicService.submitContactMessage(dto);
+  }
+
+  @Get('coupons/:slug/validate')
+  @ApiOperation({ summary: 'Validate a coupon code (public)' })
+  validateCoupon(
+    @Param('slug') slug: string,
+    @Query('code') code: string,
+    @Query('orderAmount') orderAmount?: string,
+  ) {
+    return this.publicService.validateCoupon(slug, code, orderAmount ? parseFloat(orderAmount) : undefined);
+  }
+
+  // ─── Reservations (public) ───
+
+  @Get('reservations/:slug/slots')
+  @ApiOperation({ summary: 'Get available reservation slots (public)' })
+  getAvailableSlots(@Param('slug') slug: string, @Query('date') date: string) {
+    return this.publicService.getAvailableSlots(slug, date);
+  }
+
+  @Post('reservations/:slug')
+  @ApiOperation({ summary: 'Create a reservation (public)' })
+  createReservation(
+    @Param('slug') slug: string,
+    @Body() body: {
+      customerName: string;
+      customerPhone: string;
+      date: string;
+      time: string;
+      guestCount: number;
+      occasion?: string;
+      specialRequests?: string;
+    },
+  ) {
+    return this.publicService.createPublicReservation(slug, body);
   }
 }

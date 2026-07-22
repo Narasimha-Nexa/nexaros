@@ -94,7 +94,7 @@ export default function FeaturesPage() {
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => (
-            <Card key={i} className="h-32 animate-pulse" />
+            <Card key={i} padding="sm"><div className="skeleton h-8 w-24 mb-2" /><div className="skeleton h-4 w-full" /></Card>
           ))}
         </div>
       ) : (

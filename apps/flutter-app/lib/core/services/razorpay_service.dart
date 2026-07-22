@@ -8,9 +8,8 @@ class RazorpayService {
   final Dio _dio;
   final String _keyId;
 
-  RazorpayService({required String keyId, String baseUrl = 'http://localhost:4000/api/v1'})
-      : _keyId = keyId,
-        _dio = Dio(BaseOptions(baseUrl: baseUrl, connectTimeout: const Duration(seconds: 30), receiveTimeout: const Duration(seconds: 30))) {
+  RazorpayService({required this._keyId, String baseUrl = 'http://localhost:4000/api/v1'})
+      : _dio = Dio(BaseOptions(baseUrl: baseUrl, connectTimeout: const Duration(seconds: 30), receiveTimeout: const Duration(seconds: 30))) {
     _razorpay = Razorpay();
     _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
     _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);

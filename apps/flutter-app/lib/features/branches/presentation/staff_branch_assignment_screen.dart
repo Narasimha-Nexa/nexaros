@@ -1,20 +1,23 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
 import '../../../core/network/api_client.dart';
-import '../../../core/providers/app_state.dart';
+import '../../../core/providers/riverpod_providers.dart';
 import '../../../core/providers/branch_provider.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/shared_widgets.dart';
 
-class StaffBranchAssignmentScreen extends StatefulWidget {
+class StaffBranchAssignmentScreen extends ConsumerStatefulWidget {
   const StaffBranchAssignmentScreen({super.key});
 
   @override
-  State<StaffBranchAssignmentScreen> createState() => _StaffBranchAssignmentScreenState();
+  ConsumerState<StaffBranchAssignmentScreen> createState() => _StaffBranchAssignmentScreenState();
 }
 
-class _StaffBranchAssignmentScreenState extends State<StaffBranchAssignmentScreen> {
-  final _api = ApiClient();
+class _StaffBranchAssignmentScreenState extends ConsumerState<StaffBranchAssignmentScreen> {
+  late final ApiClient _api;
   List<dynamic> _staff = [];
   bool _isLoading = true;
   String? _selectedBranchId;
@@ -22,14 +25,16 @@ class _StaffBranchAssignmentScreenState extends State<StaffBranchAssignmentScree
   @override
   void initState() {
     super.initState();
-    _selectedBranchId = context.read<AppState>().branchId;
+    _selectedBranchId = ref.read(appStateProvider).branchId;
+    _api = ref.read(appStateProvider).api;
     _loadStaff();
   }
 
   Future<void> _loadStaff() async {
     setState(() => _isLoading = true);
     try {
-      final staff = await _api.getStaff(branchId: _selectedBranchId ?? '').catchError((_) => <dynamic>[]);
+      final result = await _api.getStaff(branchId: _selectedBranchId ?? '').catchError((_) => <String, dynamic>{'staff': <dynamic>[]});
+      final staff = result is Map ? List<dynamic>.from(result['staff'] ?? []) : <dynamic>[];
       if (mounted) setState(() { _staff = staff; _isLoading = false; });
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
@@ -47,7 +52,7 @@ class _StaffBranchAssignmentScreenState extends State<StaffBranchAssignmentScree
           _buildBranchFilter(),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: NxFullScreenLoader())
                 : _staff.isEmpty
                     ? _buildEmptyState()
                     : _buildStaffList(),
@@ -58,8 +63,9 @@ class _StaffBranchAssignmentScreenState extends State<StaffBranchAssignmentScree
   }
 
   Widget _buildBranchFilter() {
-    return Consumer<BranchProvider>(
-      builder: (context, bp, _) {
+    return Consumer(
+      builder: (context, ref, _) {
+        final bp = ref.watch(branchProvider);
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
@@ -84,6 +90,7 @@ class _StaffBranchAssignmentScreenState extends State<StaffBranchAssignmentScree
                     child: DropdownButton<String>(
                       value: _selectedBranchId,
                       isDense: true,
+                      underline: const SizedBox(),
                       icon: Icon(Icons.keyboard_arrow_down, size: 16, color: AppColors.gray500),
                       style: GoogleFonts.inter(fontSize: 13, color: AppColors.gray700),
                       items: [
@@ -189,8 +196,9 @@ class _StaffBranchAssignmentScreenState extends State<StaffBranchAssignmentScree
   }
 
   Widget _buildBranchChip(Map<String, dynamic> member) {
-    return Consumer<BranchProvider>(
-      builder: (context, bp, _) {
+    return Consumer(
+      builder: (context, ref, _) {
+        final bp = ref.watch(branchProvider);
         final branchId = member['branchId'] as String?;
         final assignedBranch = bp.branches.where((b) => b.id == branchId).firstOrNull;
 

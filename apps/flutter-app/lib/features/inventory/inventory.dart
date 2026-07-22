@@ -1,0 +1,17 @@
+export 'data/inventory_models.dart';
+export 'data/inventory_service.dart';
+export 'providers/inventory_provider.dart';
+export 'presentation/inventory_dashboard_screen.dart';
+export 'presentation/inventory_management_screen.dart';
+export 'presentation/product_management_screen.dart';
+export 'presentation/warehouse_management_screen.dart';
+export 'presentation/purchase_order_screen.dart';
+export 'presentation/supplier_management_screen.dart';
+export 'presentation/recipe_management_screen.dart';
+export 'presentation/stock_counting_screen.dart';
+export 'presentation/transfer_management_screen.dart';
+export 'presentation/batch_expiry_screen.dart';
+export 'presentation/waste_management_screen.dart';
+export 'presentation/waste_tracking_screen.dart';
+export 'presentation/ai_inventory_assistant_screen.dart';
+export 'presentation/inventory_analytics_screen.dart';

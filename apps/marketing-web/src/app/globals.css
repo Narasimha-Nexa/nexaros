@@ -2,7 +2,9 @@
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
+/* ═══ NexaROS Design System — Marketing ═══ */
 :root {
+  /* Warm restaurant-brand surfaces */
   --bg-primary: #FFF9F5;
   --bg-secondary: #F7F3EF;
   --bg-tertiary: #EFEAE5;
@@ -12,24 +14,30 @@
   --border: #E8E0D8;
   --border-light: #F0EBE6;
 
+  /* NexaROS Brand — Single accent color */
   --accent: #E23744;
   --accent-hover: #C62828;
   --accent-light: #FDECEE;
   --accent-text: #FFFFFF;
 
+  /* Semantic */
   --success: #2DB67D;
   --success-light: #E8F8F0;
 
-  --font-display: 'Inter', system-ui, -apple-system, sans-serif;
+  /* Typography */
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
   --font-body: 'Inter', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
+  /* Border Radius — Customer-facing: rounded */
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
   --radius-xl: 20px;
   --radius-2xl: 24px;
+  --radius-pill: 9999px;
 
+  /* Elevation */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
@@ -53,13 +61,9 @@
   --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.5);
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
-html {
-  scroll-behavior: smooth;
-}
+html { scroll-behavior: smooth; }
 
 body {
   font-family: var(--font-body);
@@ -74,13 +78,59 @@ body {
   color: white;
 }
 
-/* Scroll reveal — always visible by default, animated only when JS loads */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── NexaROS Pill Buttons ── */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 28px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  background: var(--accent);
+  color: var(--accent-text);
+  border: none;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-primary:active { transform: scale(0.98); }
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 28px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-secondary:hover { background: var(--bg-secondary); border-color: var(--text-primary); }
+
+/* ── Scroll reveal — always visible by default, animated only when JS loads ── */
 .reveal {
   opacity: 1;
   transform: translateY(0);
 }
 
-/* When JS loads, hide elements and animate them in */
 .js-loaded .reveal {
   opacity: 0;
   transform: translateY(24px);
@@ -98,21 +148,14 @@ body {
 .reveal-delay-4 { transition-delay: 0.4s !important; }
 
 @media (prefers-reduced-motion: reduce) {
-  .reveal,
-  .js-loaded .reveal {
+  .reveal, .js-loaded .reveal {
     opacity: 1 !important;
     transform: none !important;
     transition: none !important;
   }
 }
 
-/* Focus visible */
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* Smooth underline for links */
+/* ── Smooth underline for links ── */
 .link-underline {
   position: relative;
 }
@@ -126,11 +169,9 @@ body {
   background: currentColor;
   transition: width 0.2s ease;
 }
-.link-underline:hover::after {
-  width: 100%;
-}
+.link-underline:hover::after { width: 100%; }
 
-/* Gradient text */
+/* ── Gradient text ── */
 .gradient-text {
   background: linear-gradient(135deg, var(--accent) 0%, #FF6B6B 100%);
   -webkit-background-clip: text;
@@ -138,7 +179,7 @@ body {
   background-clip: text;
 }
 
-/* Glass effect */
+/* ── Glass effect ── */
 .glass {
   background: rgba(255, 249, 245, 0.8);
   backdrop-filter: blur(12px);
@@ -149,7 +190,7 @@ body {
   background: rgba(13, 13, 13, 0.8);
 }
 
-/* Feature color tokens */
+/* ── Feature color tokens for brand illustration accents ── */
 .feature-pos { --feature-color: #E23744; }
 .feature-kitchen { --feature-color: #F58220; }
 .feature-inventory { --feature-color: #F5A623; }
@@ -158,3 +199,49 @@ body {
 .feature-qr { --feature-color: #9B51E0; }
 .feature-orders { --feature-color: #4A6CF7; }
 .feature-branch { --feature-color: #00BFA5; }
+
+/* ── Full-bleed dark hero band ── */
+.hero-band-dark {
+  background: #0D0D0D;
+  color: #F5F5F5;
+}
+
+.hero-band-dark .glass-card {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-lg);
+}
+
+/* ── NexaROS Display headline ── */
+.display-headline {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.5px;
+  line-height: 1.0;
+}
+
+/* ── Responsive spacer ── */
+.section-spacer {
+  padding: 96px 0;
+}
+
+@media (max-width: 640px) {
+  .section-spacer {
+    padding: 48px 0;
+  }
+}
+
+/* ── Skip link ── */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 0;
+  z-index: 100;
+  padding: 8px 16px;
+  background: var(--accent);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+}
+.skip-link:focus { top: 0; }

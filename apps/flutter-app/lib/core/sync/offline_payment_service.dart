@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 import '../database/local_database.dart';
@@ -46,12 +47,22 @@ class OfflinePaymentService {
 
     await _savePaymentLocally(localId, orderId, branchId, method, amount, false);
 
-    // Add to sync queue
+    // Add to sync queue with full payload
+    final payload = jsonEncode({
+      'localId': localId,
+      'orderId': orderId,
+      'branchId': branchId,
+      'method': method,
+      'amount': amount,
+      'reference': reference,
+      'status': 'COMPLETED',
+    });
+
     await _db.addToSyncQueue(LocalSyncQueueCompanion(
       entityType: const Value('payment'),
       entityId: Value(localId),
       action: const Value('create'),
-      payload: Value(''),
+      payload: Value(payload),
     ));
 
     return OfflinePaymentResult(

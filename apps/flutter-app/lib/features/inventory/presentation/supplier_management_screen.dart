@@ -1,23 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../core/network/api_client.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/providers/riverpod_providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/shared_widgets.dart';
 
-class SupplierManagementScreen extends StatefulWidget {
+class SupplierManagementScreen extends ConsumerStatefulWidget {
   const SupplierManagementScreen({super.key});
 
   @override
-  State<SupplierManagementScreen> createState() => _SupplierManagementScreenState();
+  ConsumerState<SupplierManagementScreen> createState() => _SupplierManagementScreenState();
 }
 
-class _SupplierManagementScreenState extends State<SupplierManagementScreen> {
-  final _api = ApiClient();
+class _SupplierManagementScreenState extends ConsumerState<SupplierManagementScreen> {
+  late final _api;
   List<dynamic> _suppliers = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
+    _api = ref.read(appStateProvider).api;
     _loadSuppliers();
   }
 
@@ -91,9 +94,12 @@ class _SupplierManagementScreenState extends State<SupplierManagementScreen> {
         actions: [IconButton(icon: const Icon(Icons.add), onPressed: () => _showSupplierDialog())],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const NxFullScreenLoader()
           : _suppliers.isEmpty
-              ? Center(child: Text('No suppliers', style: GoogleFonts.inter(color: AppColors.gray500)))
+              ? const NxEmptyState(
+                  icon: Icons.business,
+                  title: 'No suppliers',
+                )
               : RefreshIndicator(
                   onRefresh: _loadSuppliers,
                   child: ListView.builder(
@@ -107,7 +113,7 @@ class _SupplierManagementScreenState extends State<SupplierManagementScreen> {
 
   Widget _buildSupplierCard(Map<String, dynamic> s) {
     final purchaseCount = (s['_count'] as Map<String, dynamic>?)?['purchases'] ?? 0;
-    return Card(
+    return NxCard(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: CircleAvatar(

@@ -36,6 +36,8 @@ export default function PlansPage() {
   const [loading, setLoading] = useState(true);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
   const [editForm, setEditForm] = useState({ name: '', price: 0 });
+  const [modules, setModules] = useState<{ key: string; name: string; description: string }[]>([]);
+  const [entitlementDraft, setEntitlementDraft] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const { addToast } = useToastStore();
 
@@ -53,11 +55,27 @@ export default function PlansPage() {
 
   useEffect(() => { fetchPlans(); }, []);
 
+  const openEditor = async (plan: Plan) => {
+    setEditingPlan(plan);
+    setEditForm({ name: plan.name, price: plan.price });
+    setEntitlementDraft({ ...(plan.entitlements || {}) });
+    try {
+      const mods = await adminApi.getModuleKeys();
+      setModules(Array.isArray(mods) ? mods : (mods.modules || []));
+    } catch {
+      setModules([]);
+    }
+  };
+
+  const toggleEntitlement = (key: string) =>
+    setEntitlementDraft((prev) => ({ ...prev, [key]: !prev[key] }));
+
   const handleSave = async () => {
     if (!editingPlan) return;
     setSaving(true);
     try {
-      await adminApi.updatePlanEntitlements(editingPlan.id, editingPlan.entitlements || {});
+      await adminApi.updatePlanPrice(editingPlan.id, editForm.price);
+      await adminApi.updatePlanEntitlements(editingPlan.id, entitlementDraft);
       addToast('Plan updated successfully', 'success');
       setEditingPlan(null);
       fetchPlans();
@@ -99,7 +117,7 @@ export default function PlansPage() {
                     {icon}
                     <h3 className="text-display-xs font-sans">{plan.name}</h3>
                   </div>
-                  <button onClick={() => { setEditingPlan(plan); setEditForm({ name: plan.name, price: plan.price }); }} className="btn-ghost btn-sm p-1.5">
+                  <button onClick={() => openEditor(plan)} className="btn-ghost btn-sm p-1.5">
                     <Edit size={14} />
                   </button>
                 </div>
@@ -128,12 +146,46 @@ export default function PlansPage() {
         </div>
       )}
 
-      <Dialog open={!!editingPlan} onClose={() => setEditingPlan(null)} title={`Edit ${editingPlan?.name || ''} Plan`}>
+      <Dialog open={!!editingPlan} onClose={() => setEditingPlan(null)} title={`Edit ${editingPlan?.name || ''} Plan`} size="lg">
         {editingPlan && (
-          <div className="space-y-4">
-            <Input label="Plan Name" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
-            <Input label="Price (₹)" type="number" value={editForm.price} onChange={(e) => setEditForm({ ...editForm, price: Number(e.target.value) })} />
-            <p className="text-caption font-sans text-body">To modify entitlements (which modules are included), edit the plan&apos;s entitlements directly.</p>
+          <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-2">
+            <div className="grid grid-cols-2 gap-4">
+              <Input label="Plan Name" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+              <Input label="Price (₹)" type="number" value={editForm.price} onChange={(e) => setEditForm({ ...editForm, price: Number(e.target.value) })} />
+            </div>
+
+            <div>
+              <p className="text-body-sm font-sans font-semibold mb-2">Module Entitlements</p>
+              <p className="text-caption font-sans text-body mb-3">Toggle which modules are included in this plan. Saved instantly with the plan.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {modules.length === 0 ? (
+                  <p className="text-caption font-sans text-body">Loading modules…</p>
+                ) : (
+                  modules.map((m) => {
+                    const enabled = !!entitlementDraft[m.key];
+                    return (
+                      <button
+                        key={m.key}
+                        type="button"
+                        onClick={() => toggleEntitlement(m.key)}
+                        className={`flex items-center justify-between gap-2 border-2 px-3 py-2 text-left transition-colors ${
+                          enabled ? 'border-ink bg-ink/5' : 'border-hairline hover:border-ink/40'
+                        }`}
+                      >
+                        <span>
+                          <span className="block text-body-sm font-sans font-semibold">{m.name}</span>
+                          <span className="block text-caption font-sans text-body">{m.description}</span>
+                        </span>
+                        <span className={`w-5 h-5 flex items-center justify-center border-2 ${enabled ? 'bg-ink text-canvas border-ink' : 'border-hairline'}`}>
+                          {enabled && <Check size={12} />}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
             <DialogFooter>
               <Button variant="outline" onClick={() => setEditingPlan(null)}>Cancel</Button>
               <Button onClick={handleSave} isLoading={saving}>Save Changes</Button>

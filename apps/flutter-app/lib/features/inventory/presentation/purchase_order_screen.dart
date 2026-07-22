@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../core/network/api_client.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/providers/riverpod_providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/shared_widgets.dart';
 
-class PurchaseOrderScreen extends StatefulWidget {
+class PurchaseOrderScreen extends ConsumerStatefulWidget {
   const PurchaseOrderScreen({super.key});
 
   @override
-  State<PurchaseOrderScreen> createState() => _PurchaseOrderScreenState();
+  ConsumerState<PurchaseOrderScreen> createState() => _PurchaseOrderScreenState();
 }
 
-class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> {
-  final _api = ApiClient();
+class _PurchaseOrderScreenState extends ConsumerState<PurchaseOrderScreen> {
+  late final _api;
   List<dynamic> _purchases = [];
   List<dynamic> _suppliers = [];
   List<dynamic> _inventoryItems = [];
@@ -20,13 +22,14 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> {
   @override
   void initState() {
     super.initState();
+    _api = ref.read(appStateProvider).api;
     _loadAll();
   }
 
   Future<void> _loadAll() async {
     setState(() => _isLoading = true);
     try {
-      final results = await Future.wait([
+      final results = await Future.wait<dynamic>([
         _api.getPurchases(),
         _api.getSuppliers(),
         _api.getInventoryItems(),
@@ -133,9 +136,12 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> {
         actions: [IconButton(icon: const Icon(Icons.add), onPressed: _showCreateDialog)],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const NxFullScreenLoader()
           : _purchases.isEmpty
-              ? Center(child: Text('No purchase orders', style: GoogleFonts.inter(color: AppColors.gray500)))
+              ? const NxEmptyState(
+                  icon: Icons.receipt,
+                  title: 'No purchase orders',
+                )
               : RefreshIndicator(
                   onRefresh: _loadAll,
                   child: ListView.builder(
@@ -160,7 +166,7 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> {
       default: statusColor = AppColors.warning;
     }
 
-    return Card(
+    return NxCard(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
         padding: const EdgeInsets.all(14),

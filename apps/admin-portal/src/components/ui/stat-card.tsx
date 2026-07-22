@@ -18,9 +18,9 @@ export function StatCard({ label, value, change, changeType = 'neutral', classNa
       <p className="stat-value">{value}</p>
       {change && (
         <div className={cn(
-          'flex items-center gap-1 mt-2 text-caption font-sans',
-          changeType === 'positive' && 'text-success',
-          changeType === 'negative' && 'text-danger',
+          'flex items-center gap-1 mt-2 text-xs font-sans',
+          changeType === 'positive' && 'stat-change-positive',
+          changeType === 'negative' && 'stat-change-negative',
           changeType === 'neutral' && 'text-body'
         )}>
           {changeType === 'positive' && <TrendingUp size={12} />}

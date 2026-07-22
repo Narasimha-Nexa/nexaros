@@ -113,12 +113,15 @@ export class BillingService {
     return { status: newStatus };
   }
 
-  async createCheckout(tenantId: string, planId: string, couponCode?: string) {
+  async createCheckout(tenantId: string | undefined, planId: string, couponCode?: string, customerEmail?: string, customerPhone?: string) {
     const plan = await this.prisma.platformPlan.findUnique({ where: { id: planId } });
     if (!plan) throw new NotFoundException('Plan not found');
 
-    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
-    if (!tenant) throw new NotFoundException('Tenant not found');
+    const tenant = tenantId ? await this.prisma.tenant.findUnique({ where: { id: tenantId } }) : null;
+    if (tenantId && !tenant) throw new NotFoundException('Tenant not found');
+
+    const email = tenant?.email || customerEmail || '';
+    const phone = tenant?.phone || customerPhone;
 
     let amount = Number(plan.price);
     let discount = 0;
@@ -140,8 +143,8 @@ export class BillingService {
       amount: finalAmount,
       currency: 'INR',
       planSlug: plan.slug,
-      customerEmail: tenant.email || '',
-      customerPhone: tenant.phone || undefined,
+      customerEmail: email,
+      customerPhone: phone,
     });
 
     return {
@@ -152,8 +155,26 @@ export class BillingService {
       currency: 'INR',
       planId: plan.id,
       planSlug: plan.slug,
-      tenantId,
+      tenantId: tenantId || null,
     };
+  }
+
+  async verifyPaymentOnly(
+    razorpayOrderId: string,
+    razorpayPaymentId: string,
+    razorpaySignature: string,
+  ) {
+    const result = await this.paymentGateway.verifyPayment(
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature,
+    );
+
+    if (!result.success) {
+      throw new BadRequestException(`Payment verification failed: ${result.error}`);
+    }
+
+    return { success: true, transactionId: razorpayPaymentId };
   }
 
   async verifyAndActivatePayment(
@@ -300,8 +321,17 @@ export class BillingService {
   }
 
   // For admin portal
-  async getAllSubscriptions(page = 1, limit = 50, status?: string) {
-    const where = status ? { status: status as any } : {};
+  async getAllSubscriptions(page = 1, limit = 50, status?: string, search?: string) {
+    const where: any = {};
+    if (status) where.status = status as any;
+    if (search) {
+      where.OR = [
+        { tenant: { name: { contains: search, mode: 'insensitive' } } },
+        { tenant: { slug: { contains: search, mode: 'insensitive' } } },
+        { plan: { name: { contains: search, mode: 'insensitive' } } },
+        { plan: { slug: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
     const [subscriptions, total] = await Promise.all([
       this.prisma.subscription.findMany({
         where,

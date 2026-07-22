@@ -5,9 +5,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class InvoicesService {
   constructor(private prisma: PrismaService) {}
 
-  async generateInvoice(paymentId: string) {
-    const payment = await this.prisma.payment.findUnique({
-      where: { id: paymentId },
+  async generateInvoice(paymentId: string, tenantId: string) {
+    const payment = await this.prisma.payment.findFirst({
+      where: { id: paymentId, tenantId },
       include: {
         order: {
           include: {
@@ -46,6 +46,7 @@ export class InvoicesService {
     const invoice = await this.prisma.invoice.create({
       data: {
         paymentId,
+        tenantId: payment.tenantId,
         number: invoiceNumber,
         gstAmount: totalTax,
         cgst,
@@ -88,9 +89,9 @@ export class InvoicesService {
     };
   }
 
-  async getInvoice(invoiceId: string) {
-    const invoice = await this.prisma.invoice.findUnique({
-      where: { id: invoiceId },
+  async getInvoice(invoiceId: string, tenantId: string) {
+    const invoice = await this.prisma.invoice.findFirst({
+      where: { id: invoiceId, tenantId },
       include: {
         payment: {
           include: {
@@ -114,9 +115,9 @@ export class InvoicesService {
     return invoice;
   }
 
-  async getInvoices(branchId: string) {
+  async getInvoices(branchId: string, tenantId: string) {
     return this.prisma.invoice.findMany({
-      where: { payment: { branchId } },
+      where: { tenantId, payment: { branchId } },
       include: {
         payment: {
           select: {
@@ -132,9 +133,9 @@ export class InvoicesService {
     });
   }
 
-  async getInvoicePdf(invoiceId: string) {
-    const invoice = await this.prisma.invoice.findUnique({
-      where: { id: invoiceId },
+  async getInvoicePdf(invoiceId: string, tenantId: string) {
+    const invoice = await this.prisma.invoice.findFirst({
+      where: { id: invoiceId, tenantId },
       include: {
         payment: {
           include: {

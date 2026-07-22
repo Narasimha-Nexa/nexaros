@@ -1,54 +1,63 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../../core/network/api_client.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/providers/riverpod_providers.dart';
 import '../providers/menu_provider.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/shared_widgets.dart';
 import 'menu_item_form_screen.dart';
 
-class MenuManagementScreen extends StatefulWidget {
+class MenuManagementScreen extends ConsumerStatefulWidget {
   const MenuManagementScreen({super.key});
 
   @override
-  State<MenuManagementScreen> createState() => _MenuManagementScreenState();
+  ConsumerState<MenuManagementScreen> createState() => _MenuManagementScreenState();
 }
 
-class _MenuManagementScreenState extends State<MenuManagementScreen> {
-  late final MenuProvider _menuProvider;
+class _MenuManagementScreenState extends ConsumerState<MenuManagementScreen> {
   final _searchController = TextEditingController();
+  bool _initialLoadDone = false;
 
   @override
   void initState() {
     super.initState();
-    _menuProvider = MenuProvider(ApiClient());
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    await _menuProvider.loadItems();
-    _menuProvider.addListener(() => setState(() {}));
+    // Trigger initial data load from the globally-provided MenuProvider
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_initialLoadDone && mounted) {
+        ref.read(menuProvider.notifier).loadItems();
+        _initialLoadDone = true;
+      }
+    });
   }
 
   @override
   void dispose() {
     _searchController.dispose();
-    _menuProvider.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Reactively watch MenuProvider — widget rebuilds whenever the provider changes.
+    // This replaces the old `addListener(() => setState({}))` pattern.
+    final menuProv = ref.watch(menuProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Menu Management', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
         backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
+        foregroundColor: AppColors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () => Navigator.push(
+              onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => MenuItemFormScreen(menuProvider: _menuProvider)),
+              MaterialPageRoute(
+                builder: (_) => MenuItemFormScreen(
+                  menuProvider: ref.read(menuProvider.notifier),
+                ),
+              ),
             ),
           ),
         ],
@@ -68,14 +77,14 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                         icon: const Icon(Icons.clear, size: 20),
                         onPressed: () {
                           _searchController.clear();
-                          _menuProvider.search('');
+                          menuProv.search('');
                         },
                       )
                     : null,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
-              onChanged: (v) => _menuProvider.search(v),
+              onChanged: (v) => menuProv.search(v),
             ),
           ),
 
@@ -90,21 +99,21 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
                   padding: const EdgeInsets.only(right: 8),
                   child: FilterChip(
                     label: const Text('All'),
-                    selected: _menuProvider.selectedCategoryId == null,
-                    onSelected: (_) => _menuProvider.filterByCategory(null),
+                    selected: menuProv.selectedCategoryId == null,
+                    onSelected: (_) => menuProv.filterByCategory(null),
                     selectedColor: AppColors.primary,
-                    labelStyle: TextStyle(color: _menuProvider.selectedCategoryId == null ? Colors.white : AppColors.gray700),
+                    labelStyle: TextStyle(color: menuProv.selectedCategoryId == null ? AppColors.white : AppColors.gray700),
                   ),
                 ),
-                ...(_menuProvider.categories).map((cat) => Padding(
+                ...menuProv.categories.map((cat) => Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: FilterChip(
-                    label: Text('${cat['name']} (${_menuProvider.getCategoryItemCount(cat['id'])})'),
-                    selected: _menuProvider.selectedCategoryId == cat['id'],
-                    onSelected: (_) => _menuProvider.filterByCategory(cat['id']),
+                    label: Text('${cat['name']} (${menuProv.getCategoryItemCount(cat['id'])})'),
+                    selected: menuProv.selectedCategoryId == cat['id'],
+                    onSelected: (_) => menuProv.filterByCategory(cat['id']),
                     selectedColor: AppColors.primary,
                     labelStyle: TextStyle(
-                      color: _menuProvider.selectedCategoryId == cat['id'] ? Colors.white : AppColors.gray700,
+                      color: menuProv.selectedCategoryId == cat['id'] ? AppColors.white : AppColors.gray700,
                       fontSize: 12,
                     ),
                   ),
@@ -116,34 +125,31 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
 
           // Items list
           Expanded(
-            child: _menuProvider.isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _menuProvider.items.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.restaurant_menu, size: 64, color: AppColors.gray300),
-                            const SizedBox(height: 16),
-                            Text('No menu items found', style: GoogleFonts.inter(color: AppColors.gray500)),
-                          ],
-                        ),
+            child: menuProv.isLoading
+                ? const NxFullScreenLoader()
+                : menuProv.items.isEmpty
+                    ? const NxEmptyState(
+                        icon: Icons.restaurant_menu,
+                        title: 'No menu items found',
                       )
                     : RefreshIndicator(
-                        onRefresh: () => _menuProvider.loadItems(),
+                        onRefresh: () => menuProv.loadItems(),
                         child: ListView.builder(
                           padding: const EdgeInsets.symmetric(horizontal: 12),
-                          itemCount: _menuProvider.items.length,
+                          itemCount: menuProv.items.length,
                           itemBuilder: (context, index) {
-                            final item = _menuProvider.items[index];
+                            final item = menuProv.items[index];
                             return _MenuItemCard(
                               item: item,
-                              onToggleAvailability: () => _menuProvider.toggleAvailability(item.id),
-                              onDelete: () => _confirmDelete(item),
+                              onToggleAvailability: () => ref.read(menuProvider.notifier).toggleAvailability(item.id),
+                              onDelete: () => _confirmDelete(item, menuProv),
                               onEdit: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => MenuItemFormScreen(menuProvider: _menuProvider, item: item),
+                                  builder: (_) => MenuItemFormScreen(
+                                    menuProvider: ref.read(menuProvider.notifier),
+                                    item: item,
+                                  ),
                                 ),
                               ),
                             );
@@ -156,7 +162,7 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
     );
   }
 
-  void _confirmDelete(MenuItem item) {
+  void _confirmDelete(MenuItem item, MenuProvider menuProvider) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -166,10 +172,10 @@ class _MenuManagementScreenState extends State<MenuManagementScreen> {
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           TextButton(
             onPressed: () {
-              _menuProvider.deleteItem(item.id);
+              menuProvider.deleteItem(item.id);
               Navigator.pop(ctx);
             },
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: const Text('Delete', style: TextStyle(color: AppColors.danger)),
           ),
         ],
       ),

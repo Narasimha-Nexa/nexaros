@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { GatewayService } from '../websockets/gateway.service';
+import { EventBusService } from '../../common/event-bus/event-bus.service';
 import { RedisService } from '../../common/redis/redis.service';
 import { unlink } from 'fs/promises';
 import { join } from 'path';
@@ -15,9 +15,35 @@ export class MenuService {
 
   constructor(
     private prisma: PrismaService,
-    private gateway: GatewayService,
+    private eventBus: EventBusService,
     private redis: RedisService,
   ) {}
+
+  // ── Helper: emit menu updates to public namespace ──
+
+  /**
+   * Emit menu:updated to both the internal tenant room AND the public /public namespace
+   * so that customer-facing pages can receive real-time menu changes without a page refresh.
+   */
+  private async emitMenuUpdate(tenantId: string, data: { type: string; action: string }) {
+    // Always emit to internal tenant room (staff/admin apps)
+    this.eventBus.emitToTenant(tenantId, 'menu:updated', data);
+
+    // Also emit to public tenant room so the customer website gets real-time updates
+    try {
+      const tenant = await this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { slug: true },
+      });
+      if (tenant?.slug) {
+        this.eventBus.emitToTenantPublicBySlug(tenant.slug, 'menu:updated', data);
+        // Invalidate public menu cache so customer website gets fresh data on next poll
+        await this.redis.delPattern(`public:menu:${tenant.slug}*`);
+      }
+    } catch {
+      // Silently fail — public emission is best-effort
+    }
+  }
 
   // ─── Categories ───
 
@@ -43,15 +69,16 @@ export class MenuService {
       data: { ...dto, tenantId },
     });
     await this.redis.delPattern(`menu:categories:${tenantId}*`);
-    this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'category', action: 'created' });
+    await this.emitMenuUpdate(tenantId, { type: 'category', action: 'created' });
     return category;
   }
 
   async updateCategory(id: string, tenantId: string, dto: UpdateCategoryDto) {
-    await this.prisma.category.findFirst({ where: { id, tenantId } });
+    const existing = await this.prisma.category.findFirst({ where: { id, tenantId } });
+    if (!existing) throw new NotFoundException('Category not found');
     const category = await this.prisma.category.update({ where: { id }, data: dto });
     await this.redis.delPattern(`menu:categories:${tenantId}*`);
-    this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'category', action: 'updated' });
+    await this.emitMenuUpdate(tenantId, { type: 'category', action: 'updated' });
     return category;
   }
 
@@ -68,7 +95,7 @@ export class MenuService {
     await this.prisma.category.delete({ where: { id } });
     await this.redis.delPattern(`menu:categories:${tenantId}*`);
     await this.redis.delPattern(`menu:items:${tenantId}*`);
-    this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'category', action: 'deleted' });
+    await this.emitMenuUpdate(tenantId, { type: 'category', action: 'deleted' });
     return { message: 'Category deleted' };
   }
 
@@ -140,7 +167,7 @@ export class MenuService {
       include: { variants: true, addOns: true, images: true },
     });
     await this.redis.delPattern(`menu:items:${tenantId}*`);
-    this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'item', action: 'created' });
+    await this.emitMenuUpdate(tenantId, { type: 'item', action: 'created' });
     return item;
   }
 
@@ -228,7 +255,7 @@ export class MenuService {
     });
 
     await this.redis.delPattern(`menu:items:${tenantId}*`);
-    this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'item', action: 'updated' });
+    await this.emitMenuUpdate(tenantId, { type: 'item', action: 'updated' });
     return item;
   }
 
@@ -239,7 +266,7 @@ export class MenuService {
       data: { isAvailable: !item.isAvailable },
     });
     await this.redis.delPattern(`menu:items:${tenantId}*`);
-    this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'item', action: 'availability_changed' });
+    await this.emitMenuUpdate(tenantId, { type: 'item', action: 'availability_changed' });
     return updated;
   }
 
@@ -256,7 +283,7 @@ export class MenuService {
 
     await this.prisma.menuItem.delete({ where: { id } });
     await this.redis.delPattern(`menu:items:${tenantId}*`);
-    this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'item', action: 'deleted' });
+    await this.emitMenuUpdate(tenantId, { type: 'item', action: 'deleted' });
     return { message: 'Menu item deleted' };
   }
 
@@ -279,7 +306,7 @@ export class MenuService {
       ),
     );
 
-    this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'item', action: 'images_uploaded' });
+    await this.emitMenuUpdate(tenantId, { type: 'item', action: 'images_uploaded' });
     await this.redis.delPattern(`menu:items:${tenantId}*`);
     return createdImages;
   }
@@ -300,7 +327,7 @@ export class MenuService {
 
     await this.prisma.menuItemImage.delete({ where: { id: imageId } });
     await this.redis.delPattern(`menu:items:${tenantId}*`);
-    this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'item', action: 'image_deleted' });
+    await this.emitMenuUpdate(tenantId, { type: 'item', action: 'image_deleted' });
     return { message: 'Image deleted' };
   }
 
@@ -319,7 +346,116 @@ export class MenuService {
     });
 
     await this.redis.delPattern(`menu:items:${tenantId}*`);
-    this.gateway.emitToTenant(tenantId, 'menu:updated', { type: 'item', action: 'primary_changed' });
+    await this.emitMenuUpdate(tenantId, { type: 'item', action: 'primary_changed' });
     return image;
+  }
+
+  // ─── Combos ───
+
+  async findAllCombos(tenantId: string) {
+    const cacheKey = `menu:combos:${tenantId}`;
+    const cached = await this.redis.get(cacheKey);
+    if (cached) return cached;
+
+    const combos = await this.prisma.combo.findMany({
+      where: { tenantId, deletedAt: null },
+      include: {
+        items: {
+          include: {
+            menuItem: { select: { id: true, name: true, price: true, image: true, isVeg: true } },
+          },
+        },
+      },
+      orderBy: { sortOrder: 'asc' },
+    });
+
+    await this.redis.set(cacheKey, combos, this.CACHE_TTL);
+    return combos;
+  }
+
+  async findOneCombo(id: string, tenantId: string) {
+    const combo = await this.prisma.combo.findFirst({
+      where: { id, tenantId, deletedAt: null },
+      include: {
+        items: {
+          include: {
+            menuItem: { select: { id: true, name: true, price: true, image: true, isVeg: true } },
+          },
+        },
+      },
+    });
+    if (!combo) throw new NotFoundException('Combo not found');
+    return combo;
+  }
+
+  async createCombo(tenantId: string, dto: { name: string; description?: string; price: number; image?: string; items: { menuItemId: string; quantity?: number }[] }) {
+    const combo = await this.prisma.combo.create({
+      data: {
+        tenantId,
+        name: dto.name,
+        description: dto.description,
+        price: dto.price,
+        image: dto.image,
+        items: {
+          create: dto.items.map(item => ({
+            menuItemId: item.menuItemId,
+            quantity: item.quantity ?? 1,
+          })),
+        },
+      },
+      include: {
+        items: {
+          include: {
+            menuItem: { select: { id: true, name: true, price: true, image: true, isVeg: true } },
+          },
+        },
+      },
+    });
+    await this.redis.delPattern(`menu:combos:${tenantId}*`);
+    return combo;
+  }
+
+  async updateCombo(id: string, tenantId: string, dto: { name?: string; description?: string; price?: number; isActive?: boolean; image?: string; items?: { menuItemId: string; quantity?: number }[] }) {
+    await this.findOneCombo(id, tenantId);
+
+    const { items, ...updateData } = dto;
+
+    // If items provided, sync them
+    if (items !== undefined) {
+      await this.prisma.comboItem.deleteMany({ where: { comboId: id } });
+      if (items.length > 0) {
+        await this.prisma.comboItem.createMany({
+          data: items.map(item => ({
+            comboId: id,
+            menuItemId: item.menuItemId,
+            quantity: item.quantity ?? 1,
+          })),
+        });
+      }
+    }
+
+    const combo = await this.prisma.combo.update({
+      where: { id },
+      data: updateData,
+      include: {
+        items: {
+          include: {
+            menuItem: { select: { id: true, name: true, price: true, image: true, isVeg: true } },
+          },
+        },
+      },
+    });
+    await this.redis.delPattern(`menu:combos:${tenantId}*`);
+    return combo;
+  }
+
+  async removeCombo(id: string, tenantId: string) {
+    await this.findOneCombo(id, tenantId);
+    await this.prisma.combo.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+    await this.redis.delPattern(`menu:combos:${tenantId}*`);
+    return { message: 'Combo deleted' };
   }
 }

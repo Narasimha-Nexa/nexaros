@@ -49,6 +49,7 @@ export class InvoiceWorker extends WorkerHost {
     const invoice = await this.prisma.invoice.create({
       data: {
         paymentId,
+        tenantId: payment.tenantId,
         number: invoiceNumber,
         gstAmount,
         cgst: gstAmount / 2,

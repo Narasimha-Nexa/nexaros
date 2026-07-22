@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -10,7 +10,8 @@ import { Button, Card, Badge, SectionHeader, VegIndicator, EmptyState, RatingSta
 import { cn, formatPrice, truncate } from '@/lib/utils';
 import { useCartStore } from '@/lib/store/cart-store';
 import { useUIStore } from '@/lib/store/ui-store';
-import { api } from '@/lib/api';
+import { api, invalidateMenuCache, getCurrentTenantSlug } from '@/lib/api';
+import { useTenantSocket } from '@/lib/socket';
 import type { MenuItem, MenuCategory } from '@/types';
 
 export default function MenuPage() {
@@ -32,18 +33,30 @@ export default function MenuPage() {
   const { addItem } = useCartStore();
   const { openCart } = useUIStore();
 
-  useEffect(() => {
-    async function load() {
-      const [cats, menuItems] = await Promise.all([
-        api.getMenuCategories(),
-        api.getMenuItems(),
-      ]);
-      setCategories(cats);
-      setItems(menuItems);
-      setLoading(false);
-    }
-    load();
+  const load = useCallback(async () => {
+    const [cats, menuItems] = await Promise.all([
+      api.getMenuCategories(),
+      api.getMenuItems(),
+    ]);
+    setCategories(cats);
+    setItems(menuItems);
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // ── Real-time menu updates ──
+  // When the restaurant owner updates the menu (price, availability, new items, etc.),
+  // invalidate the cache and re-fetch so the customer sees changes instantly.
+  useTenantSocket({
+    slug: getCurrentTenantSlug(),
+    onMenuUpdated: () => {
+      invalidateMenuCache();
+      load();
+    },
+  });
 
   // Filter & sort
   let filteredItems = items.filter((item) => {

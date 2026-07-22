@@ -50,8 +50,19 @@ export class AuthService {
         finalSlug = `${slug}-${Date.now().toString(36)}`;
       }
 
+      // Create owner profile first (required by Tenant)
+      const ownerProfile = await tx.ownerProfile.create({
+        data: {
+          email: dto.email,
+          name: `${dto.firstName} ${dto.lastName}`.trim(),
+          password: hashedPassword,
+          phone: dto.phone,
+        },
+      });
+
       const tenant = await tx.tenant.create({
         data: {
+          ownerProfileId: ownerProfile.id,
           name: dto.restaurantName,
           slug: finalSlug,
           phone: dto.phone,

@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/services/event_bus.dart';
 
 class MenuItem {
   final String id;
@@ -59,6 +61,8 @@ class MenuItem {
 
 class MenuProvider extends ChangeNotifier {
   final ApiClient _api;
+  final EventBus _eventBus;
+  StreamSubscription<BusEvent>? _menuUpdateSub;
 
   List<Map<String, dynamic>> _categories = [];
   List<MenuItem> _items = [];
@@ -68,7 +72,9 @@ class MenuProvider extends ChangeNotifier {
   String? _selectedCategoryId;
   String _searchQuery = '';
 
-  MenuProvider(this._api);
+  MenuProvider(this._api, this._eventBus) {
+    _listenToEvents();
+  }
 
   List<Map<String, dynamic>> get categories => _categories;
   List<MenuItem> get items => _selectedCategoryId == null && _searchQuery.isEmpty
@@ -81,6 +87,21 @@ class MenuProvider extends ChangeNotifier {
 
   int getCategoryItemCount(String categoryId) {
     return _items.where((i) => i.categoryId == categoryId).length;
+  }
+
+  /// Subscribe to real-time menu updates via WebSocket.
+  /// When the restaurant owner updates the menu, prices, or availability
+  /// from any device, this provider automatically re-fetches the latest data.
+  void _listenToEvents() {
+    _menuUpdateSub = _eventBus.listen(BusEventType.menuUpdated, (_) {
+      // Re-fetch categories and items in the background
+      loadCategories();
+      if (_selectedCategoryId != null || _searchQuery.isNotEmpty) {
+        loadItems(categoryId: _selectedCategoryId, search: _searchQuery);
+      } else {
+        loadItems();
+      }
+    });
   }
 
   Future<void> loadCategories() async {
@@ -99,8 +120,10 @@ class MenuProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final data = await _api.getCategories();
-      _categories = data.cast<Map<String, dynamic>>();
+      if (_categories.isEmpty) {
+        final data = await _api.getCategories();
+        _categories = data.cast<Map<String, dynamic>>();
+      }
 
       final itemsData = await _api.getMenuItems(categoryId: categoryId, search: search);
       _items = itemsData.map((j) => MenuItem.fromJson(j)).toList();
@@ -204,5 +227,11 @@ class MenuProvider extends ChangeNotifier {
       _error = e.toString();
       notifyListeners();
     }
+  }
+
+  @override
+  void dispose() {
+    _menuUpdateSub?.cancel();
+    super.dispose();
   }
 }

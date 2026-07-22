@@ -1,26 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
-import '../providers/branch_provider.dart';
+import '../providers/riverpod_providers.dart';
 import '../theme/app_colors.dart';
 
-class BranchSwitcher extends StatelessWidget {
+class BranchSwitcher extends ConsumerWidget {
   const BranchSwitcher({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Consumer<BranchProvider>(
-      builder: (context, branchProvider, _) {
-        if (branchProvider.branches.isEmpty) return const SizedBox.shrink();
-        if (!branchProvider.hasMultipleBranches) {
-          return _buildSingleBranch(context, branchProvider);
-        }
-        return _buildDropdown(context, branchProvider);
-      },
-    );
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bp = ref.watch(branchProvider);
+    if (bp.branches.isEmpty) return const SizedBox.shrink();
+    if (!bp.hasMultipleBranches) {
+      return _buildSingleBranch(context, bp);
+    }
+    return _buildDropdown(context, bp, ref);
   }
 
-  Widget _buildSingleBranch(BuildContext context, BranchProvider bp) {
+  Widget _buildSingleBranch(BuildContext context, bp) {
     final branch = bp.selectedBranch;
     if (branch == null) return const SizedBox.shrink();
     return Container(
@@ -50,14 +47,15 @@ class BranchSwitcher extends StatelessWidget {
     );
   }
 
-  Widget _buildDropdown(BuildContext context, BranchProvider bp) {
+  Widget _buildDropdown(BuildContext context, bp, WidgetRef ref) {
     final current = bp.selectedBranch ?? bp.branches.first;
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.gray200),
+        border: Border.all(color: cs.outline),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
@@ -67,7 +65,7 @@ class BranchSwitcher extends StatelessWidget {
           style: GoogleFonts.inter(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: AppColors.gray800,
+            color: cs.onSurface,
           ),
           items: bp.branches.map((branch) {
             return DropdownMenuItem<String>(
@@ -94,7 +92,7 @@ class BranchSwitcher extends StatelessWidget {
           onChanged: (branchId) {
             if (branchId == null) return;
             final branch = bp.branches.firstWhere((b) => b.id == branchId);
-            bp.selectBranch(branch);
+            ref.read(branchProvider.notifier).selectBranch(branch);
           },
         ),
       ),

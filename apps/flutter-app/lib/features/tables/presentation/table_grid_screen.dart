@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../../core/network/api_client.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/providers/riverpod_providers.dart';
+import '../../../shared/widgets/shared_widgets.dart';
 
-class TableGridScreen extends StatefulWidget {
+class TableGridScreen extends ConsumerStatefulWidget {
   const TableGridScreen({super.key});
 
   @override
-  State<TableGridScreen> createState() => _TableGridScreenState();
+  ConsumerState<TableGridScreen> createState() => _TableGridScreenState();
 }
 
-class _TableGridScreenState extends State<TableGridScreen> {
-  final _api = ApiClient();
+class _TableGridScreenState extends ConsumerState<TableGridScreen> {
+  late final _api;
+  late final _appState;
   List<dynamic> _tables = [];
   Map<String, dynamic> _summary = {};
   bool _isLoading = true;
@@ -19,13 +21,15 @@ class _TableGridScreenState extends State<TableGridScreen> {
   @override
   void initState() {
     super.initState();
+    _appState = ref.read(appStateProvider);
+    _api = _appState.api;
     _loadFloorPlan();
   }
 
   Future<void> _loadFloorPlan() async {
     setState(() => _isLoading = true);
     try {
-      final result = await _api.getFloorPlan();
+      final result = await _api.getFloorPlan(branchId: _appState.branchId);
       if (mounted) {
         setState(() {
           _tables = result['tables'] ?? [];
@@ -35,18 +39,6 @@ class _TableGridScreenState extends State<TableGridScreen> {
       }
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'FREE': return AppColors.tableFree;
-      case 'OCCUPIED': return AppColors.tableOccupied;
-      case 'RESERVED': return AppColors.tableReserved;
-      case 'CLEANING': return AppColors.tableCleaning;
-      case 'ORDER_READY': return AppColors.tableReady;
-      case 'BILLING': return AppColors.tableBilling;
-      default: return AppColors.gray400;
     }
   }
 
@@ -76,34 +68,33 @@ class _TableGridScreenState extends State<TableGridScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: Text('Tables', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+        title: const Text('Tables'),
         actions: [
           IconButton(onPressed: _loadFloorPlan, icon: const Icon(Icons.refresh)),
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const NxFullScreenLoader()
           : Column(
               children: [
-                // Summary bar
                 Container(
-                  color: AppColors.white,
+                  color: cs.surface,
                   padding: const EdgeInsets.all(14),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _summaryItem('Total', _summary['total'] ?? 0, AppColors.gray600),
-                      _summaryItem('Free', _summary['free'] ?? 0, AppColors.tableFree),
-                      _summaryItem('Occupied', _summary['occupied'] ?? 0, AppColors.tableOccupied),
-                      _summaryItem('Reserved', _summary['reserved'] ?? 0, AppColors.tableReserved),
-                      _summaryItem('Ready', _summary['orderReady'] ?? 0, AppColors.tableReady),
+                      _summaryItem('Total', _summary['total'] ?? 0, AppColors.gray600, cs),
+                      _summaryItem('Free', _summary['free'] ?? 0, AppColors.tableFree, cs),
+                      _summaryItem('Occupied', _summary['occupied'] ?? 0, AppColors.tableOccupied, cs),
+                      _summaryItem('Reserved', _summary['reserved'] ?? 0, AppColors.tableReserved, cs),
+                      _summaryItem('Ready', _summary['orderReady'] ?? 0, AppColors.tableReady, cs),
                     ],
                   ),
                 ),
                 const SizedBox(height: 12),
-                // Table grid
                 Expanded(
                   child: RefreshIndicator(
                     onRefresh: _loadFloorPlan,
@@ -116,7 +107,7 @@ class _TableGridScreenState extends State<TableGridScreen> {
                         mainAxisSpacing: 10,
                       ),
                       itemCount: _tables.length,
-                      itemBuilder: (ctx, i) => _buildTableCard(_tables[i]),
+                      itemBuilder: (ctx, i) => _buildTableCard(_tables[i], cs),
                     ),
                   ),
                 ),
@@ -126,14 +117,18 @@ class _TableGridScreenState extends State<TableGridScreen> {
   }
 
   int _getCrossAxisCount(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    if (width > 1200) return 5;
-    if (width > 900) return 4;
-    if (width > 600) return 3;
-    return 2;
+    final deviceType = ResponsiveLayout.deviceType(context);
+    switch (deviceType) {
+      case DeviceType.desktop:
+        return 5;
+      case DeviceType.tablet:
+        return 3;
+      case DeviceType.mobile:
+        return 2;
+    }
   }
 
-  Widget _summaryItem(String label, int count, Color color) {
+  Widget _summaryItem(String label, int count, Color color, ColorScheme cs) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -142,24 +137,24 @@ class _TableGridScreenState extends State<TableGridScreen> {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(height: 4),
-        Text('$count', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 16)),
-        Text(label, style: GoogleFonts.inter(fontSize: 10, color: AppColors.gray500)),
+        Text('$count', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: cs.onSurface)),
+        Text(label, style: TextStyle(fontSize: 10, color: AppColors.gray500)),
       ],
     );
   }
 
-  Widget _buildTableCard(Map<String, dynamic> table) {
+  Widget _buildTableCard(Map<String, dynamic> table, ColorScheme cs) {
     final status = table['status'] ?? 'FREE';
-    final color = _statusColor(status);
+    final color = AppColors.tableStatusColor(status);
     final activeOrders = (table['orders'] as List<dynamic>?) ?? [];
     final ordersCount = activeOrders.length;
 
     return InkWell(
-      onTap: () => _showTableDetails(table),
+      onTap: () => _showTableDetails(table, cs),
       borderRadius: BorderRadius.circular(12),
       child: Container(
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
+          color: color.withValues(alpha: Theme.of(context).brightness == Brightness.dark ? 0.15 : 0.08),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
         ),
@@ -170,39 +165,32 @@ class _TableGridScreenState extends State<TableGridScreen> {
             const SizedBox(height: 6),
             Text(
               table['number'].toString(),
-              style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18, color: color),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: color),
             ),
             if (table['name'] != null)
-              Text(table['name'], style: GoogleFonts.inter(fontSize: 10, color: AppColors.gray500)),
+              Text(table['name'], style: TextStyle(fontSize: 10, color: AppColors.gray500)),
             const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(_statusLabel(status), style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w600, color: color)),
-            ),
+            NxStatusBadge(label: _statusLabel(status), color: color, small: true),
             if (ordersCount > 0) ...[
               const SizedBox(height: 4),
-              Text('$ordersCount order${ordersCount > 1 ? 's' : ''}', style: GoogleFonts.inter(fontSize: 10, color: AppColors.gray500)),
+              Text('$ordersCount order${ordersCount > 1 ? 's' : ''}', style: TextStyle(fontSize: 10, color: AppColors.gray500)),
             ],
             const SizedBox(height: 2),
-            Text('${table['capacity']} seats', style: GoogleFonts.inter(fontSize: 10, color: AppColors.gray400)),
+            Text('${table['capacity']} seats', style: TextStyle(fontSize: 10, color: AppColors.gray400)),
           ],
         ),
       ),
     );
   }
 
-  void _showTableDetails(Map<String, dynamic> table) {
+  void _showTableDetails(Map<String, dynamic> table, ColorScheme cs) {
     final status = table['status'] ?? 'FREE';
     final activeOrders = (table['orders'] as List<dynamic>?) ?? [];
+    final color = AppColors.tableStatusColor(status);
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (ctx) => DraggableScrollableSheet(
         initialChildSize: 0.5,
         minChildSize: 0.3,
@@ -223,28 +211,13 @@ class _TableGridScreenState extends State<TableGridScreen> {
               const SizedBox(height: 16),
               Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: _statusColor(status).withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text('Table ${table['number']}', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18)),
-                  ),
+                  Text('Table ${table['number']}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: cs.onSurface)),
                   const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _statusColor(status).withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(_statusLabel(status), style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: _statusColor(status))),
-                  ),
+                  NxStatusBadge(label: _statusLabel(status), color: color),
                 ],
               ),
               const SizedBox(height: 16),
-              // Status actions
-              Text('Update Status', style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14)),
+              Text('Update Status', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: cs.onSurface)),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -252,15 +225,14 @@ class _TableGridScreenState extends State<TableGridScreen> {
                 children: ['FREE', 'OCCUPIED', 'RESERVED', 'CLEANING', 'ORDER_READY', 'BILLING'].map((s) {
                   final isSelected = status == s;
                   return ActionChip(
-                    label: Text(_statusLabel(s), style: GoogleFonts.inter(fontSize: 12)),
+                    label: Text(_statusLabel(s), style: const TextStyle(fontSize: 12)),
                     onPressed: isSelected ? null : () => _updateTableStatus(table['id'], s),
-                    backgroundColor: isSelected ? _statusColor(s).withValues(alpha: 0.15) : null,
-                    side: BorderSide(color: isSelected ? _statusColor(s) : AppColors.gray300),
+                    backgroundColor: isSelected ? AppColors.tableStatusColor(s).withValues(alpha: 0.15) : null,
+                    side: BorderSide(color: isSelected ? AppColors.tableStatusColor(s) : cs.outline),
                   );
                 }).toList(),
               ),
               const SizedBox(height: 16),
-              // QR Code & Edit buttons
               Row(
                 children: [
                   Expanded(
@@ -282,16 +254,16 @@ class _TableGridScreenState extends State<TableGridScreen> {
               ),
               if (activeOrders.isNotEmpty) ...[
                 const SizedBox(height: 16),
-                Text('Active Orders (${activeOrders.length})', style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14)),
+                Text('Active Orders (${activeOrders.length})', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: cs.onSurface)),
                 const SizedBox(height: 8),
                 ...activeOrders.map((o) => ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: CircleAvatar(
                     backgroundColor: AppColors.orderPreparing.withValues(alpha: 0.15),
-                    child: Text('#${o['orderNumber']}', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600)),
+                    child: Text('#${o['orderNumber']}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                   ),
-                  title: Text('${o['status']}', style: GoogleFonts.inter(fontSize: 13)),
-                  subtitle: Text('₹${double.tryParse(o['totalAmount'].toString())?.toStringAsFixed(0) ?? '0'}', style: GoogleFonts.inter(fontSize: 12, color: AppColors.primary)),
+                  title: Text('${o['status']}', style: const TextStyle(fontSize: 13)),
+                  subtitle: Text('₹${double.tryParse(o['totalAmount'].toString())?.toStringAsFixed(0) ?? '0'}', style: TextStyle(fontSize: 12, color: cs.primary)),
                 )),
               ],
             ],
@@ -330,16 +302,16 @@ class _TableGridScreenState extends State<TableGridScreen> {
         showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: Text('Table QR Code', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+            title: const Text('Table QR Code'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Scan to order from this table', style: GoogleFonts.inter(fontSize: 12, color: AppColors.gray500)),
+                Text('Scan to order from this table', style: TextStyle(fontSize: 12, color: AppColors.gray500)),
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(color: AppColors.gray50, borderRadius: BorderRadius.circular(8)),
-                  child: Text(qrUrl, style: GoogleFonts.inter(fontSize: 10, color: AppColors.primary), textAlign: TextAlign.center),
+                  child: Text(qrUrl, style: TextStyle(fontSize: 10, color: AppColors.primary), textAlign: TextAlign.center),
                 ),
               ],
             ),
@@ -362,20 +334,13 @@ class _TableGridScreenState extends State<TableGridScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Edit Table ${table['number']}', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+        title: Text('Edit Table ${table['number']}'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Name (optional)'),
-            ),
+            TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Name (optional)')),
             const SizedBox(height: 12),
-            TextField(
-              controller: capacityController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Capacity'),
-            ),
+            TextField(controller: capacityController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Capacity')),
           ],
         ),
         actions: [

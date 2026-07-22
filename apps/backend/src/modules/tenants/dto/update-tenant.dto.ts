@@ -1,9 +1,5 @@
 import {
-  IsString,
-  IsEmail,
-  IsOptional,
-  IsBoolean,
-  Matches,
+  IsString, IsEmail, IsOptional, IsBoolean, Matches,
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -21,7 +17,6 @@ export class UpdateTenantDto {
   @ApiPropertyOptional({ example: '+919876543210' })
   @IsString()
   @IsOptional()
-  @Matches(/^\+?[1-9]\d{1,14}$/, { message: 'Invalid phone number format' })
   phone?: string;
 
   @ApiPropertyOptional({ example: 'contact@spicekitchen.com' })
@@ -33,6 +28,31 @@ export class UpdateTenantDto {
   @IsString()
   @IsOptional()
   address?: string;
+
+  @ApiPropertyOptional({ example: 'Spice Kitchen Pvt Ltd' })
+  @IsString()
+  @IsOptional()
+  legalName?: string;
+
+  @ApiPropertyOptional({ example: 'Spice Kitchen' })
+  @IsString()
+  @IsOptional()
+  brandName?: string;
+
+  @ApiPropertyOptional({ example: 'Mumbai' })
+  @IsString()
+  @IsOptional()
+  city?: string;
+
+  @ApiPropertyOptional({ example: 'Maharashtra' })
+  @IsString()
+  @IsOptional()
+  state?: string;
+
+  @ApiPropertyOptional({ example: 'India' })
+  @IsString()
+  @IsOptional()
+  country?: string;
 
   @ApiPropertyOptional({ example: '27AABCU9603R1ZM' })
   @IsString()
@@ -50,6 +70,16 @@ export class UpdateTenantDto {
   })
   panNumber?: string;
 
+  @ApiPropertyOptional({ example: '123456789012' })
+  @IsString()
+  @IsOptional()
+  fssaiNumber?: string;
+
+  @ApiPropertyOptional({ example: 'South Indian' })
+  @IsString()
+  @IsOptional()
+  businessType?: string;
+
   @ApiPropertyOptional({ example: 'Asia/Kolkata' })
   @IsString()
   @IsOptional()
@@ -59,6 +89,16 @@ export class UpdateTenantDto {
   @IsString()
   @IsOptional()
   currency?: string;
+
+  @ApiPropertyOptional({ example: 'spice-kitchen' })
+  @IsString()
+  @IsOptional()
+  subdomain?: string;
+
+  @ApiPropertyOptional({ example: 'spicekitchen.com' })
+  @IsString()
+  @IsOptional()
+  customDomain?: string;
 
   @ApiPropertyOptional({ example: true })
   @IsBoolean()

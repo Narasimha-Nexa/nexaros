@@ -14,7 +14,8 @@ export function Card({ variant = 'default', padding = 'md', className, ...props 
         'card',
         variant === 'elevated' && 'card-elevated',
         padding === 'none' && 'p-0',
-        padding === 'sm' && 'p-4',
+        padding === 'sm' && 'p-3 sm:p-4',
+        padding === 'md' && 'p-4 sm:p-5',
         padding === 'lg' && 'p-6 sm:p-8',
         className
       )}

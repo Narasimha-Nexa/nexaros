@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { GatewayService } from '../websockets/gateway.service';
+import { EventBusService } from '../../common/event-bus/event-bus.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 
 @Injectable()
@@ -9,91 +9,110 @@ export class NotificationsService {
 
   constructor(
     private prisma: PrismaService,
-    private gateway: GatewayService,
+    private eventBus: EventBusService,
   ) {}
 
-  async findAll(tenantId: string, branchId?: string, limit = 50) {
-    const where: any = { tenantId };
+  async findAll(tenantId: string, userId?: string, branchId?: string, limit = 50) {
+    const where: any = { tenantId, deletedAt: null };
+    if (userId) where.userId = userId;
     if (branchId) where.branchId = branchId;
 
-    return this.prisma.auditLog.findMany({
+    return this.prisma.notification.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       take: limit,
-      select: {
-        id: true,
-        action: true,
-        entity: true,
-        entityId: true,
-        createdAt: true,
-        user: { select: { firstName: true, lastName: true } },
-      },
+    });
+  }
+
+  async getUnreadCount(tenantId: string, userId: string) {
+    return this.prisma.notification.count({
+      where: { tenantId, userId, isRead: false, deletedAt: null },
+    });
+  }
+
+  async markRead(tenantId: string, notificationId: string, userId: string) {
+    return this.prisma.notification.updateMany({
+      where: { id: notificationId, tenantId, userId },
+      data: { isRead: true, readAt: new Date() },
+    });
+  }
+
+  async markAllRead(tenantId: string, userId: string) {
+    return this.prisma.notification.updateMany({
+      where: { tenantId, userId, isRead: false, deletedAt: null },
+      data: { isRead: true, readAt: new Date() },
     });
   }
 
   async send(tenantId: string, dto: CreateNotificationDto) {
-    // Create audit log entry for the notification
-    const log = await this.prisma.auditLog.create({
+    const notification = await this.prisma.notification.create({
       data: {
         tenantId,
-        userId: dto.recipientId || 'system',
-        action: `NOTIFICATION_${dto.channel || 'IN_APP'}`,
-        entity: dto.entityType || 'notification',
+        userId: dto.recipientId || dto.actorId || null,
+        branchId: dto.branchIds?.[0] || null,
+        title: dto.title,
+        message: dto.message,
+        channel: dto.channel || 'IN_APP',
+        entityType: dto.entityType,
         entityId: dto.entityId,
-        newData: { title: dto.title, message: dto.message, channel: dto.channel },
       },
     });
 
-    // Broadcast via WebSocket for in-app notifications
+    // Broadcast via EventBus (triggers WS + background jobs)
     if (!dto.channel || dto.channel === 'IN_APP') {
       if (dto.branchIds?.length) {
         for (const branchId of dto.branchIds) {
-          this.gateway.emitToBranch(branchId, 'notification', {
-            id: log.id,
+          await this.eventBus.emitToBranch(branchId, 'notification', {
+            id: notification.id,
             title: dto.title,
             message: dto.message,
-            createdAt: log.createdAt,
+            createdAt: notification.createdAt,
           });
         }
       } else {
-        this.gateway.emitToTenant(tenantId, 'notification', {
-          id: log.id,
+        await this.eventBus.emitToTenant(tenantId, 'notification', {
+          id: notification.id,
           title: dto.title,
           message: dto.message,
-          createdAt: log.createdAt,
+          createdAt: notification.createdAt,
         });
       }
     }
 
-    // For email/SMS channels, would integrate with email/SMS provider here
+    // For email/SMS channels, enqueue background job
     if (dto.channel === 'EMAIL' && dto.recipientEmail) {
-      // TODO: Integrate with email provider (Resend, SendGrid, etc.)
-      this.logger.log(`[EMAIL] To: ${dto.recipientEmail} - ${dto.title}: ${dto.message}`);
+      await this.eventBus.notificationSent(tenantId, dto.branchIds?.[0], {
+        channel: 'email',
+        to: dto.recipientEmail,
+        subject: dto.title,
+        template: 'generic',
+        payload: { title: dto.title, message: dto.message },
+      });
     }
 
     if (dto.channel === 'SMS' && dto.recipientPhone) {
-      // TODO: Integrate with SMS provider (Twilio, etc.)
-      this.logger.log(`[SMS] To: ${dto.recipientPhone} - ${dto.title}: ${dto.message}`);
+      await this.eventBus.notificationSent(tenantId, dto.branchIds?.[0], {
+        channel: 'sms',
+        to: dto.recipientPhone,
+        subject: dto.title,
+        template: 'generic',
+        payload: { title: dto.title, message: dto.message },
+      });
     }
 
     return {
-      id: log.id,
+      id: notification.id,
       title: dto.title,
       message: dto.message,
       channel: dto.channel || 'IN_APP',
-      sentAt: log.createdAt,
+      sentAt: notification.createdAt,
     };
   }
 
-  async getUnreadCount(tenantId: string, userId: string) {
-    // Count recent audit log entries as unread notifications
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    return this.prisma.auditLog.count({
-      where: {
-        tenantId,
-        userId,
-        createdAt: { gte: oneDayAgo },
-      },
+  async delete(tenantId: string, notificationId: string, userId: string) {
+    return this.prisma.notification.updateMany({
+      where: { id: notificationId, tenantId, userId },
+      data: { deletedAt: new Date() },
     });
   }
 }

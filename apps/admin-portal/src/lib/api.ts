@@ -32,8 +32,10 @@ class AdminApiClient {
       if (qs) url += `?${qs}`;
     }
 
+    const method = (fetchOptions.method || 'GET').toUpperCase();
+    const hasBody = ['POST', 'PUT', 'PATCH'].includes(method);
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+      ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(fetchOptions.headers as Record<string, string> || {}),
     };
@@ -104,6 +106,55 @@ class AdminApiClient {
     return this.request(`/tenants/${id}/activate`, { method: 'POST' });
   }
 
+  async pauseTenant(id: string) {
+    return this.request(`/tenants/${id}/pause`, { method: 'POST' });
+  }
+
+  async resumeTenant(id: string) {
+    return this.request(`/tenants/${id}/resume`, { method: 'POST' });
+  }
+
+  async deleteTenant(id: string) {
+    return this.request(`/tenants/${id}`, { method: 'DELETE' });
+  }
+
+  async updateTenantStatus(id: string, status: string) {
+    return this.request(`/tenants/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) });
+  }
+
+  async getTenantStats() {
+    return this.request('/tenants/stats');
+  }
+
+  async exportTenants(format: 'csv' | 'json', params: Record<string, string> = {}) {
+    return this.request('/tenants/export', { params: { format, ...params } });
+  }
+
+  async bulkTenantAction(ids: string[], action: string) {
+    return this.request('/tenants/bulk', { method: 'POST', body: JSON.stringify({ ids, action }) });
+  }
+
+  // Billing
+  async createBillingCheckout(data: { tenantId?: string; planId: string; customerEmail?: string; customerPhone?: string }) {
+    return this.request('/billing/checkout', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async verifyBillingPayment(data: {
+    razorpayOrderId: string;
+    razorpayPaymentId: string;
+    razorpaySignature: string;
+    tenantId?: string;
+    planId: string;
+  }) {
+    return this.request('/billing/verify', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   // Subscriptions
   async getSubscriptions(page = 1, limit = 50, status = '') {
     return this.request('/billing/admin/subscriptions', { params: { page: String(page), limit: String(limit), status } });
@@ -116,7 +167,6 @@ class AdminApiClient {
     });
   }
 
-  // Billing
   async getInvoices(tenantId: string) {
     return this.request(`/billing/invoices/${tenantId}`);
   }
@@ -145,9 +195,18 @@ class AdminApiClient {
     });
   }
 
+  async updatePlanPrice(planId: string, price: number) {
+    return this.request(`/plans/admin/${planId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ price }),
+    });
+  }
+
   // Coupons
-  async getCoupons(page = 1, limit = 50) {
-    return this.request('/coupons', { params: { page: String(page), limit: String(limit) } });
+  async getCoupons(page = 1, limit = 50, search?: string) {
+    const params: Record<string, string> = { page: String(page), limit: String(limit) };
+    if (search) params.search = search;
+    return this.request('/coupons', { params });
   }
 
   async createCoupon(data: any) {
@@ -213,13 +272,27 @@ class AdminApiClient {
   }
 
   // Audit Logs
-  async getAuditLogs(page = 1, limit = 50) {
-    return this.request('/admin/audit-logs', { params: { page: String(page), limit: String(limit) } });
+  async getAuditLogs(page = 1, limit = 50, search?: string, severity?: string) {
+    const params: Record<string, string> = { page: String(page), limit: String(limit) };
+    if (search) params.search = search;
+    if (severity) params.severity = severity;
+    return this.request('/admin/audit-logs', { params });
   }
 
   // Admin Users
   async getAdminSessions() {
     return this.request('/admin/auth/sessions');
+  }
+
+  async getAdminUsers(search = '', page = 1, limit = 50) {
+    return this.request(`/admin/users?search=${encodeURIComponent(search)}&page=${page}&limit=${limit}`);
+  }
+
+  async createAdminUser(data: { name: string; email: string; password: string; role?: string }) {
+    return this.request('/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 
   // Notifications
@@ -296,16 +369,564 @@ class AdminApiClient {
     address?: string;
     city?: string;
     state?: string;
+    country?: string;
     cuisineType?: string;
     planId?: string;
     gstNumber?: string;
     phone?: string;
+    timezone?: string;
+    currency?: string;
+    subdomain?: string;
+    logo?: string;
+    razorpayOrderId?: string;
+    razorpayPaymentId?: string;
+    razorpaySignature?: string;
   }) {
     return this.request('/admin/tenants/provision', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
+
+  // Provisioning Lifecycle (new)
+  async createProvisionDraft(data: Record<string, any>) {
+    return this.request('/provisioning/draft', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getProvisionPlans() {
+    return this.request('/provisioning/plans');
+  }
+
+  async calculateProvisionPrice(data: { planId: string; couponCode?: string; billingCycle?: string; customAmount?: number }) {
+    return this.request('/provisioning/calculate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async validateProvisionCoupon(data: { couponCode: string; planId: string; billingCycle?: string }) {
+    return this.request('/provisioning/coupon/validate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async createProvisionPaymentOrder(data: { requestId: string; paymentProvider?: string }) {
+    return this.request('/provisioning/payment/create-order', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async verifyProvisionPayment(data: {
+    requestId: string;
+    paymentOrderId: string;
+    paymentId: string;
+    paymentSignature: string;
+  }) {
+    return this.request('/provisioning/payment/verify', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async executeProvisioning(data: { requestId: string }) {
+    return this.request('/provisioning/execute', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async previewProvisioning(requestId: string) {
+    return this.request('/provisioning/preview', {
+      method: 'POST',
+      body: JSON.stringify({ requestId }),
+    });
+  }
+
+  async getProvisionProgress(requestId: string) {
+    return this.request(`/provisioning/${requestId}/progress`);
+  }
+
+  async getProvisionByToken(token: string) {
+    return this.request(`/provisioning/token/${token}`);
+  }
+
+  async updateProvisionDraft(requestId: string, data: Record<string, any>) {
+    return this.request(`/provisioning/draft/${requestId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async validatePreProvision(requestId: string) {
+    return this.request(`/provisioning/validate/${requestId}`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
+  async checkOwner(email: string) {
+    return this.request('/provisioning/check-owner', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  }
+
+  // Onboarding
+  async startOnboarding() {
+    return this.request('/public/onboarding/start', { method: 'POST' });
+  }
+
+  async getOnboardingStatus(token: string) {
+    return this.request(`/public/onboarding/${token}`);
+  }
+
+  async updateOnboardingRestaurant(token: string, data: Record<string, any>) {
+    return this.request(`/public/onboarding/${token}/restaurant`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateOnboardingOwner(token: string, data: Record<string, any>) {
+    return this.request(`/public/onboarding/${token}/owner`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateOnboardingSettings(token: string, data: Record<string, any>) {
+    return this.request(`/public/onboarding/${token}/settings`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async selectOnboardingPlan(token: string, planId: string, billingCycle?: string, couponCode?: string) {
+    return this.request(`/public/onboarding/${token}/plan`, {
+      method: 'POST',
+      body: JSON.stringify({ planId, billingCycle, couponCode }),
+    });
+  }
+
+  async createOnboardingPaymentOrder(token: string, couponCode?: string) {
+    return this.request(`/public/onboarding/${token}/payment/order?coupon=${couponCode || ''}`, {
+      method: 'POST',
+    });
+  }
+
+  async verifyOnboardingPayment(token: string, data: {
+    razorpayOrderId: string;
+    razorpayPaymentId: string;
+    razorpaySignature: string;
+  }) {
+    return this.request(`/public/onboarding/${token}/payment/verify`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async completeOnboarding(token: string, data: {
+    razorpayOrderId?: string;
+    razorpayPaymentId?: string;
+    razorpaySignature?: string;
+  }) {
+    return this.request(`/public/onboarding/${token}/complete`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async cancelOnboarding(token: string) {
+    return this.request(`/public/onboarding/${token}/cancel`, {
+      method: 'POST',
+    });
+  }
+
+  // Impersonation
+  async impersonate(tenantId: string, userId: string) {
+    return this.request('/admin/impersonate', {
+      method: 'POST',
+      body: JSON.stringify({ tenantId, userId }),
+    });
+  }
+
+  async exitImpersonation() {
+    return this.request('/admin/impersonate/exit', { method: 'POST' });
+  }
+
+  // Users (for impersonation target selection)
+  async listTenantUsers(tenantId: string) {
+    return this.request(`/tenants/${tenantId}/users`);
+  }
+
+  // API Keys
+  async listApiKeys(tenantId: string) {
+    return this.request(`/admin/api-keys`, { params: { tenantId } });
+  }
+
+  async createApiKey(tenantId: string, data: { name: string; permissions: string[]; expiresAt?: string }) {
+    return this.request('/admin/api-keys', { method: 'POST', body: JSON.stringify({ tenantId, ...data }) });
+  }
+
+  async revokeApiKey(id: string) {
+    return this.request(`/admin/api-keys/${id}/revoke`, { method: 'POST' });
+  }
+
+  async rotateApiKey(id: string) {
+    return this.request(`/admin/api-keys/${id}/rotate`, { method: 'POST' });
+  }
+
+  async deleteApiKey(id: string) {
+    return this.request(`/admin/api-keys/${id}`, { method: 'DELETE' });
+  }
+
+  // Webhooks
+  async listWebhooks(tenantId: string) {
+    return this.request('/admin/webhooks', { params: { tenantId } });
+  }
+
+  async createWebhook(tenantId: string, data: { name: string; url: string; events: string[]; secret?: string }) {
+    return this.request('/admin/webhooks', { method: 'POST', body: JSON.stringify({ tenantId, ...data }) });
+  }
+
+  async updateWebhook(id: string, data: { name?: string; url?: string; events?: string[]; isActive?: boolean }) {
+    return this.request(`/admin/webhooks/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+  }
+
+  async deleteWebhook(id: string) {
+    return this.request(`/admin/webhooks/${id}`, { method: 'DELETE' });
+  }
+
+  async getWebhookDeliveries(id: string) {
+    return this.request(`/admin/webhooks/${id}/deliveries`);
+  }
+
+  async testWebhook(id: string) {
+    return this.request(`/admin/webhooks/test/${id}`, { method: 'POST' });
+  }
+
+  // Workflows
+  async listWorkflowTemplates(tenantId: string) {
+    return this.request('/admin/workflows/templates', { params: { tenantId } });
+  }
+
+  async createWorkflowTemplate(tenantId: string, data: any) {
+    return this.request('/admin/workflows/templates', { method: 'POST', body: JSON.stringify({ ...data, tenantId }) });
+  }
+
+  async updateWorkflowTemplate(tenantId: string, id: string, data: any) {
+    return this.request(`/admin/workflows/templates/${id}`, { method: 'PATCH', params: { tenantId }, body: JSON.stringify(data) });
+  }
+
+  async deleteWorkflowTemplate(tenantId: string, id: string) {
+    return this.request(`/admin/workflows/templates/${id}`, { method: 'DELETE', params: { tenantId } });
+  }
+
+  async listWorkflowRequests(tenantId: string, params: Record<string, string> = {}) {
+    return this.request('/admin/workflows/requests', { params: { ...params, tenantId } });
+  }
+
+  async getWorkflowRequest(tenantId: string, id: string) {
+    return this.request(`/admin/workflows/requests/${id}`, { params: { tenantId } });
+  }
+
+  async approveWorkflowRequest(tenantId: string, id: string, data: { decision: string; comment?: string }) {
+    return this.request(`/admin/workflows/requests/${id}/approve`, { method: 'POST', params: { tenantId }, body: JSON.stringify(data) });
+  }
+
+  async rejectWorkflowRequest(tenantId: string, id: string, comment: string) {
+    return this.request(`/admin/workflows/requests/${id}/reject`, { method: 'POST', params: { tenantId }, body: JSON.stringify({ comment }) });
+  }
+
+  async getWorkflowStats(tenantId: string) {
+    return this.request('/admin/workflows/stats', { params: { tenantId } });
+  }
+
+  // AI Insights & Forecasting (admin-scoped, tenant-selected)
+  async getAiInsights(tenantId: string) {
+    return this.request(`/admin/ai/insights?tenantId=${tenantId}`);
+  }
+
+  async getAiForecast(tenantId: string, days = 7) {
+    return this.request(`/admin/ai/forecast?tenantId=${tenantId}&days=${days}`);
+  }
+
+  async getAiPairings(tenantId: string, menuItemId: string) {
+    return this.request(`/admin/ai/pairings/${menuItemId}?tenantId=${tenantId}`);
+  }
+
+  // Backups
+  async listBackups() {
+    return this.request('/admin/backups');
+  }
+
+  async triggerBackup(data: { name?: string; type?: string; tables?: string[] }) {
+    return this.request('/admin/backups/trigger', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async restoreBackup(id: string) {
+    return this.request(`/admin/backups/${id}/restore`, { method: 'POST' });
+  }
+
+  async deleteBackup(id: string) {
+    return this.request(`/admin/backups/${id}`, { method: 'DELETE' });
+  }
+
+  async getBackupStats() {
+    return this.request('/admin/backups/stats');
+  }
+
+  // Branches
+  async listBranches(params: Record<string, string> = {}) {
+    return this.request('/admin/branches', { params });
+  }
+
+  async getBranch(id: string) {
+    return this.request(`/admin/branches/${id}`);
+  }
+
+  async updateBranchStatus(id: string, status: string) {
+    return this.request(`/admin/branches/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) });
+  }
+
+  // ─── Website Management (super-admin, tenant-scoped) ───
+  async getWebsiteConfig(tenantId: string) {
+    return this.request(`/admin/tenants/${tenantId}/website`);
+  }
+
+  async updateWebsiteConfig(tenantId: string, data: Record<string, any>) {
+    return this.request(`/admin/tenants/${tenantId}/website`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateWebsiteSeo(tenantId: string, seo: Record<string, any>) {
+    return this.request(`/admin/tenants/${tenantId}/website/seo`, {
+      method: 'PATCH',
+      body: JSON.stringify(seo),
+    });
+  }
+
+  async updateWebsiteFeatures(tenantId: string, features: Record<string, any>) {
+    return this.request(`/admin/tenants/${tenantId}/website/features`, {
+      method: 'PATCH',
+      body: JSON.stringify({ features }),
+    });
+  }
+
+  async updateWebsiteSections(tenantId: string, sections: any[]) {
+    return this.request(`/admin/tenants/${tenantId}/website/sections`, {
+      method: 'PATCH',
+      body: JSON.stringify({ sections }),
+    });
+  }
+
+  async publishWebsite(tenantId: string) {
+    return this.request(`/admin/tenants/${tenantId}/website/publish`, { method: 'POST' });
+  }
+
+  async resetWebsite(tenantId: string) {
+    return this.request(`/admin/tenants/${tenantId}/website/reset`, { method: 'POST' });
+  }
+
+  // ─── Offers (super-admin, tenant-scoped) ───
+  async listOffers(tenantId: string) {
+    return this.request(`/admin/tenants/${tenantId}/offers`);
+  }
+
+  async createOffer(tenantId: string, data: Record<string, any>) {
+    return this.request(`/admin/tenants/${tenantId}/offers`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateOffer(tenantId: string, id: string, data: Record<string, any>) {
+    return this.request(`/admin/tenants/${tenantId}/offers/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteOffer(tenantId: string, id: string) {
+    return this.request(`/admin/tenants/${tenantId}/offers/${id}`, { method: 'DELETE' });
+  }
+
+  // ─── Announcements (super-admin, tenant-scoped) ───
+  async listAnnouncements(tenantId: string) {
+    return this.request(`/admin/tenants/${tenantId}/announcements`);
+  }
+
+  async createAnnouncement(tenantId: string, data: Record<string, any>) {
+    return this.request(`/admin/tenants/${tenantId}/announcements`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAnnouncement(tenantId: string, id: string, data: Record<string, any>) {
+    return this.request(`/admin/tenants/${tenantId}/announcements/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAnnouncement(tenantId: string, id: string) {
+    return this.request(`/admin/tenants/${tenantId}/announcements/${id}`, { method: 'DELETE' });
+  }
+
+  // ─── Gallery (super-admin, tenant-scoped) ───
+  async listGallery(tenantId: string) {
+    return this.request(`/admin/tenants/${tenantId}/gallery`);
+  }
+
+  async createGalleryImage(tenantId: string, data: Record<string, any>) {
+    return this.request(`/admin/tenants/${tenantId}/gallery`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateGalleryImage(tenantId: string, id: string, data: Record<string, any>) {
+    return this.request(`/admin/tenants/${tenantId}/gallery/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteGalleryImage(tenantId: string, id: string) {
+    return this.request(`/admin/tenants/${tenantId}/gallery/${id}`, { method: 'DELETE' });
+  }
+
+  // ─── BI / Executive Analytics (admin, tenant-scoped) ───
+  async getBiExecutiveSummary(tenantId: string, params: Record<string, string> = {}) {
+    return this.request('/admin/bi/executive-summary', { params: { ...params, tenantId } });
+  }
+  async getBiRevenueTrend(tenantId: string, params: Record<string, string> = {}) {
+    return this.request('/admin/bi/revenue-trend', { params: { ...params, tenantId } });
+  }
+  async getBiOrdersTrend(tenantId: string, params: Record<string, string> = {}) {
+    return this.request('/admin/bi/orders-trend', { params: { ...params, tenantId } });
+  }
+  async getBiCustomerTrend(tenantId: string, params: Record<string, string> = {}) {
+    return this.request('/admin/bi/customer-trend', { params: { ...params, tenantId } });
+  }
+  async getBiProfitability(tenantId: string, params: Record<string, string> = {}) {
+    return this.request('/admin/bi/profitability', { params: { ...params, tenantId } });
+  }
+  async getBiPeakHours(tenantId: string, params: Record<string, string> = {}) {
+    return this.request('/admin/bi/peak-hours', { params: { ...params, tenantId } });
+  }
+  async getBiTopItems(tenantId: string, params: Record<string, string> = {}) {
+    return this.request('/admin/bi/top-items', { params: { ...params, tenantId } });
+  }
+  async getBiBranchLeaderboard(tenantId: string, params: Record<string, string> = {}) {
+    return this.request('/admin/bi/branch-leaderboard', { params: { ...params, tenantId } });
+  }
+  async getBiBranchComparison(tenantId: string, params: Record<string, string> = {}) {
+    return this.request('/admin/bi/branch-comparison', { params: { ...params, tenantId } });
+  }
+  async getBiRegionalPerformance(tenantId: string, params: Record<string, string> = {}) {
+    return this.request('/admin/bi/regional-performance', { params: { ...params, tenantId } });
+  }
+  async getBiInsights(tenantId: string, params: Record<string, string> = {}) {
+    return this.request('/admin/bi/insights', { params: { ...params, tenantId } });
+  }
+  async getBiGoals(tenantId: string) {
+    return this.request('/admin/bi/goals', { params: { tenantId } });
+  }
+  async getBiAlerts(tenantId: string) {
+    return this.request('/admin/bi/alerts', { params: { tenantId } });
+  }
+  async getForecastRevenue(tenantId: string, params: Record<string, string> = {}) {
+    return this.request('/admin/bi/forecast/revenue', { params: { ...params, tenantId } });
+  }
+  async getForecastOrders(tenantId: string, params: Record<string, string> = {}) {
+    return this.request('/admin/bi/forecast/orders', { params: { ...params, tenantId } });
+  }
+  async getForecastInventory(tenantId: string, params: Record<string, string> = {}) {
+    return this.request('/admin/bi/forecast/inventory', { params: { ...params, tenantId } });
+  }
+  async getForecastStaffing(tenantId: string, params: Record<string, string> = {}) {
+    return this.request('/admin/bi/forecast/staffing', { params: { ...params, tenantId } });
+  }
+
+  // ─── AI Business Copilot (admin, tenant-scoped) ───
+  async getCopilotProviders(tenantId: string) {
+    return this.request('/admin/ai-copilot/providers', { params: { tenantId } });
+  }
+  async getCopilotSuggestions(tenantId: string) {
+    return this.request('/admin/ai-copilot/suggestions', { params: { tenantId } });
+  }
+  async listCopilotConversations(tenantId: string) {
+    return this.request('/admin/ai-copilot/conversations', { params: { tenantId } });
+  }
+  async getCopilotConversation(tenantId: string, id: string) {
+    return this.request(`/admin/ai-copilot/conversations/${id}`, { params: { tenantId } });
+  }
+  async deleteCopilotConversation(tenantId: string, id: string) {
+    return this.request(`/admin/ai-copilot/conversations/${id}`, { method: 'DELETE', params: { tenantId } });
+  }
+  async sendCopilotMessage(tenantId: string, message: string, conversationId?: string) {
+    return this.request('/admin/ai-copilot/chat', {
+      method: 'POST',
+      params: { tenantId },
+      body: JSON.stringify({ message, conversationId }),
+    });
+  }
+  async generateCopilotReport(tenantId: string, type: string, from?: string, to?: string) {
+    return this.request('/admin/ai-copilot/reports', {
+      method: 'POST',
+      params: { tenantId },
+      body: JSON.stringify({ type, from, to }),
+    });
+  }
+  async listCopilotReports(tenantId: string) {
+    return this.request('/admin/ai-copilot/reports', { params: { tenantId } });
+  }
+  async pinCopilotConversation(tenantId: string, id: string, pinned: boolean) {
+    return this.request(`/admin/ai-copilot/conversations/${id}/pin`, {
+      method: 'PATCH',
+      params: { tenantId },
+      body: JSON.stringify({ pinned }),
+    });
+  }
+  async renameCopilotConversation(tenantId: string, id: string, title: string) {
+    return this.request(`/admin/ai-copilot/conversations/${id}/rename`, {
+      method: 'PATCH',
+      params: { tenantId },
+      body: JSON.stringify({ title }),
+    });
+  }
+  async searchCopilotConversations(tenantId: string, query: string) {
+    return this.request('/admin/ai-copilot/conversations/search', { params: { tenantId, q: query } });
+  }
+  streamCopilotMessage(tenantId: string, message: string, conversationId?: string): EventSource {
+    const params = new URLSearchParams({ tenantId, message });
+    if (conversationId) params.set('conversationId', conversationId);
+    const token = this.getToken();
+    return new EventSource(`/api/v1/admin/ai-copilot/chat/stream?${params.toString()}`);
+  }
 }
+
+/**
+ * MediaService abstraction. Phase 4 stores image URLs directly; the upload
+ * method is a stub that will be implemented with MinIO/S3 in Phase 6 without
+ * changing this interface or the UI components that consume it.
+ */
+export const mediaService = {
+  async upload(_file: File): Promise<{ url: string }> {
+    throw new Error('Media upload is not available yet (Phase 6). Use a direct image URL.');
+  },
+  async uploadUrl(url: string): Promise<{ url: string }> {
+    return { url };
+  },
+};
 
 export const adminApi = new AdminApiClient();

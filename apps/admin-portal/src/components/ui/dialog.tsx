@@ -45,7 +45,7 @@ export function Dialog({ open, onClose, title, children, size = 'md' }: DialogPr
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <div ref={overlayRef} className="absolute inset-0 bg-ink/40 animate-fade-in" onClick={onClose} />
+      <div ref={overlayRef} className="dialog-overlay absolute inset-0" onClick={onClose} />
       <DialogContext.Provider value={{ close: onClose }}>
         <div
           className={cn(
@@ -53,8 +53,6 @@ export function Dialog({ open, onClose, title, children, size = 'md' }: DialogPr
             'max-h-[95vh] sm:max-h-[90vh] flex flex-col',
             'animate-slide-in-up sm:animate-fade-in',
             sizeClasses[size],
-            // Mobile: full width, slide up from bottom
-            'sm:rounded-none',
           )}
         >
           {title && (

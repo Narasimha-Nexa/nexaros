@@ -87,6 +87,11 @@ export default function SecurityPage() {
               onClick={async () => {
                 setRevoking(row.id);
                 try {
+                  const token = row.token || row.id;
+                  await adminApi.request('/admin/auth/sessions/revoke', {
+                    method: 'POST',
+                    body: JSON.stringify({ token }),
+                  });
                   setSessions((prev) => prev.map((s) => s.id === row.id ? { ...s, revoked: true } : s));
                   addToast('Session revoked', 'success');
                 } catch {
@@ -123,7 +128,7 @@ export default function SecurityPage() {
           <Button variant="outline" size="sm" onClick={fetchSessions}><RefreshCw size={14} /> Refresh</Button>
         </div>
         {loading ? (
-          <div className="space-y-3">{[...Array(3)].map((_, i) => <Card key={i} className="h-14 animate-pulse" />)}</div>
+          <div className="space-y-1">{[...Array(3)].map((_, i) => <div key={i} className="skeleton h-[52px] w-full" />)}</div>
         ) : activeSessions.length === 0 ? (
           <p className="text-body-sm text-body font-sans">No active sessions.</p>
         ) : (

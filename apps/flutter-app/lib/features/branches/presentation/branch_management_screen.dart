@@ -1,23 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
+import '../../../core/providers/riverpod_providers.dart';
 import '../../../core/providers/branch_provider.dart';
-import '../../../core/providers/app_state.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/shared_widgets.dart';
 
-class BranchManagementScreen extends StatefulWidget {
+class BranchManagementScreen extends ConsumerStatefulWidget {
   const BranchManagementScreen({super.key});
 
   @override
-  State<BranchManagementScreen> createState() => _BranchManagementScreenState();
+  ConsumerState<BranchManagementScreen> createState() => _BranchManagementScreenState();
 }
 
-class _BranchManagementScreenState extends State<BranchManagementScreen> {
+class _BranchManagementScreenState extends ConsumerState<BranchManagementScreen> {
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<BranchProvider>().loadBranches(selectDefault: false);
+      ref.read(branchProvider.notifier).loadBranches(selectDefault: false);
     });
   }
 
@@ -33,10 +34,11 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
           ),
         ],
       ),
-      body: Consumer<BranchProvider>(
-        builder: (context, bp, _) {
+      body: Consumer(
+        builder: (context, ref, _) {
+          final bp = ref.watch(branchProvider);
           if (bp.isLoading && bp.branches.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: NxFullScreenLoader());
           }
           if (bp.branches.isEmpty) {
             return _buildEmptyState(context);
@@ -69,7 +71,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
   }
 
   Widget _buildBranchList(BuildContext context, BranchProvider bp) {
-    final currentBranchId = context.read<AppState>().branchId;
+    final currentBranchId = ref.read(appStateProvider).branchId;
     return RefreshIndicator(
       onRefresh: () => bp.loadBranches(selectDefault: false),
       child: ListView.builder(
@@ -306,7 +308,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
               FilledButton(
                 onPressed: () async {
                   if (!formKey.currentState!.validate()) return;
-                  final bp = context.read<BranchProvider>();
+                  final bp = ref.read(branchProvider.notifier);
                   final scaffold = ScaffoldMessenger.of(context);
                   try {
                     if (existing != null) {

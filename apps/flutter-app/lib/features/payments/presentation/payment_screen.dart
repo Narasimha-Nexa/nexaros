@@ -1,23 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/providers/app_state.dart';
+import '../../../core/providers/riverpod_providers.dart';
 import '../../../core/hardware/receipt_formatter.dart';
 import '../../../core/services/razorpay_service.dart';
+import '../../../shared/widgets/shared_widgets.dart';
 
-class PaymentScreen extends StatefulWidget {
+class PaymentScreen extends ConsumerStatefulWidget {
   final String orderId;
   final int orderNumber;
   final String? tableName;
   const PaymentScreen({super.key, required this.orderId, this.orderNumber = 0, this.tableName});
 
   @override
-  State<PaymentScreen> createState() => _PaymentScreenState();
+  ConsumerState<PaymentScreen> createState() => _PaymentScreenState();
 }
 
-class _PaymentScreenState extends State<PaymentScreen> {
-  late final AppState _appState;
+class _PaymentScreenState extends ConsumerState<PaymentScreen> {
   late final RazorpayService _razorpay;
   Map<String, dynamic>? _paymentInfo;
   String _selectedMethod = 'CASH';
@@ -29,7 +29,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
   @override
   void initState() {
     super.initState();
-    _appState = context.read<AppState>();
     _razorpay = RazorpayService(keyId: const String.fromEnvironment('RAZORPAY_KEY_ID', defaultValue: 'rzp_test_demo'));
     _loadPaymentInfo();
   }
@@ -44,7 +43,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Future<void> _loadPaymentInfo() async {
     setState(() => _isLoading = true);
     try {
-      final info = await _appState.api.getOrderPayments(widget.orderId);
+      final info = await ref.read(appStateProvider).api.getOrderPayments(widget.orderId);
       if (mounted) setState(() { _paymentInfo = info; _isLoading = false; _isOffline = false; });
     } catch (e) {
       // Build basic payment info from local data
@@ -54,7 +53,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   Future<void> _loadPaymentInfoFromLocal() async {
     try {
-      final order = await _appState.api.getOrder(widget.orderId);
+      final order = await ref.read(appStateProvider).api.getOrder(widget.orderId);
       if (mounted) {
         setState(() {
           _paymentInfo = {
@@ -69,7 +68,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       }
     } catch (_) {
       // Try local payments
-      final localPayments = await _appState.offlinePayments.getPaymentsForOrder(widget.orderId);
+      final localPayments = await ref.read(appStateProvider).offlinePayments.getPaymentsForOrder(widget.orderId);
       final totalPaid = localPayments.fold<double>(0, (sum, p) => sum + p.amount);
       if (mounted) {
         setState(() {
@@ -99,7 +98,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     setState(() => _isProcessing = true);
     try {
       if (_selectedMethod == 'CASH') {
-        final result = await _appState.offlinePayments.recordPayment(
+        final result = await ref.read(appStateProvider).offlinePayments.recordPayment(
           orderId: widget.orderId,
           branchId: '',
           method: _selectedMethod,
@@ -139,7 +138,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           return;
         }
 
-        final result = await _appState.offlinePayments.recordPayment(
+        final result = await ref.read(appStateProvider).offlinePayments.recordPayment(
           orderId: widget.orderId,
           branchId: '',
           method: _selectedMethod,
@@ -186,7 +185,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         date: DateTime.now(),
       );
 
-      final printed = await _appState.printer.printReceipt(receiptData);
+      final printed = await ref.read(appStateProvider).printer.printReceipt(receiptData);
       if (!printed) {
         debugPrint('Receipt printing failed');
       }
@@ -198,7 +197,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   /// Open cash drawer for cash payments
   Future<void> _openCashDrawer() async {
     try {
-      final opened = await _appState.printer.openCashDrawer();
+      final opened = await ref.read(appStateProvider).printer.openCashDrawer();
       if (!opened) {
         debugPrint('Cash drawer open failed');
       }
@@ -233,7 +232,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: NxFullScreenLoader())
           : _paymentInfo == null
               ? const Center(child: Text('Order not found'))
               : _buildPaymentContent(),

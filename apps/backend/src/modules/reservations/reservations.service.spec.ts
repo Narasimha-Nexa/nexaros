@@ -1,13 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ReservationsService } from './reservations.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { GatewayService } from '../websockets/gateway.service';
+import { EventBusService } from '../../common/event-bus/event-bus.service';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 
 describe('ReservationsService', () => {
   let service: ReservationsService;
   let prisma: jest.Mocked<PrismaService>;
-  let gateway: jest.Mocked<GatewayService>;
+  let eventBus: jest.Mocked<EventBusService>;
 
   const mockReservation = {
     id: 'res-1',
@@ -43,7 +43,12 @@ describe('ReservationsService', () => {
     },
   };
 
-  const mockGateway = { emitToTenant: jest.fn() };
+  const mockEventBus = {
+    emitToTenant: jest.fn(),
+    reservationCreated: jest.fn(),
+    reservationUpdated: jest.fn(),
+    reservationDeleted: jest.fn(),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -52,13 +57,13 @@ describe('ReservationsService', () => {
       providers: [
         ReservationsService,
         { provide: PrismaService, useValue: mockPrisma },
-        { provide: GatewayService, useValue: mockGateway },
+        { provide: EventBusService, useValue: mockEventBus },
       ],
     }).compile();
 
     service = module.get<ReservationsService>(ReservationsService);
     prisma = module.get(PrismaService) as jest.Mocked<PrismaService>;
-    gateway = module.get(GatewayService) as jest.Mocked<GatewayService>;
+    eventBus = module.get(EventBusService) as jest.Mocked<EventBusService>;
   });
 
   describe('findAll', () => {
@@ -182,7 +187,7 @@ describe('ReservationsService', () => {
 
       await service.create('tenant-1', createDto);
 
-      expect(mockGateway.emitToTenant).toHaveBeenCalledWith(
+      expect(mockEventBus.emitToTenant).toHaveBeenCalledWith(
         'tenant-1',
         'reservation:created',
         expect.objectContaining({ customerName: 'John Doe' }),
@@ -278,7 +283,7 @@ describe('ReservationsService', () => {
 
       await service.remove('res-1', 'tenant-1');
 
-      expect(mockGateway.emitToTenant).toHaveBeenCalledWith('tenant-1', 'reservation:deleted', {
+      expect(mockEventBus.emitToTenant).toHaveBeenCalledWith('tenant-1', 'reservation:deleted', {
         id: 'res-1',
       });
     });

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
-import '../../../core/network/api_client.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/providers/riverpod_providers.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/providers/subscription_provider.dart';
 import '../../../core/services/razorpay_service.dart';
+import '../../../shared/widgets/shared_widgets.dart';
 
-class CouponRedemptionScreen extends StatefulWidget {
+class CouponRedemptionScreen extends ConsumerStatefulWidget {
   final String planId;
   final String planName;
   final double planPrice;
@@ -19,10 +19,10 @@ class CouponRedemptionScreen extends StatefulWidget {
   });
 
   @override
-  State<CouponRedemptionScreen> createState() => _CouponRedemptionScreenState();
+  ConsumerState<CouponRedemptionScreen> createState() => _CouponRedemptionScreenState();
 }
 
-class _CouponRedemptionScreenState extends State<CouponRedemptionScreen> {
+class _CouponRedemptionScreenState extends ConsumerState<CouponRedemptionScreen> {
   final _couponController = TextEditingController();
   bool _isValidating = false;
   bool _isCheckingOut = false;
@@ -52,7 +52,7 @@ class _CouponRedemptionScreenState extends State<CouponRedemptionScreen> {
     });
 
     try {
-      final api = context.read<ApiClient>();
+      final api = ref.read(apiClientProvider);
       final tenantId = api.branchId ?? '';
       final result = await api.requestWithRetry(
         () => api.validateCouponRaw(_couponController.text.trim(), tenantId),
@@ -98,7 +98,7 @@ class _CouponRedemptionScreenState extends State<CouponRedemptionScreen> {
     setState(() => _isCheckingOut = true);
 
     try {
-      final api = context.read<ApiClient>();
+      final api = ref.read(apiClientProvider);
       final tenantId = api.branchId ?? '';
       final couponCode = _couponResult != null ? _couponController.text.trim() : null;
 
@@ -120,14 +120,14 @@ class _CouponRedemptionScreenState extends State<CouponRedemptionScreen> {
           _showCheckoutResult(result);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Payment cancelled or failed'), backgroundColor: Colors.orange),
+            const SnackBar(content: Text('Payment cancelled or failed'), backgroundColor: AppColors.warning),
           );
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Checkout failed: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Checkout failed: $e'), backgroundColor: AppColors.danger),
         );
       }
     } finally {
@@ -163,7 +163,7 @@ class _CouponRedemptionScreenState extends State<CouponRedemptionScreen> {
           TextButton(
             onPressed: () async {
               Navigator.of(ctx).pop();
-              final provider = context.read<SubscriptionProvider>();
+              final provider = ref.read(subscriptionProvider.notifier);
               await provider.loadEntitlements();
               if (mounted) Navigator.of(context).pop();
             },
@@ -182,7 +182,7 @@ class _CouponRedemptionScreenState extends State<CouponRedemptionScreen> {
       appBar: AppBar(
         title: Text('Upgrade to ${widget.planName}', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
         backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
+        foregroundColor: AppColors.white,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -190,9 +190,8 @@ class _CouponRedemptionScreenState extends State<CouponRedemptionScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Plan summary
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            NxCard(
+              elevated: true,
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -280,7 +279,7 @@ class _CouponRedemptionScreenState extends State<CouponRedemptionScreen> {
                     onPressed: _isValidating ? null : _validateCoupon,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
+                      foregroundColor: AppColors.white,
                     ),
                     child: _isValidating
                         ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
@@ -322,7 +321,7 @@ class _CouponRedemptionScreenState extends State<CouponRedemptionScreen> {
                 onPressed: _isCheckingOut ? null : _proceedCheckout,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
+                  foregroundColor: AppColors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 child: _isCheckingOut

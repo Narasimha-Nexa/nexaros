@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sidebar } from './sidebar';
 import { Header } from './header';
 import { useSidebarStore } from '@/stores/ui.store';
@@ -12,9 +12,37 @@ interface DashboardShellProps {
 
 export function DashboardShell({ children }: DashboardShellProps) {
   const { isCollapsed, isMobileOpen, closeMobile } = useSidebarStore();
+  const [apiStatus, setApiStatus] = useState<'connected' | 'reconnecting' | 'disconnected'>('connected');
+
+  useEffect(() => {
+    let mounted = true;
+    let controller: AbortController;
+    const check = async () => {
+      controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1'}/`, {
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        if (mounted) setApiStatus(res.ok ? 'connected' : 'disconnected');
+      } catch {
+        clearTimeout(timeout);
+        if (mounted) setApiStatus('disconnected');
+      }
+    };
+    check();
+    const interval = setInterval(check, 30000);
+    return () => { mounted = false; clearInterval(interval); if (controller) controller.abort(); };
+  }, []);
 
   return (
     <div className="h-screen flex overflow-hidden bg-canvas-soft">
+      {/* Connection Status Bar */}
+      <div className={`connection-bar ${
+        apiStatus === 'connected' ? 'connected' :
+        apiStatus === 'reconnecting' ? 'reconnecting' : 'disconnected'
+      }`} />
       {/* Mobile backdrop */}
       {isMobileOpen && (
         <div
@@ -45,9 +73,11 @@ export function DashboardShell({ children }: DashboardShellProps) {
         <footer className="border-t border-hairline px-4 sm:px-6 py-3 flex items-center justify-between shrink-0 bg-canvas">
           <p className="text-caption text-body font-sans">NexaROS Control Plane v1.0</p>
           <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1.5 text-caption text-body font-sans">
-              <span className="w-1.5 h-1.5 bg-green-600 rounded-full" />
-              System Operational
+            <span className="flex items-center gap-1.5 text-caption font-sans font-semibold">
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                apiStatus === 'connected' ? 'bg-semantic-success' : 'bg-semantic-danger'
+              }`} />
+              API {apiStatus === 'connected' ? 'Connected' : 'Disconnected'}
             </span>
           </div>
         </footer>

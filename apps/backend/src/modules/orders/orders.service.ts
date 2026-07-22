@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { GatewayService } from '../websockets/gateway.service';
+import { EventBusService } from '../../common/event-bus/event-bus.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { AddItemDto } from './dto/add-item.dto';
 import { OrderStatus } from '@prisma/client';
@@ -9,8 +9,17 @@ import { OrderStatus } from '@prisma/client';
 export class OrdersService {
   constructor(
     private prisma: PrismaService,
-    private gateway: GatewayService,
+    private eventBus: EventBusService,
   ) {}
+
+  private async findOneWithTenantValidation(id: string, tenantId: string) {
+    const order = await this.prisma.order.findFirst({
+      where: { id, branch: { tenantId } },
+      include: { branch: { select: { tenantId: true } } },
+    });
+    if (!order) throw new NotFoundException('Order not found or does not belong to this tenant');
+    return order;
+  }
 
   async findAll(branchId: string, status?: string, skip = 0, take = 20) {
     const [orders, total] = await Promise.all([
@@ -44,7 +53,8 @@ export class OrdersService {
     return { orders, total, skip, take };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, tenantId: string) {
+    await this.findOneWithTenantValidation(id, tenantId);
     const order = await this.prisma.order.findUnique({
       where: { id },
       include: {
@@ -65,6 +75,9 @@ export class OrdersService {
   }
 
   async create(branchId: string, data: CreateOrderDto) {
+    const branch = await this.prisma.branch.findUnique({ where: { id: branchId }, select: { tenantId: true } });
+    const tenantId = branch?.tenantId || '';
+
     const lastOrder = await this.prisma.order.findFirst({
       where: { branchId },
       orderBy: { orderNumber: 'desc' },
@@ -91,41 +104,49 @@ export class OrdersService {
     const discountAmount = data.discountAmount || 0;
     const totalAmount = subtotal + totalTax - discountAmount;
 
-    const order = await this.prisma.order.create({
-      data: {
-        branchId,
-        tableId: data.tableId,
-        staffId: data.staffId,
-        orderNumber,
-        type: (data.type as any) || 'DINE_IN',
-        status: 'PENDING',
-        customerName: data.customerName,
-        customerPhone: data.customerPhone,
-        guestCount: data.guestCount,
-        subtotal,
-        taxAmount: totalTax,
-        discountAmount,
-        totalAmount,
-        notes: data.notes,
-        kotPrinted: false,
-        items: {
-          create: items.map((item) => ({
-            menuItemId: item.menuItemId,
-            name: item.name,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            totalPrice: item.unitPrice * item.quantity,
-            notes: item.notes,
-          })),
+    const order = await this.prisma.$transaction(async (tx) => {
+      const createdOrder = await tx.order.create({
+        data: {
+          branchId,
+          tenantId,
+          tableId: data.tableId,
+          staffId: data.staffId,
+          orderNumber,
+          type: (data.type as any) || 'DINE_IN',
+          status: 'PENDING',
+          customerName: data.customerName,
+          customerPhone: data.customerPhone,
+          guestCount: data.guestCount,
+          subtotal,
+          taxAmount: totalTax,
+          discountAmount,
+          totalAmount,
+          notes: data.notes,
+          kotPrinted: false,
+          items: {
+            create: items.map((item) => ({
+              menuItemId: item.menuItemId,
+              name: item.name,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              totalPrice: item.unitPrice * item.quantity,
+              notes: item.notes,
+            })),
+          },
         },
-      },
-      include: {
-        table: { select: { id: true, number: true } },
-        items: { include: { addOns: true } },
-      },
+        include: {
+          table: { select: { id: true, number: true } },
+          items: { include: { addOns: true } },
+        },
+      });
+
+      await tx.orderStatusHistory.create({
+        data: { orderId: createdOrder.id, status: 'PENDING', notes: 'Order created' },
+      });
+
+      return createdOrder;
     });
 
-    // Update table status
     if (data.tableId) {
       await this.prisma.restaurantTable.update({
         where: { id: data.tableId },
@@ -133,13 +154,7 @@ export class OrdersService {
       });
     }
 
-    // Record initial status
-    await this.prisma.orderStatusHistory.create({
-      data: { orderId: order.id, status: 'PENDING', notes: 'Order created' },
-    });
-
-    // Emit real-time events
-    this.gateway.emitToBranch(branchId, 'order:created', {
+    await this.eventBus.orderCreated(order.tenantId || branchId, branchId, {
       id: order.id,
       orderNumber: order.orderNumber,
       type: order.type,
@@ -153,16 +168,14 @@ export class OrdersService {
     return order;
   }
 
-  async addItem(orderId: string, data: { menuItemId: string; name: string; quantity: number; unitPrice: number; taxRate?: number; notes?: string }) {
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
-    if (!order) throw new NotFoundException('Order not found');
+  async addItem(orderId: string, data: { menuItemId: string; name: string; quantity: number; unitPrice: number; taxRate?: number; notes?: string }, tenantId: string) {
+    const order = await this.findOneWithTenantValidation(orderId, tenantId);
     if (order.status === 'COMPLETED' || order.status === 'CANCELLED') {
       throw new BadRequestException('Cannot add items to a completed or cancelled order');
     }
 
     const taxRate = data.taxRate ?? 5;
     const itemTotal = data.unitPrice * data.quantity;
-    const tax = itemTotal * (taxRate / 100);
 
     const orderItem = await this.prisma.orderItem.create({
       data: {
@@ -176,10 +189,9 @@ export class OrdersService {
       },
     });
 
-    // Recalculate totals
     const updatedOrder = await this.recalculateOrder(orderId);
 
-    this.gateway.emitToBranch(order.branchId, 'order:updated', {
+    this.eventBus.emitToBranch(order.branchId, 'order:updated', {
       orderId,
       orderNumber: updatedOrder.orderNumber,
       action: 'item_added',
@@ -190,9 +202,8 @@ export class OrdersService {
     return { orderItem, order: updatedOrder };
   }
 
-  async removeItem(orderId: string, itemId: string) {
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
-    if (!order) throw new NotFoundException('Order not found');
+  async removeItem(orderId: string, itemId: string, tenantId: string) {
+    const order = await this.findOneWithTenantValidation(orderId, tenantId);
     if (order.status === 'COMPLETED' || order.status === 'CANCELLED') {
       throw new BadRequestException('Cannot remove items from a completed or cancelled order');
     }
@@ -204,10 +215,9 @@ export class OrdersService {
 
     await this.prisma.orderItem.delete({ where: { id: itemId } });
 
-    // Recalculate totals
     const updatedOrder = await this.recalculateOrder(orderId);
 
-    this.gateway.emitToBranch(order.branchId, 'order:updated', {
+    this.eventBus.emitToBranch(order.branchId, 'order:updated', {
       orderId,
       orderNumber: updatedOrder.orderNumber,
       action: 'item_removed',
@@ -218,11 +228,12 @@ export class OrdersService {
     return { removed: true, order: updatedOrder };
   }
 
-  async updateStatus(id: string, status: string, notes?: string) {
-    const order = await this.prisma.order.findUnique({ where: { id } });
+  async updateStatus(id: string, status: string, notes?: string, tenantId?: string) {
+    const order = tenantId
+      ? await this.findOneWithTenantValidation(id, tenantId)
+      : await this.prisma.order.findUnique({ where: { id } });
     if (!order) throw new NotFoundException('Order not found');
 
-    // Validate status transitions
     const validTransitions: Record<string, string[]> = {
       PENDING: ['CONFIRMED', 'PREPARING', 'CANCELLED'],
       CONFIRMED: ['PREPARING', 'CANCELLED'],
@@ -248,7 +259,6 @@ export class OrdersService {
       data: { orderId: id, status: status as OrderStatus, notes },
     });
 
-    // Update table status based on order status
     if (order.tableId) {
       let tableStatus: string | undefined;
       switch (status) {
@@ -265,15 +275,14 @@ export class OrdersService {
       }
     }
 
-    this.gateway.emitToBranch(order.branchId, 'order:status-changed', {
+    this.eventBus.emitToBranch(order.branchId, 'order:status-changed', {
       orderId: updated.id,
       orderNumber: updated.orderNumber,
       status: updated.status,
       tableNumber: updated.table?.number,
     });
 
-    // Notify customer's tracking page
-    this.gateway.emitToOrder(id, 'order:status-changed', {
+    this.eventBus.orderTrackingEvent(id, 'order:status-changed', {
       orderId: updated.id,
       orderNumber: updated.orderNumber,
       status: updated.status,
@@ -281,13 +290,13 @@ export class OrdersService {
     });
 
     if (status === 'READY') {
-      this.gateway.emitToBranch(order.branchId, 'order:ready', {
+      this.eventBus.emitToBranch(order.branchId, 'order:ready', {
         orderId: updated.id,
         orderNumber: updated.orderNumber,
         tableNumber: updated.table?.number,
       });
 
-      this.gateway.emitToOrder(id, 'order:ready', {
+      this.eventBus.orderTrackingEvent(id, 'order:ready', {
         orderId: updated.id,
         orderNumber: updated.orderNumber,
         tableNumber: updated.table?.number,
@@ -297,42 +306,41 @@ export class OrdersService {
     return updated;
   }
 
-  async printKot(id: string) {
-    const order = await this.prisma.order.findUnique({
+  async printKot(id: string, tenantId: string) {
+    const order = await this.findOneWithTenantValidation(id, tenantId);
+    const fullOrder = await this.prisma.order.findUnique({
       where: { id },
       include: {
         items: { include: { menuItem: { select: { name: true, isVeg: true } } } },
         table: { select: { number: true, name: true } },
       },
     });
-    if (!order) throw new NotFoundException('Order not found');
+    if (!fullOrder) throw new NotFoundException('Order not found');
 
-    // Mark KOT as printed
     await this.prisma.order.update({
       where: { id },
       data: { kotPrinted: true },
     });
 
-    // Emit KOT event for kitchen display
-    this.gateway.emitToBranch(order.branchId, 'kot:ready', {
-      orderId: order.id,
-      orderNumber: order.orderNumber,
-      tableNumber: order.table?.number,
-      tableName: order.table?.name,
-      items: order.items.map(i => ({
+    this.eventBus.emitToBranch(fullOrder.branchId, 'kot:ready', {
+      orderId: fullOrder.id,
+      orderNumber: fullOrder.orderNumber,
+      tableNumber: fullOrder.table?.number,
+      tableName: fullOrder.table?.name,
+      items: fullOrder.items.map(i => ({
         name: i.menuItem?.name || i.name,
         quantity: i.quantity,
         isVeg: i.menuItem?.isVeg ?? true,
         notes: i.notes,
       })),
-      createdAt: order.createdAt,
+      createdAt: fullOrder.createdAt,
     });
 
     return { kotPrinted: true, orderId: id };
   }
 
-  async cancel(id: string, notes?: string) {
-    return this.updateStatus(id, 'CANCELLED', notes);
+  async cancel(id: string, notes?: string, tenantId?: string) {
+    return this.updateStatus(id, 'CANCELLED', notes, tenantId);
   }
 
   async getOrderNumber(branchId: string): Promise<number> {

@@ -48,6 +48,24 @@ export class ReportsController {
     return this.reportsService.inventoryConsumption(tenantId, dto);
   }
 
+  @Get('customers')
+  @ApiOperation({ summary: 'Customer analytics — acquisition, retention, segmentation' })
+  customerAnalytics(@CurrentTenant() tenantId: string, @Query() dto: ReportFilterDto) {
+    return this.reportsService.customerAnalytics(tenantId, dto);
+  }
+
+  @Get('kitchen')
+  @ApiOperation({ summary: 'Kitchen analytics — prep times, order volume, KDS metrics' })
+  kitchenAnalytics(@CurrentTenant() tenantId: string, @Query() dto: ReportFilterDto) {
+    return this.reportsService.kitchenAnalytics(tenantId, dto);
+  }
+
+  @Get('delivery')
+  @ApiOperation({ summary: 'Delivery analytics — times, partner stats, zone analysis' })
+  deliveryAnalytics(@CurrentTenant() tenantId: string, @Query() dto: ReportFilterDto) {
+    return this.reportsService.deliveryAnalytics(tenantId, dto);
+  }
+
   @Get('export/:type')
   @ApiOperation({ summary: 'Export report data (daily-sales, revenue, items)' })
   exportReport(
@@ -56,5 +74,15 @@ export class ReportsController {
     @Query() dto: ReportFilterDto,
   ) {
     return this.reportsService.exportReport(tenantId, type, dto);
+  }
+
+  @Get('finance/:type')
+  @ApiOperation({ summary: 'Get finance report by type (income, expenses, tax, overview)' })
+  financeReport(
+    @CurrentTenant() tenantId: string,
+    @Param('type') type: string,
+    @Query() dto: ReportFilterDto,
+  ) {
+    return this.reportsService.financeReport(tenantId, type, dto);
   }
 }

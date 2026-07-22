@@ -35,6 +35,7 @@ export default function StaffPage() {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -43,11 +44,18 @@ export default function StaffPage() {
   const [showCreate, setShowCreate] = useState(false);
   const { addToast } = useToastStore();
 
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => { setPage(1); }, [debouncedSearch, roleFilter]);
+
   const fetchStaff = async () => {
     setLoading(true);
     try {
       const params: any = { page, limit: 10 };
-      if (search) params.search = search;
+      if (debouncedSearch) params.search = debouncedSearch;
       if (roleFilter !== 'all') params.role = roleFilter;
       const result = await adminApi.request('/admin/staff', { params });
       setStaff(result.data || []);
@@ -59,7 +67,7 @@ export default function StaffPage() {
     }
   };
 
-  useEffect(() => { fetchStaff(); }, [page, search, roleFilter]);
+  useEffect(() => { fetchStaff(); }, [page, debouncedSearch, roleFilter]);
 
   const columns = [
     {
@@ -233,7 +241,25 @@ export default function StaffPage() {
 function StaffForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [form, setForm] = useState({ name: '', email: '', phone: '', role: 'SERVER', tenantId: '', branchId: '' });
   const [loading, setLoading] = useState(false);
+  const [tenants, setTenants] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
   const { addToast } = useToastStore();
+
+  useEffect(() => {
+    adminApi.listTenants({ limit: '100' }).then((res) => {
+      setTenants(res.data || res.tenants || res || []);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (form.tenantId) {
+      adminApi.listBranches({ tenantId: form.tenantId, limit: '100' })
+        .then((res: any) => setBranches(res.data || res.branches || res || []))
+        .catch(() => setBranches([]));
+    } else {
+      setBranches([]);
+    }
+  }, [form.tenantId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -260,15 +286,31 @@ function StaffForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: () 
           value={form.role}
           onChange={(e) => setForm({ ...form, role: e.target.value })}
           options={[
-            { value: 'ADMIN', label: 'Admin' },
             { value: 'MANAGER', label: 'Manager' },
-            { value: 'SERVER', label: 'Server' },
-            { value: 'KITCHEN', label: 'Kitchen' },
+            { value: 'SERVER', label: 'Server / Waiter' },
+            { value: 'KITCHEN', label: 'Kitchen Staff' },
             { value: 'CASHIER', label: 'Cashier' },
+            { value: 'ADMIN', label: 'Admin (Branch Manager)' },
           ]}
         />
-        <Input label="Restaurant ID" value={form.tenantId} onChange={(e) => setForm({ ...form, tenantId: e.target.value })} placeholder="UUID" />
-        <Input label="Branch ID" value={form.branchId} onChange={(e) => setForm({ ...form, branchId: e.target.value })} placeholder="UUID (optional)" />
+        <Select
+          label="Restaurant"
+          value={form.tenantId}
+          onChange={(e) => setForm({ ...form, tenantId: e.target.value, branchId: '' })}
+          options={[
+            { value: '', label: 'Select restaurant...' },
+            ...tenants.map((t: any) => ({ value: t.id, label: t.name })),
+          ]}
+        />
+        <Select
+          label="Branch"
+          value={form.branchId}
+          onChange={(e) => setForm({ ...form, branchId: e.target.value })}
+          options={[
+            { value: '', label: 'Select branch...' },
+            ...branches.map((b: any) => ({ value: b.id, label: b.name })),
+          ]}
+        />
       </div>
       <DialogFooter>
         <Button variant="outline" type="button" onClick={onClose}>Cancel</Button>

@@ -7,6 +7,10 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
+import * as jwt from 'jsonwebtoken';
+
+const IMPERSONATION_SECRET =
+  process.env.IMPERSONATION_JWT_SECRET || 'impersonation-secret-change-in-production';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -24,60 +28,80 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Missing authentication token');
     }
 
+    let payload: any;
+    let isImpersonation = false;
+
+    // Try regular JWT first
     try {
-      const payload = await this.jwtService.verifyAsync(token, {
+      payload = await this.jwtService.verifyAsync(token, {
         secret: this.configService.get('JWT_SECRET'),
       });
-
-      const user = await this.prisma.user.findUnique({
-        where: { id: payload.sub },
-        select: {
-          id: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-          role: true,
-          tenantId: true,
-          isActive: true,
-        },
-      });
-
-      if (!user || !user.isActive) {
-        throw new UnauthorizedException('User not found or inactive');
+    } catch {
+      // If regular JWT fails, try impersonation token
+      try {
+        payload = jwt.verify(token, IMPERSONATION_SECRET) as any;
+        isImpersonation = true;
+      } catch {
+        throw new UnauthorizedException('Invalid or expired token');
       }
+    }
 
-      // Load user permissions for authorization
-      const staffRecord = await this.prisma.staff.findFirst({
-        where: { userId: user.id },
-        select: {
-          roleId: true,
-          role: {
-            select: {
-              permissions: {
-                include: {
-                  permission: { select: { module: true, action: true } },
-                },
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        tenantId: true,
+        isActive: true,
+      },
+    });
+
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('User not found or inactive');
+    }
+
+    // Load user permissions for authorization
+    const staffRecord = await this.prisma.staff.findFirst({
+      where: { userId: user.id },
+      select: {
+        id: true,
+        branchId: true,
+        roleId: true,
+        role: {
+          select: {
+            permissions: {
+              include: {
+                permission: { select: { module: true, action: true } },
               },
             },
           },
         },
-      });
+      },
+    });
 
-      const permissions = staffRecord?.role.permissions.map(
-        (rp) => `${rp.permission.module}:${rp.permission.action}`,
-      ) || [];
+    const permissions = staffRecord?.role.permissions.map(
+      (rp) => `${rp.permission.module}:${rp.permission.action}`,
+    ) || [];
 
-      // Also include base role-based permissions
-      if (user.role === 'OWNER') {
-        // Owners have full access
-        request.user = { ...user, permissions: ['*:*'] };
-      } else {
-        request.user = { ...user, permissions };
-      }
-      return true;
-    } catch {
-      throw new UnauthorizedException('Invalid or expired token');
+    // Build request.user object
+    const userContext: any = {
+      ...user,
+      permissions: user.role === 'OWNER' ? ['*:*'] : permissions,
+      staffId: staffRecord?.id,
+      branchId: staffRecord?.branchId,
+    };
+
+    // Add impersonation context if applicable
+    if (isImpersonation) {
+      userContext.isImpersonation = true;
+      userContext.impersonatorId = payload.impersonatorId;
     }
+
+    request.user = userContext;
+    return true;
   }
 
   private extractTokenFromHeader(request: any): string | undefined {

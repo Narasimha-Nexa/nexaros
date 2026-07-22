@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { PurchasesService } from './purchases.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
+import { CreatePurchaseDto } from './dto/create-purchase.dto';
 
 @ApiTags('purchases')
 @ApiBearerAuth()
@@ -25,7 +26,7 @@ export class PurchasesController {
 
   @Post()
   @ApiOperation({ summary: 'Create purchase order' })
-  create(@CurrentTenant() tenantId: string, @Body() dto: any) {
+  create(@CurrentTenant() tenantId: string, @Body() dto: CreatePurchaseDto) {
     return this.purchasesService.create(tenantId, dto);
   }
 

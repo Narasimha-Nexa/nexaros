@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
-import '../../../core/network/api_client.dart';
-import '../../../core/providers/app_state.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/providers/riverpod_providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/shared_widgets.dart';
 
-class ShiftScheduleScreen extends StatefulWidget {
+class ShiftScheduleScreen extends ConsumerStatefulWidget {
   const ShiftScheduleScreen({super.key});
 
   @override
-  State<ShiftScheduleScreen> createState() => _ShiftScheduleScreenState();
+  ConsumerState<ShiftScheduleScreen> createState() => _ShiftScheduleScreenState();
 }
 
-class _ShiftScheduleScreenState extends State<ShiftScheduleScreen> {
-  final _api = ApiClient();
+class _ShiftScheduleScreenState extends ConsumerState<ShiftScheduleScreen> {
+  late final _api;
   List<dynamic> _schedule = [];
   List<dynamic> _shifts = [];
   List<dynamic> _staff = [];
@@ -24,17 +24,18 @@ class _ShiftScheduleScreenState extends State<ShiftScheduleScreen> {
   @override
   void initState() {
     super.initState();
+    _api = ref.read(appStateProvider).api;
     _loadAll();
   }
 
   Future<void> _loadAll() async {
     setState(() => _isLoading = true);
     try {
-      final branchId = context.read<AppState>().branchId ?? '';
-      final results = await Future.wait([
+      final branchId = ref.read(appStateProvider).branchId ?? '';
+      final results = await Future.wait<dynamic>([
         _api.getSchedule(branchId, DateFormat('yyyy-MM-dd').format(_selectedDate)),
         _api.getShifts(branchId: branchId),
-        _api.getStaff(branchId: branchId),
+        _api.getStaff(branchId: branchId).then((r) => r is Map ? List<dynamic>.from(r['staff'] ?? []) : r),
       ]);
       if (mounted) {
         setState(() {
@@ -67,7 +68,7 @@ class _ShiftScheduleScreenState extends State<ShiftScheduleScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           ElevatedButton(onPressed: () async {
-            final branchId = context.read<AppState>().branchId ?? '';
+            final branchId = ref.read(appStateProvider).branchId ?? '';
             await _api.createShift(branchId, {'name': nameCtrl.text, 'startTime': startCtrl.text, 'endTime': endCtrl.text});
             if (ctx.mounted) Navigator.pop(ctx, true);
           }, child: const Text('Create')),
@@ -167,9 +168,12 @@ class _ShiftScheduleScreenState extends State<ShiftScheduleScreen> {
           ),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const NxFullScreenLoader()
                 : _schedule.isEmpty
-                    ? Center(child: Text('No schedule for this date', style: GoogleFonts.inter(color: AppColors.gray500)))
+                    ? const NxEmptyState(
+                        icon: Icons.schedule,
+                        title: 'No schedule for this date',
+                      )
                     : ListView.builder(
                         padding: const EdgeInsets.all(12),
                         itemCount: _schedule.length,
@@ -184,7 +188,7 @@ class _ShiftScheduleScreenState extends State<ShiftScheduleScreen> {
   Widget _buildScheduleCard(Map<String, dynamic> entry) {
     final staff = entry['staff'] as Map<String, dynamic>?;
     final shift = entry['shift'] as Map<String, dynamic>?;
-    return Card(
+    return NxCard(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: CircleAvatar(

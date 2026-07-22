@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth.store';
 import { DashboardShell } from '@/components/layout/dashboard-shell';
+import { ErrorBoundary } from '@/components/error-boundary';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuthStore();
@@ -27,5 +28,5 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (!isAuthenticated) return null;
 
-  return <DashboardShell>{children}</DashboardShell>;
+  return <DashboardShell><ErrorBoundary>{children}</ErrorBoundary></DashboardShell>;
 }

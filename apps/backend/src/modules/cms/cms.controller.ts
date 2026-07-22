@@ -1,60 +1,87 @@
-import { Controller, Get, Put, Patch, Post, Param, Body, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Controller, Get, Put, Patch, Post, Body, UseGuards, HttpCode } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CmsService } from './cms.service';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { RequirePermissions } from '../../common/decorators/roles.decorator';
+import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { UpdateCmsConfigDto } from './dto/update-cms-config.dto';
-import { UpdateFeaturesDto } from './dto/update-features.dto';
-import { UpdateSectionsDto } from './dto/update-sections.dto';
 
+/**
+ * Owner / staff scoped website management. The tenant is ALWAYS resolved from
+ * the authenticated JWT — callers can never supply a tenantId. Reuses CmsService
+ * (single source of truth) so owner and super-admin edits share identical
+ * business logic, real-time events, cache-busting and audit behaviour.
+ */
 @ApiTags('cms')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('cms')
 export class CmsController {
   constructor(private readonly cmsService: CmsService) {}
 
-  @Get(':tenantId')
-  @ApiOperation({ summary: 'Get full CMS config for a tenant' })
-  getConfig(@Param('tenantId') tenantId: string) {
+  @Get('website')
+  @ApiOperation({ summary: 'Get own website config (owner/staff)' })
+  @RequirePermissions('cms:read')
+  getWebsite(@CurrentTenant() tenantId: string) {
     return this.cmsService.getConfig(tenantId);
   }
 
-  @Put(':tenantId')
-  @ApiOperation({ summary: 'Update full CMS config for a tenant' })
-  updateConfig(@Param('tenantId') tenantId: string, @Body() dto: UpdateCmsConfigDto) {
+  @Put('website')
+  @ApiOperation({ summary: 'Update own website config (owner/staff)' })
+  @RequirePermissions('cms:write')
+  updateWebsite(@CurrentTenant() tenantId: string, @Body() dto: UpdateCmsConfigDto) {
     return this.cmsService.updateConfig(tenantId, dto);
   }
 
-  @Patch(':tenantId/features')
-  @ApiOperation({ summary: 'Update feature toggles' })
-  updateFeatures(@Param('tenantId') tenantId: string, @Body() dto: UpdateFeaturesDto) {
-    return this.cmsService.updateFeatures(tenantId, dto.features);
+  @Get('theme')
+  @ApiOperation({ summary: 'Get own theme settings (owner/staff)' })
+  @RequirePermissions('cms:read')
+  getTheme(@CurrentTenant() tenantId: string) {
+    return this.cmsService.getConfig(tenantId);
   }
 
-  @Patch(':tenantId/sections')
-  @ApiOperation({ summary: 'Update home page sections order/config' })
-  updateSections(@Param('tenantId') tenantId: string, @Body() dto: UpdateSectionsDto) {
-    return this.cmsService.updateHomeSections(tenantId, dto.sections);
+  @Put('theme')
+  @ApiOperation({ summary: 'Update own theme/branding (owner/staff)' })
+  @RequirePermissions('cms:write')
+  updateTheme(@CurrentTenant() tenantId: string, @Body() dto: UpdateCmsConfigDto) {
+    return this.cmsService.updateConfig(tenantId, dto);
   }
 
-  @Patch(':tenantId/seo')
-  @ApiOperation({ summary: 'Update SEO settings' })
-  updateSeo(@Param('tenantId') tenantId: string, @Body() seo: Record<string, any>) {
+  @Get('menu')
+  @ApiOperation({ summary: 'Get own menu display config (owner/staff)' })
+  @RequirePermissions('cms:read')
+  getMenu(@CurrentTenant() tenantId: string) {
+    return this.cmsService.getConfig(tenantId);
+  }
+
+  @Put('menu')
+  @ApiOperation({ summary: 'Update own menu/home section config (owner/staff)' })
+  @RequirePermissions('cms:write')
+  updateMenu(@CurrentTenant() tenantId: string, @Body() dto: UpdateCmsConfigDto) {
+    return this.cmsService.updateConfig(tenantId, dto);
+  }
+
+  @Patch('seo')
+  @ApiOperation({ summary: 'Update SEO settings (owner/staff)' })
+  @RequirePermissions('cms:write')
+  updateSeo(@CurrentTenant() tenantId: string, @Body() seo: Record<string, any>) {
     return this.cmsService.updateSeo(tenantId, seo);
   }
 
-  @Post(':tenantId/publish')
-  @ApiOperation({ summary: 'Publish website changes' })
-  publish(@Param('tenantId') tenantId: string) {
+  @Post('publish')
+  @ApiOperation({ summary: 'Publish website changes (owner/staff)' })
+  @RequirePermissions('cms:write')
+  @HttpCode(200)
+  publish(@CurrentTenant() tenantId: string) {
     return this.cmsService.publishWebsite(tenantId);
   }
 
-  @Post(':tenantId/reset')
-  @ApiOperation({ summary: 'Reset CMS config to defaults' })
-  reset(@Param('tenantId') tenantId: string) {
+  @Post('reset')
+  @ApiOperation({ summary: 'Reset website config to defaults (owner/staff)' })
+  @RequirePermissions('cms:write')
+  @HttpCode(200)
+  reset(@CurrentTenant() tenantId: string) {
     return this.cmsService.resetToDefaults(tenantId);
-  }
-
-  @Get('public/:slug')
-  @ApiOperation({ summary: 'Get public CMS config by tenant slug (for website)' })
-  getPublicConfig(@Param('slug') slug: string) {
-    return this.cmsService.getPublicConfig(slug);
   }
 }

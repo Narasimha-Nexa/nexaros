@@ -10,15 +10,23 @@ class ApiClient {
 
   String? _accessToken;
   String? _branchId;
+  String? _tenantId;
 
   String get baseUrl => _baseUrl;
   String get socketUrl => serverUrl;
   String? get accessToken => _accessToken;
   String? get branchId => _branchId;
+  String? get tenantId => _tenantId;
 
   void setBranchId(String branchId) {
     _branchId = branchId;
   }
+
+  void setTenantId(String tenantId) {
+    _tenantId = tenantId;
+  }
+
+  Future<Map<String, String>> get headers async => _headers;
 
   Future<Map<String, String>> get _headers async {
     _accessToken ??= await _storage.read(key: 'access_token');
@@ -38,6 +46,9 @@ class ApiClient {
     );
     final data = _handleResponse(response);
     await _storeTokens(data['accessToken'], data['refreshToken']);
+    // Extract tenantId from login response if present
+    final tenant = data['tenant'] as Map<String, dynamic>?;
+    if (tenant?['id'] != null) _tenantId = tenant!['id'].toString();
     return data;
   }
 
@@ -312,6 +323,15 @@ class ApiClient {
     return _handleResponse(response);
   }
 
+  Future<List<dynamic>> getPayments({String? branchId, String? orderId}) async {
+    final params = <String, String>{};
+    if (branchId != null) params['branchId'] = branchId;
+    if (orderId != null) params['orderId'] = orderId;
+    final uri = Uri.parse('$_baseUrl/payments').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
   // ─── Invoices ───
 
   Future<Map<String, dynamic>> generateInvoice(String paymentId) async {
@@ -437,15 +457,15 @@ class ApiClient {
 
   // ─── Staff Management ───
 
-  Future<List<dynamic>> getStaff({required String branchId, int? page, int? limit}) async {
+  Future<Map<String, dynamic>> getStaff({required String branchId, int? page, int? limit}) async {
     final params = 'branchId=$branchId';
     final pageParam = page != null ? '&page=$page' : '';
     final limitParam = limit != null ? '&limit=$limit' : '';
     final response = await _authedGet('$_baseUrl/staff?$params$pageParam$limitParam');
     final data = _handleResponse(response);
     // Paginated response: { staff: [...], total, skip, take }
-    if (data is Map && data.containsKey('staff')) return List<dynamic>.from(data['staff']);
-    return List<dynamic>.from(data);
+    if (data is Map && data.containsKey('staff')) return Map<String, dynamic>.from(data);
+    return {'staff': data, 'total': (data is List) ? data.length : 0};
   }
 
   Future<Map<String, dynamic>> createStaff(String branchId, Map<String, dynamic> data) async {
@@ -539,6 +559,126 @@ class ApiClient {
     return _handleResponse(response);
   }
 
+  // ─── CRM ───
+
+  Future<Map<String, dynamic>> getCustomers({String? search, int? page, int? limit}) async {
+    final params = <String, String>{};
+    if (search != null) params['search'] = search;
+    if (page != null) params['page'] = page.toString();
+    if (limit != null) params['limit'] = limit.toString();
+    final uri = Uri.parse('$_baseUrl/crm/customers').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> getCustomer(String id) async {
+    final response = await _authedGet('$_baseUrl/crm/customers/$id');
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> createCustomer(Map<String, dynamic> data) async {
+    final response = await _authedPost('$_baseUrl/crm/customers', data);
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> updateCustomer(String id, Map<String, dynamic> data) async {
+    final response = await _authedPatch('$_baseUrl/crm/customers/$id', data);
+    return _handleResponse(response);
+  }
+
+  Future<void> deleteCustomer(String id) async {
+    final response = await _authedDelete('$_baseUrl/crm/customers/$id');
+    _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> getLoyaltySummary() async {
+    final response = await _authedGet('$_baseUrl/crm/loyalty/summary');
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> adjustLoyaltyPoints(String customerId, int points, String description) async {
+    final response = await _authedPost('$_baseUrl/crm/loyalty/adjust', {
+      'customerId': customerId,
+      'points': points,
+      'description': description,
+    });
+    return _handleResponse(response);
+  }
+
+  Future<List<dynamic>> getMembershipTiers() async {
+    final response = await _authedGet('$_baseUrl/crm/tiers');
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> createMembershipTier(Map<String, dynamic> data) async {
+    final response = await _authedPost('$_baseUrl/crm/tiers', data);
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> updateMembershipTier(String id, Map<String, dynamic> data) async {
+    final response = await _authedPatch('$_baseUrl/crm/tiers/$id', data);
+    return _handleResponse(response);
+  }
+
+  Future<void> deleteMembershipTier(String id) async {
+    final response = await _authedDelete('$_baseUrl/crm/tiers/$id');
+    _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> getWalletTransactions(String customerId, {int? page, int? limit}) async {
+    final params = <String, String>{};
+    if (page != null) params['page'] = page.toString();
+    if (limit != null) params['limit'] = limit.toString();
+    final uri = Uri.parse('$_baseUrl/crm/wallet/$customerId').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> topUpWallet(String customerId, double amount, String description) async {
+    final response = await _authedPost('$_baseUrl/crm/wallet/topup', {
+      'customerId': customerId,
+      'amount': amount,
+      'description': description,
+    });
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> getReviews({int? page, int? limit, int? rating, bool? published}) async {
+    final params = <String, String>{};
+    if (page != null) params['page'] = page.toString();
+    if (limit != null) params['limit'] = limit.toString();
+    if (rating != null) params['rating'] = rating.toString();
+    if (published != null) params['published'] = published.toString();
+    final uri = Uri.parse('$_baseUrl/crm/reviews').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> replyToReview(String reviewId, String reply) async {
+    final response = await _authedPost('$_baseUrl/crm/reviews/$reviewId/reply', {'reply': reply});
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> toggleReviewPublish(String reviewId) async {
+    final response = await _authedPost('$_baseUrl/crm/reviews/$reviewId/toggle-publish', {});
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> getFeedback({int? page, int? limit, bool? resolved}) async {
+    final params = <String, String>{};
+    if (page != null) params['page'] = page.toString();
+    if (limit != null) params['limit'] = limit.toString();
+    if (resolved != null) params['resolved'] = resolved.toString();
+    final uri = Uri.parse('$_baseUrl/crm/feedback').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> resolveFeedback(String id) async {
+    final response = await _authedPost('$_baseUrl/crm/feedback/$id/resolve', {});
+    return _handleResponse(response);
+  }
+
   // ─── Reservations ───
 
   Future<List<dynamic>> getReservations({String? date, String? status, String? branchId}) async {
@@ -624,6 +764,391 @@ class ApiClient {
     return _handleResponse(response);
   }
 
+  // ─── Delivery Management ───
+
+  Future<List<dynamic>> getDeliveryPartners({String? tenantId, String? branchId}) async {
+    final params = <String, String>{};
+    if (tenantId != null) params['tenantId'] = tenantId;
+    if (branchId != null) params['branchId'] = branchId;
+    final uri = Uri.parse('$_baseUrl/delivery/partners').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> createDeliveryPartner(Map<String, dynamic> data) async {
+    final response = await _authedPost('$_baseUrl/delivery/partners', data);
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> updateDeliveryPartner(String id, Map<String, dynamic> data) async {
+    final response = await _authedPut('$_baseUrl/delivery/partners/$id', data);
+    return _handleResponse(response);
+  }
+
+  Future<void> deleteDeliveryPartner(String id) async {
+    final response = await _authedDelete('$_baseUrl/delivery/partners/$id');
+    _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> getDeliveryStats({String? branchId}) async {
+    final params = <String, String>{};
+    if (branchId != null) params['branchId'] = branchId;
+    final uri = Uri.parse('$_baseUrl/delivery/stats').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  Future<List<dynamic>> getActiveDeliveries({String? branchId}) async {
+    final params = <String, String>{};
+    if (branchId != null) params['branchId'] = branchId;
+    final uri = Uri.parse('$_baseUrl/delivery/active').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> getDeliveryHistory({String? branchId, int? page, int? limit}) async {
+    final params = <String, String>{};
+    if (branchId != null) params['branchId'] = branchId;
+    if (page != null) params['page'] = page.toString();
+    if (limit != null) params['limit'] = limit.toString();
+    final uri = Uri.parse('$_baseUrl/delivery/history').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> assignDelivery(String deliveryId, String partnerId) async {
+    final response = await _authedPost('$_baseUrl/delivery/assign', {
+      'deliveryId': deliveryId,
+      'partnerId': partnerId,
+    });
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> unassignDelivery(String deliveryId) async {
+    final response = await _authedPost('$_baseUrl/delivery/unassign', {'deliveryId': deliveryId});
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> updateDeliveryStatus(String id, String status, {double? lat, double? lng}) async {
+    final data = <String, dynamic>{'status': status};
+    if (lat != null) data['lat'] = lat;
+    if (lng != null) data['lng'] = lng;
+    final response = await _authedPatch('$_baseUrl/delivery/$id/status', data);
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> recordDeliveryLocation(String deliveryId, {required double latitude, required double longitude, double? speed, double? accuracy}) async {
+    final response = await _authedPost('$_baseUrl/delivery/$deliveryId/location', {
+      'latitude': latitude,
+      'longitude': longitude,
+      if (speed != null) 'speed': speed,
+      if (accuracy != null) 'accuracy': accuracy,
+    });
+    return _handleResponse(response);
+  }
+
+  Future<List<dynamic>> getPendingDeliveryOrders(String branchId) async {
+    final response = await _authedGet('$_baseUrl/delivery/pending-orders/$branchId');
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> createDeliveryFromOrder(String orderId, {String? address, double? lat, double? lng}) async {
+    final response = await _authedPost('$_baseUrl/delivery/from-order/$orderId', {
+      if (address != null) 'customerAddress': address,
+      if (lat != null) 'customerLat': lat,
+      if (lng != null) 'customerLng': lng,
+    });
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> autoAssignDelivery() async {
+    final response = await _authedPost('$_baseUrl/delivery/auto-assign', {});
+    return _handleResponse(response);
+  }
+
+  // ─── Coupons & Offers ───
+
+  Future<List<dynamic>> getCoupons({int? page, int? limit}) async {
+    final params = <String, String>{};
+    if (page != null) params['page'] = page.toString();
+    if (limit != null) params['limit'] = limit.toString();
+    final uri = Uri.parse('$_baseUrl/coupons/restaurant').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    final data = _handleResponse(response);
+    return List<dynamic>.from(data['coupons'] ?? data ?? []);
+  }
+
+  Future<Map<String, dynamic>> createCoupon(Map<String, dynamic> data) async {
+    final response = await _authedPost('$_baseUrl/coupons/restaurant', data);
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> updateCoupon(String id, Map<String, dynamic> data) async {
+    final response = await _authedPut('$_baseUrl/coupons/restaurant/$id', data);
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> getCouponStats(String id) async {
+    final response = await _authedGet('$_baseUrl/coupons/restaurant/$id/stats');
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> validateOrderCoupon(String code, {String? tenantId, double? orderAmount}) async {
+    final uri = Uri.parse('$_baseUrl/coupons/restaurant/validate').replace(queryParameters: {
+      'code': code,
+      if (tenantId != null) 'tenantId': tenantId,
+      if (orderAmount != null) 'orderAmount': orderAmount.toString(),
+    });
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> applyCouponToOrder(String code, String orderId, {String? tenantId}) async {
+    final response = await _authedPost('$_baseUrl/coupons/restaurant/apply', {
+      'code': code,
+      'orderId': orderId,
+      if (tenantId != null) 'tenantId': tenantId,
+    });
+    return _handleResponse(response);
+  }
+
+  Future<void> deleteCoupon(String id) async {
+    final response = await _authedDelete('$_baseUrl/coupons/restaurant/$id');
+    _handleResponse(response);
+  }
+
+  // ─── Combos ───
+
+  Future<List<dynamic>> getCombos() async {
+    final response = await _authedGet('$_baseUrl/menu/combos');
+    final data = _handleResponse(response);
+    return List<dynamic>.from(data['combos'] ?? data ?? []);
+  }
+
+  Future<Map<String, dynamic>> createCombo(Map<String, dynamic> data) async {
+    final response = await _authedPost('$_baseUrl/menu/combos', data);
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> updateCombo(String id, Map<String, dynamic> data) async {
+    final response = await _authedPatch('$_baseUrl/menu/combos/$id', data);
+    return _handleResponse(response);
+  }
+
+  Future<void> deleteCombo(String id) async {
+    final response = await _authedDelete('$_baseUrl/menu/combos/$id');
+    _handleResponse(response);
+  }
+
+  // ─── Finance: Income ───
+
+  Future<Map<String, dynamic>> getIncome({String? startDate, String? endDate, String? category, int? page, int? limit}) async {
+    final params = <String, String>{};
+    if (startDate != null) params['startDate'] = startDate;
+    if (endDate != null) params['endDate'] = endDate;
+    if (category != null) params['category'] = category;
+    if (page != null) params['page'] = page.toString();
+    if (limit != null) params['limit'] = limit.toString();
+    final uri = Uri.parse('$_baseUrl/finance/income').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> createIncome(Map<String, dynamic> data) async {
+    final response = await _authedPost('$_baseUrl/finance/income', data);
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> updateIncome(String id, Map<String, dynamic> data) async {
+    final response = await _authedPatch('$_baseUrl/finance/income/$id', data);
+    return _handleResponse(response);
+  }
+
+  Future<void> deleteIncome(String id) async {
+    final response = await _authedDelete('$_baseUrl/finance/income/$id');
+    _handleResponse(response);
+  }
+
+  // ─── Finance: Expenses ───
+
+  Future<Map<String, dynamic>> getExpenses({String? startDate, String? endDate, String? category, int? page, int? limit}) async {
+    final params = <String, String>{};
+    if (startDate != null) params['startDate'] = startDate;
+    if (endDate != null) params['endDate'] = endDate;
+    if (category != null) params['category'] = category;
+    if (page != null) params['page'] = page.toString();
+    if (limit != null) params['limit'] = limit.toString();
+    final uri = Uri.parse('$_baseUrl/finance/expenses').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> createExpense(Map<String, dynamic> data) async {
+    final response = await _authedPost('$_baseUrl/finance/expenses', data);
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> updateExpense(String id, Map<String, dynamic> data) async {
+    final response = await _authedPatch('$_baseUrl/finance/expenses/$id', data);
+    return _handleResponse(response);
+  }
+
+  Future<void> deleteExpense(String id) async {
+    final response = await _authedDelete('$_baseUrl/finance/expenses/$id');
+    _handleResponse(response);
+  }
+
+  // ─── Finance: Transaction Ledger ───
+
+  Future<Map<String, dynamic>> getFinanceTransactions({String? startDate, String? endDate, String? type, String? category, String? search, int? page, int? limit}) async {
+    final params = <String, String>{};
+    if (startDate != null) params['startDate'] = startDate;
+    if (endDate != null) params['endDate'] = endDate;
+    if (type != null) params['type'] = type;
+    if (category != null) params['category'] = category;
+    if (search != null) params['search'] = search;
+    if (page != null) params['page'] = page.toString();
+    if (limit != null) params['limit'] = limit.toString();
+    final uri = Uri.parse('$_baseUrl/finance/transactions').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  // ─── Finance: Tax & GST ───
+
+  Future<Map<String, dynamic>> getTaxSettings() async {
+    final response = await _authedGet('$_baseUrl/finance/tax');
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> updateTaxSettings(Map<String, dynamic> data) async {
+    final response = await _authedPut('$_baseUrl/finance/tax', data);
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> getGstSummary({String? fromDate, String? toDate}) async {
+    final params = <String, String>{};
+    if (fromDate != null) params['fromDate'] = fromDate;
+    if (toDate != null) params['toDate'] = toDate;
+    final uri = Uri.parse('$_baseUrl/finance/tax/gst-summary').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> getTaxReports({String? fromDate, String? toDate}) async {
+    final params = <String, String>{};
+    if (fromDate != null) params['fromDate'] = fromDate;
+    if (toDate != null) params['toDate'] = toDate;
+    final uri = Uri.parse('$_baseUrl/finance/tax/reports').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  // ─── Finance: Overview / Dashboard ───
+
+  Future<Map<String, dynamic>> getFinanceOverview({String? startDate, String? endDate}) async {
+    final params = <String, String>{};
+    if (startDate != null) params['startDate'] = startDate;
+    if (endDate != null) params['endDate'] = endDate;
+    final uri = Uri.parse('$_baseUrl/finance/overview').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> getFinanceReport(String type, {String? startDate, String? endDate}) async {
+    final params = <String, String>{};
+    if (startDate != null) params['startDate'] = startDate;
+    if (endDate != null) params['endDate'] = endDate;
+    final uri = Uri.parse('$_baseUrl/reports/finance/$type').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  // ─── Analytics Dashboards ───
+
+  Future<Map<String, dynamic>> getSalesAnalytics({String? startDate, String? endDate, String? branchId}) async {
+    final params = <String, String>{};
+    if (startDate != null) params['startDate'] = startDate;
+    if (endDate != null) params['endDate'] = endDate;
+    if (branchId != null) params['branchId'] = branchId;
+    final uri = Uri.parse('$_baseUrl/reports/daily-sales').replace(queryParameters: params);
+    return _handleResponse(await _authedGet(uri.toString()));
+  }
+
+  Future<Map<String, dynamic>> getCustomerAnalytics({String? startDate, String? endDate, String? branchId}) async {
+    final params = <String, String>{};
+    if (startDate != null) params['startDate'] = startDate;
+    if (endDate != null) params['endDate'] = endDate;
+    if (branchId != null) params['branchId'] = branchId;
+    final uri = Uri.parse('$_baseUrl/reports/customers').replace(queryParameters: params);
+    return _handleResponse(await _authedGet(uri.toString()));
+  }
+
+  Future<Map<String, dynamic>> getInventoryAnalytics({String? startDate, String? endDate, String? branchId}) async {
+    final params = <String, String>{};
+    if (startDate != null) params['startDate'] = startDate;
+    if (endDate != null) params['endDate'] = endDate;
+    if (branchId != null) params['branchId'] = branchId;
+    final uri = Uri.parse('$_baseUrl/reports/inventory').replace(queryParameters: params);
+    return _handleResponse(await _authedGet(uri.toString()));
+  }
+
+  Future<Map<String, dynamic>> getStaffAnalytics({String? startDate, String? endDate, String? branchId}) async {
+    final params = <String, String>{};
+    if (startDate != null) params['startDate'] = startDate;
+    if (endDate != null) params['endDate'] = endDate;
+    if (branchId != null) params['branchId'] = branchId;
+    final uri = Uri.parse('$_baseUrl/reports/staff').replace(queryParameters: params);
+    return _handleResponse(await _authedGet(uri.toString()));
+  }
+
+  Future<Map<String, dynamic>> getKitchenAnalytics({String? startDate, String? endDate, String? branchId}) async {
+    final params = <String, String>{};
+    if (startDate != null) params['startDate'] = startDate;
+    if (endDate != null) params['endDate'] = endDate;
+    if (branchId != null) params['branchId'] = branchId;
+    final uri = Uri.parse('$_baseUrl/reports/kitchen').replace(queryParameters: params);
+    return _handleResponse(await _authedGet(uri.toString()));
+  }
+
+  Future<Map<String, dynamic>> getDeliveryAnalytics({String? startDate, String? endDate, String? branchId}) async {
+    final params = <String, String>{};
+    if (startDate != null) params['startDate'] = startDate;
+    if (endDate != null) params['endDate'] = endDate;
+    if (branchId != null) params['branchId'] = branchId;
+    final uri = Uri.parse('$_baseUrl/reports/delivery').replace(queryParameters: params);
+    return _handleResponse(await _authedGet(uri.toString()));
+  }
+
+  // ─── Notifications ───
+
+  Future<List<dynamic>> getNotifications({String? branchId, int? limit}) async {
+    final params = <String, String>{};
+    if (branchId != null) params['branchId'] = branchId;
+    if (limit != null) params['limit'] = limit.toString();
+    final uri = Uri.parse('$_baseUrl/notifications').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    final data = _handleResponse(response);
+    if (data is Map && data.containsKey('notifications')) return List<dynamic>.from(data['notifications']);
+    return List<dynamic>.from(data);
+  }
+
+  Future<int> getUnreadNotificationCount() async {
+    final response = await _authedGet('$_baseUrl/notifications/unread-count');
+    final data = _handleResponse(response);
+    return data['count'] ?? 0;
+  }
+
+  Future<void> markNotificationRead(String id) async {
+    final response = await _authedPost('$_baseUrl/notifications/$id/read', {});
+    _handleResponse(response);
+  }
+
+  Future<void> markAllNotificationsRead() async {
+    final response = await _authedPost('$_baseUrl/notifications/read-all', {});
+    _handleResponse(response);
+  }
+
   // ─── Billing / Entitlements ───
 
   Future<http.Response> getEntitlements(String tenantId) async {
@@ -677,6 +1202,11 @@ class ApiClient {
     return http.patch(Uri.parse(url), headers: h, body: jsonEncode(body));
   }
 
+  Future<http.Response> _authedPut(String url, Map<String, dynamic> body) async {
+    final h = await _headers;
+    return http.put(Uri.parse(url), headers: h, body: jsonEncode(body));
+  }
+
   Future<http.Response> _authedDelete(String url) async {
     final h = await _headers;
     return http.delete(Uri.parse(url), headers: h);
@@ -713,6 +1243,60 @@ class ApiClient {
   Future<bool> hasValidSession() async {
     final token = await _storage.read(key: 'access_token');
     return token != null;
+  }
+
+  // ─── Generic HTTP helpers (used by feature providers) ───
+
+  Future<dynamic> get(String path, {Map<String, String>? queryParameters}) async {
+    final uri = queryParameters != null
+        ? Uri.parse('$_baseUrl$path').replace(queryParameters: queryParameters)
+        : Uri.parse('$_baseUrl$path');
+    return requestWithRetry(() => _authedGet(uri.toString()));
+  }
+
+  Future<dynamic> post(String path, Map<String, dynamic> body) async {
+    return requestWithRetry(() => _authedPost('$_baseUrl$path', body));
+  }
+
+  Future<dynamic> put(String path, Map<String, dynamic> body) async {
+    return requestWithRetry(() => _authedPut('$_baseUrl$path', body));
+  }
+
+  Future<dynamic> patch(String path, Map<String, dynamic> body) async {
+    return requestWithRetry(() => _authedPatch('$_baseUrl$path', body));
+  }
+
+  Future<dynamic> delete(String path) async {
+    return requestWithRetry(() => _authedDelete('$_baseUrl$path'));
+  }
+
+  // ─── Support ───
+
+  Future<dynamic> getSupportTickets({String? status, String? priority, int page = 1, int limit = 50}) async {
+    final params = <String, String>{'page': '$page', 'limit': '$limit'};
+    if (status != null) params['status'] = status;
+    if (priority != null) params['priority'] = priority;
+    return get('/support/tickets', queryParameters: params);
+  }
+
+  Future<dynamic> getSupportTicket(String id) async {
+    return get('/support/tickets/$id');
+  }
+
+  Future<dynamic> createSupportTicket({required String subject, required String description, String? priority}) async {
+    return post('/support/tickets', {'subject': subject, 'description': description, if (priority != null) 'priority': priority});
+  }
+
+  Future<dynamic> addSupportMessage(String ticketId, {required String message, bool isInternal = false}) async {
+    return post('/support/tickets/$ticketId/messages', {'senderType': 'ADMIN', 'senderId': 'current-user', 'message': message, 'isInternal': isInternal});
+  }
+
+  Future<dynamic> updateSupportTicketStatus(String ticketId, {required String status, String? assignedTo}) async {
+    return put('/support/tickets/$ticketId/status', {'status': status, if (assignedTo != null) 'assignedTo': assignedTo});
+  }
+
+  Future<dynamic> getSupportStats() async {
+    return get('/support/admin/stats');
   }
 }
 

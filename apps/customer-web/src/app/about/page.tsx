@@ -11,7 +11,9 @@ export default function AboutPage() {
     <div className="space-y-0">
       {/* Hero */}
       <section className="relative h-[50vh] min-h-[400px] flex items-center justify-center overflow-hidden">
-        <Image src={TENANT_INFO.coverImage} alt="" fill className="object-cover" sizes="100vw" priority />
+        {TENANT_INFO.coverImage ? (
+          <Image src={TENANT_INFO.coverImage} alt="" fill className="object-cover" sizes="100vw" priority />
+        ) : null}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-black/30" />
         <div className="relative z-10 text-center px-4">
           <Badge variant="warning" className="mb-4">Our Story</Badge>

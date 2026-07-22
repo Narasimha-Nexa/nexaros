@@ -17,10 +17,10 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         <input
           ref={ref}
           id={inputId}
-          className={cn('input', error && 'border-current', className)}
+          className={cn('input', error && 'input-error', className)}
           {...props}
         />
-        {error && <p className="mt-1 text-xs text-current font-sans">{error}</p>}
+        {error && <p className="mt-1 text-xs text-danger font-sans">{error}</p>}
         {hint && !error && <p className="mt-1 text-xs text-body font-sans">{hint}</p>}
       </div>
     );

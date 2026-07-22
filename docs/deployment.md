@@ -175,8 +175,10 @@ docker compose logs nexaros-postgres
 
 ### Build failures
 ```bash
-# Clean and rebuild
-docker compose down -v
+# Restart services WITHOUT destroying the database volume
+docker compose down
 docker compose build --no-cache
 docker compose up -d
 ```
+> ⚠️ Do **not** use `docker compose down -v` here — the `-v` flag deletes the
+> `docker_nexaros_postgres_data` named volume and wipes all restaurants/tenants.

@@ -3170,6 +3170,18 @@ class $LocalSyncQueueTable extends LocalSyncQueue
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _retryCountMeta = const VerificationMeta(
+    'retryCount',
+  );
+  @override
+  late final GeneratedColumn<int> retryCount = GeneratedColumn<int>(
+    'retry_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -3202,6 +3214,7 @@ class $LocalSyncQueueTable extends LocalSyncQueue
     entityId,
     action,
     payload,
+    retryCount,
     createdAt,
     synced,
   ];
@@ -3252,6 +3265,12 @@ class $LocalSyncQueueTable extends LocalSyncQueue
     } else if (isInserting) {
       context.missing(_payloadMeta);
     }
+    if (data.containsKey('retry_count')) {
+      context.handle(
+        _retryCountMeta,
+        retryCount.isAcceptableOrUnknown(data['retry_count']!, _retryCountMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -3293,6 +3312,10 @@ class $LocalSyncQueueTable extends LocalSyncQueue
         DriftSqlType.string,
         data['${effectivePrefix}payload'],
       )!,
+      retryCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}retry_count'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -3317,6 +3340,7 @@ class LocalSyncQueueData extends DataClass
   final String entityId;
   final String action;
   final String payload;
+  final int retryCount;
   final DateTime createdAt;
   final bool synced;
   const LocalSyncQueueData({
@@ -3325,6 +3349,7 @@ class LocalSyncQueueData extends DataClass
     required this.entityId,
     required this.action,
     required this.payload,
+    required this.retryCount,
     required this.createdAt,
     required this.synced,
   });
@@ -3336,6 +3361,7 @@ class LocalSyncQueueData extends DataClass
     map['entity_id'] = Variable<String>(entityId);
     map['action'] = Variable<String>(action);
     map['payload'] = Variable<String>(payload);
+    map['retry_count'] = Variable<int>(retryCount);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['synced'] = Variable<bool>(synced);
     return map;
@@ -3348,6 +3374,7 @@ class LocalSyncQueueData extends DataClass
       entityId: Value(entityId),
       action: Value(action),
       payload: Value(payload),
+      retryCount: Value(retryCount),
       createdAt: Value(createdAt),
       synced: Value(synced),
     );
@@ -3364,6 +3391,7 @@ class LocalSyncQueueData extends DataClass
       entityId: serializer.fromJson<String>(json['entityId']),
       action: serializer.fromJson<String>(json['action']),
       payload: serializer.fromJson<String>(json['payload']),
+      retryCount: serializer.fromJson<int>(json['retryCount']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       synced: serializer.fromJson<bool>(json['synced']),
     );
@@ -3377,6 +3405,7 @@ class LocalSyncQueueData extends DataClass
       'entityId': serializer.toJson<String>(entityId),
       'action': serializer.toJson<String>(action),
       'payload': serializer.toJson<String>(payload),
+      'retryCount': serializer.toJson<int>(retryCount),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'synced': serializer.toJson<bool>(synced),
     };
@@ -3388,6 +3417,7 @@ class LocalSyncQueueData extends DataClass
     String? entityId,
     String? action,
     String? payload,
+    int? retryCount,
     DateTime? createdAt,
     bool? synced,
   }) => LocalSyncQueueData(
@@ -3396,6 +3426,7 @@ class LocalSyncQueueData extends DataClass
     entityId: entityId ?? this.entityId,
     action: action ?? this.action,
     payload: payload ?? this.payload,
+    retryCount: retryCount ?? this.retryCount,
     createdAt: createdAt ?? this.createdAt,
     synced: synced ?? this.synced,
   );
@@ -3408,6 +3439,9 @@ class LocalSyncQueueData extends DataClass
       entityId: data.entityId.present ? data.entityId.value : this.entityId,
       action: data.action.present ? data.action.value : this.action,
       payload: data.payload.present ? data.payload.value : this.payload,
+      retryCount: data.retryCount.present
+          ? data.retryCount.value
+          : this.retryCount,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       synced: data.synced.present ? data.synced.value : this.synced,
     );
@@ -3421,6 +3455,7 @@ class LocalSyncQueueData extends DataClass
           ..write('entityId: $entityId, ')
           ..write('action: $action, ')
           ..write('payload: $payload, ')
+          ..write('retryCount: $retryCount, ')
           ..write('createdAt: $createdAt, ')
           ..write('synced: $synced')
           ..write(')'))
@@ -3428,8 +3463,16 @@ class LocalSyncQueueData extends DataClass
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, entityType, entityId, action, payload, createdAt, synced);
+  int get hashCode => Object.hash(
+    id,
+    entityType,
+    entityId,
+    action,
+    payload,
+    retryCount,
+    createdAt,
+    synced,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -3439,6 +3482,7 @@ class LocalSyncQueueData extends DataClass
           other.entityId == this.entityId &&
           other.action == this.action &&
           other.payload == this.payload &&
+          other.retryCount == this.retryCount &&
           other.createdAt == this.createdAt &&
           other.synced == this.synced);
 }
@@ -3449,6 +3493,7 @@ class LocalSyncQueueCompanion extends UpdateCompanion<LocalSyncQueueData> {
   final Value<String> entityId;
   final Value<String> action;
   final Value<String> payload;
+  final Value<int> retryCount;
   final Value<DateTime> createdAt;
   final Value<bool> synced;
   const LocalSyncQueueCompanion({
@@ -3457,6 +3502,7 @@ class LocalSyncQueueCompanion extends UpdateCompanion<LocalSyncQueueData> {
     this.entityId = const Value.absent(),
     this.action = const Value.absent(),
     this.payload = const Value.absent(),
+    this.retryCount = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.synced = const Value.absent(),
   });
@@ -3466,6 +3512,7 @@ class LocalSyncQueueCompanion extends UpdateCompanion<LocalSyncQueueData> {
     required String entityId,
     required String action,
     required String payload,
+    this.retryCount = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.synced = const Value.absent(),
   }) : entityType = Value(entityType),
@@ -3478,6 +3525,7 @@ class LocalSyncQueueCompanion extends UpdateCompanion<LocalSyncQueueData> {
     Expression<String>? entityId,
     Expression<String>? action,
     Expression<String>? payload,
+    Expression<int>? retryCount,
     Expression<DateTime>? createdAt,
     Expression<bool>? synced,
   }) {
@@ -3487,6 +3535,7 @@ class LocalSyncQueueCompanion extends UpdateCompanion<LocalSyncQueueData> {
       if (entityId != null) 'entity_id': entityId,
       if (action != null) 'action': action,
       if (payload != null) 'payload': payload,
+      if (retryCount != null) 'retry_count': retryCount,
       if (createdAt != null) 'created_at': createdAt,
       if (synced != null) 'synced': synced,
     });
@@ -3498,6 +3547,7 @@ class LocalSyncQueueCompanion extends UpdateCompanion<LocalSyncQueueData> {
     Value<String>? entityId,
     Value<String>? action,
     Value<String>? payload,
+    Value<int>? retryCount,
     Value<DateTime>? createdAt,
     Value<bool>? synced,
   }) {
@@ -3507,6 +3557,7 @@ class LocalSyncQueueCompanion extends UpdateCompanion<LocalSyncQueueData> {
       entityId: entityId ?? this.entityId,
       action: action ?? this.action,
       payload: payload ?? this.payload,
+      retryCount: retryCount ?? this.retryCount,
       createdAt: createdAt ?? this.createdAt,
       synced: synced ?? this.synced,
     );
@@ -3530,6 +3581,9 @@ class LocalSyncQueueCompanion extends UpdateCompanion<LocalSyncQueueData> {
     if (payload.present) {
       map['payload'] = Variable<String>(payload.value);
     }
+    if (retryCount.present) {
+      map['retry_count'] = Variable<int>(retryCount.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -3547,6 +3601,7 @@ class LocalSyncQueueCompanion extends UpdateCompanion<LocalSyncQueueData> {
           ..write('entityId: $entityId, ')
           ..write('action: $action, ')
           ..write('payload: $payload, ')
+          ..write('retryCount: $retryCount, ')
           ..write('createdAt: $createdAt, ')
           ..write('synced: $synced')
           ..write(')'))
@@ -5189,6 +5244,7 @@ typedef $$LocalSyncQueueTableCreateCompanionBuilder =
       required String entityId,
       required String action,
       required String payload,
+      Value<int> retryCount,
       Value<DateTime> createdAt,
       Value<bool> synced,
     });
@@ -5199,6 +5255,7 @@ typedef $$LocalSyncQueueTableUpdateCompanionBuilder =
       Value<String> entityId,
       Value<String> action,
       Value<String> payload,
+      Value<int> retryCount,
       Value<DateTime> createdAt,
       Value<bool> synced,
     });
@@ -5234,6 +5291,11 @@ class $$LocalSyncQueueTableFilterComposer
 
   ColumnFilters<String> get payload => $composableBuilder(
     column: $table.payload,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get retryCount => $composableBuilder(
+    column: $table.retryCount,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5282,6 +5344,11 @@ class $$LocalSyncQueueTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get retryCount => $composableBuilder(
+    column: $table.retryCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -5318,6 +5385,11 @@ class $$LocalSyncQueueTableAnnotationComposer
 
   GeneratedColumn<String> get payload =>
       $composableBuilder(column: $table.payload, builder: (column) => column);
+
+  GeneratedColumn<int> get retryCount => $composableBuilder(
+    column: $table.retryCount,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -5368,6 +5440,7 @@ class $$LocalSyncQueueTableTableManager
                 Value<String> entityId = const Value.absent(),
                 Value<String> action = const Value.absent(),
                 Value<String> payload = const Value.absent(),
+                Value<int> retryCount = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<bool> synced = const Value.absent(),
               }) => LocalSyncQueueCompanion(
@@ -5376,6 +5449,7 @@ class $$LocalSyncQueueTableTableManager
                 entityId: entityId,
                 action: action,
                 payload: payload,
+                retryCount: retryCount,
                 createdAt: createdAt,
                 synced: synced,
               ),
@@ -5386,6 +5460,7 @@ class $$LocalSyncQueueTableTableManager
                 required String entityId,
                 required String action,
                 required String payload,
+                Value<int> retryCount = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<bool> synced = const Value.absent(),
               }) => LocalSyncQueueCompanion.insert(
@@ -5394,6 +5469,7 @@ class $$LocalSyncQueueTableTableManager
                 entityId: entityId,
                 action: action,
                 payload: payload,
+                retryCount: retryCount,
                 createdAt: createdAt,
                 synced: synced,
               ),

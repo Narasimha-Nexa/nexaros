@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Headers, UseGuards, Query, Request } from '@nestjs/common';
+import { Controller, Post, Get, Body, Headers, UseGuards, Query, Request, Param, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
@@ -57,9 +57,25 @@ export class AdminController {
   @Post('auth/sessions/revoke')
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Revoke a session' })
+  @ApiOperation({ summary: 'Revoke a specific admin session' })
   async revokeSession(@Body() body: { token: string }) {
     return this.adminService.revokeSession(body.token);
+  }
+
+  @Get('users')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List platform admin users' })
+  async listAdminUsers(@Query('search') search = '', @Query('page') page = 1, @Query('limit') limit = 50) {
+    return this.adminService.listAdminUsers(search, Number(page), Number(limit));
+  }
+
+  @Post('users')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create a new platform admin user' })
+  async createAdminUser(@Request() req: any, @Body() body: { name: string; email: string; password: string; role?: string }, @Headers('x-forwarded-for') ip?: string) {
+    return this.adminService.createAdminUser(req.admin.id, body, ip);
   }
 
   @Post('tenants/provision')
@@ -81,18 +97,49 @@ export class AdminController {
       planId?: string;
       gstNumber?: string;
       phone?: string;
+      razorpayOrderId?: string;
+      razorpayPaymentId?: string;
+      razorpaySignature?: string;
     },
     @Headers('x-forwarded-for') ip?: string,
   ) {
     return this.adminService.provisionTenant(req.admin.id, body, ip);
   }
 
+  @Post('impersonate')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Impersonate a restaurant user (secure temporary session)' })
+  async impersonate(
+    @Request() req: any,
+    @Body() body: { tenantId: string; userId: string },
+    @Headers('x-forwarded-for') ip?: string,
+  ) {
+    return this.adminService.impersonate(req.admin.id, body.tenantId, body.userId, ip);
+  }
+
+  @Post('impersonate/exit')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Exit impersonation session' })
+  async exitImpersonation(
+    @Request() req: any,
+    @Headers('x-forwarded-for') ip?: string,
+  ) {
+    return this.adminService.exitImpersonation(req.admin.id, ip);
+  }
+
   @Get('audit-logs')
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get audit logs' })
-  async getAuditLogs(@Query('page') page?: number, @Query('limit') limit?: number) {
-    return this.adminService.getAuditLogs(page || 1, limit || 50);
+  async getAuditLogs(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+    @Query('severity') severity?: string,
+  ) {
+    return this.adminService.getAuditLogs(page || 1, limit || 50, search, severity);
   }
 
   @Get('notifications')
@@ -115,8 +162,8 @@ export class AdminController {
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Mark notification as read' })
-  async markRead(@Query('id') id?: string) {
-    return this.adminService.markNotificationRead(id!);
+  async markRead(@Param('id') id: string) {
+    return this.adminService.markNotificationRead(id);
   }
 
   @Post('notifications/read-all')
@@ -133,5 +180,61 @@ export class AdminController {
   @ApiOperation({ summary: 'Get database stats' })
   async getDatabaseStats() {
     return this.adminService.getDatabaseStats();
+  }
+
+  @Get('staff')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List all staff across all tenants (admin)' })
+  async listAllStaff(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+    @Query('role') role?: string,
+  ) {
+    return this.adminService.listAllStaff(page || 1, limit || 20, search || '', role || '');
+  }
+
+  @Post('staff')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create a staff member (admin)' })
+  async createStaff(
+    @Body() body: { name: string; email: string; phone?: string; role: string; tenantId: string; branchId?: string },
+  ) {
+    return this.adminService.createStaff(body);
+  }
+
+  @Get('branches')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List all branches across all tenants (admin)' })
+  async listAllBranches(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+    @Query('tenantId') tenantId?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.adminService.listAllBranches(page || 1, limit || 20, search || '', tenantId || '', status || '');
+  }
+
+  @Get('branches/:id')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get branch detail (admin)' })
+  async getBranch(@Param('id') id: string) {
+    return this.adminService.getBranch(id);
+  }
+
+  @Post('branches/:id/status')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update branch status (admin)' })
+  async updateBranchStatus(
+    @Param('id') id: string,
+    @Body() body: { status: string },
+  ) {
+    return this.adminService.updateBranchStatus(id, body.status);
   }
 }

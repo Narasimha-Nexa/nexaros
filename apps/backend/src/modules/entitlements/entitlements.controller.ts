@@ -2,6 +2,11 @@ import { Controller, Get, Post, Put, Body, Param, Query, UseGuards } from '@nest
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { EntitlementsService } from './entitlements.service';
 import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
+import { CreatePlanDto } from './dto/create-plan.dto';
+import { UpdatePlanEntitlementsDto } from './dto/update-plan-entitlements.dto';
+import { SetCustomEntitlementsDto } from './dto/set-custom-entitlements.dto';
+import { ToggleFeatureFlagDto } from './dto/toggle-feature-flag.dto';
+import { SetTenantFeatureFlagDto } from './dto/set-tenant-feature-flag.dto';
 
 @ApiTags('Entitlements')
 @Controller('entitlements')
@@ -30,8 +35,8 @@ export class EntitlementsController {
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a platform plan (Admin)' })
-  async createPlan(@Body() body: any) {
-    return this.entitlementsService.createPlan(body);
+  async createPlan(@Body() dto: CreatePlanDto) {
+    return this.entitlementsService.createPlan(dto);
   }
 
   @Put('plans/:planId/entitlements')
@@ -40,19 +45,17 @@ export class EntitlementsController {
   @ApiOperation({ summary: 'Update plan entitlements (Admin)' })
   async updatePlanEntitlements(
     @Param('planId') planId: string,
-    @Body() body: { entitlements: Record<string, boolean> },
+    @Body() dto: UpdatePlanEntitlementsDto,
   ) {
-    return this.entitlementsService.updatePlanEntitlements(planId, body.entitlements);
+    return this.entitlementsService.updatePlanEntitlements(planId, dto.entitlements);
   }
 
   @Post('custom')
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Set custom entitlements for a tenant (Admin)' })
-  async setCustomEntitlements(
-    @Body() body: { tenantId: string; entitlements: Record<string, boolean> },
-  ) {
-    return this.entitlementsService.setCustomEntitlements(body.tenantId, body.entitlements);
+  async setCustomEntitlements(@Body() dto: SetCustomEntitlementsDto) {
+    return this.entitlementsService.setCustomEntitlements(dto.tenantId, dto.entitlements);
   }
 
   @Get('feature-flags')
@@ -67,18 +70,16 @@ export class EntitlementsController {
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Toggle feature flag (Admin)' })
-  async toggleFeatureFlag(@Body() body: { key: string; enabled: boolean }) {
-    return this.entitlementsService.toggleFeatureFlag(body.key, body.enabled);
+  async toggleFeatureFlag(@Body() dto: ToggleFeatureFlagDto) {
+    return this.entitlementsService.toggleFeatureFlag(dto.key, dto.enabled);
   }
 
   @Post('feature-flags/tenant')
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Set tenant feature flag override (Admin)' })
-  async setTenantFeatureFlag(
-    @Body() body: { tenantId: string; featureFlagKey: string; enabled: boolean },
-  ) {
-    return this.entitlementsService.setTenantFeatureFlag(body.tenantId, body.featureFlagKey, body.enabled);
+  async setTenantFeatureFlag(@Body() dto: SetTenantFeatureFlagDto) {
+    return this.entitlementsService.setTenantFeatureFlag(dto.tenantId, dto.featureFlagKey, dto.enabled);
   }
 
   @Get('feature-flags/:tenantId')

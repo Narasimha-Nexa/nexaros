@@ -2,11 +2,15 @@ import { Controller, Get, Post, Body, Param, Query, UseGuards, Headers, HttpCode
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { BillingService } from './billing.service';
 import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
+import { PaymentGateway } from '../../common/providers/payment-gateway';
 
 @ApiTags('Billing')
 @Controller('billing')
 export class BillingController {
-  constructor(private billingService: BillingService) {}
+  constructor(
+    private billingService: BillingService,
+    private paymentGateway: PaymentGateway,
+  ) {}
 
   @Get('entitlements/:tenantId')
   @ApiOperation({ summary: 'Get tenant entitlements and subscription status' })
@@ -30,6 +34,24 @@ export class BillingController {
     @Body() body: { tenantId: string; planId: string; couponCode?: string },
   ) {
     return this.billingService.createCheckout(body.tenantId, body.planId, body.couponCode);
+  }
+
+  @Post('create-order')
+  @ApiOperation({ summary: 'Create a Razorpay order for payment' })
+  async createOrder(
+    @Body() body: { amount: number; currency?: string; receipt?: string; notes?: Record<string, string> },
+  ) {
+    const result = await this.paymentGateway.createOrder({
+      amount: body.amount,
+      currency: body.currency || 'INR',
+      planSlug: body.receipt || 'order',
+      customerEmail: '',
+    });
+    return {
+      orderId: result.razorpayOrderId,
+      amount: body.amount,
+      currency: body.currency || 'INR',
+    };
   }
 
   @Post('verify')
@@ -98,8 +120,9 @@ export class BillingController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('status') status?: string,
+    @Query('search') search?: string,
   ) {
-    return this.billingService.getAllSubscriptions(page || 1, limit || 50, status);
+    return this.billingService.getAllSubscriptions(page || 1, limit || 50, status, search);
   }
 
   @Get('admin/expiring-soon')

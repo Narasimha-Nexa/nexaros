@@ -1,13 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { KitchenService } from './kitchen.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { GatewayService } from '../websockets/gateway.service';
+import { EventBusService } from '../../common/event-bus/event-bus.service';
 import { NotFoundException } from '@nestjs/common';
 
 describe('KitchenService', () => {
   let service: KitchenService;
   let prisma: jest.Mocked<PrismaService>;
-  let gateway: jest.Mocked<GatewayService>;
+  let eventBus: jest.Mocked<EventBusService>;
 
   const mockOrder = {
     id: 'order-1',
@@ -75,7 +75,21 @@ describe('KitchenService', () => {
     stockMovement: { create: jest.fn() },
   };
 
-  const mockGateway = { emitToBranch: jest.fn(), emitToOrder: jest.fn() };
+  const mockEventBus = {
+    emitToBranch: jest.fn(),
+    emitToTenant: jest.fn(),
+    orderCreated: jest.fn(),
+    orderUpdated: jest.fn(),
+    orderStatusChanged: jest.fn(),
+    orderReady: jest.fn(),
+    kotReady: jest.fn(),
+    orderTrackingEvent: jest.fn(),
+    menuUpdated: jest.fn(),
+    itemStatusChanged: jest.fn(),
+    emitToRoom: jest.fn(),
+    emitToTenantPublicBySlug: jest.fn(),
+    emitToRoomPublic: jest.fn(),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -84,13 +98,13 @@ describe('KitchenService', () => {
       providers: [
         KitchenService,
         { provide: PrismaService, useValue: mockPrisma },
-        { provide: GatewayService, useValue: mockGateway },
+        { provide: EventBusService, useValue: mockEventBus },
       ],
     }).compile();
 
     service = module.get<KitchenService>(KitchenService);
     prisma = module.get(PrismaService) as jest.Mocked<PrismaService>;
-    gateway = module.get(GatewayService) as jest.Mocked<GatewayService>;
+    eventBus = module.get(EventBusService) as jest.Mocked<EventBusService>;
   });
 
   describe('getActiveOrders', () => {
@@ -185,7 +199,7 @@ describe('KitchenService', () => {
 
       await service.updateOrderStatus('order-1', 'READY');
 
-      expect(mockGateway.emitToBranch).toHaveBeenCalledWith(
+      expect(mockEventBus.emitToBranch).toHaveBeenCalledWith(
         'branch-1',
         'order:ready',
         expect.any(Object),

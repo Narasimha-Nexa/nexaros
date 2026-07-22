@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MenuService } from './menu.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { GatewayService } from '../websockets/gateway.service';
+import { EventBusService } from '../../common/event-bus/event-bus.service';
 import { RedisService } from '../../common/redis/redis.service';
 import { NotFoundException } from '@nestjs/common';
 
@@ -13,7 +13,7 @@ jest.mock('fs/promises', () => ({
 describe('MenuService', () => {
   let service: MenuService;
   let prisma: jest.Mocked<PrismaService>;
-  let gateway: jest.Mocked<GatewayService>;
+  let eventBus: jest.Mocked<EventBusService>;
   let redis: jest.Mocked<RedisService>;
 
   const mockCategory = {
@@ -74,7 +74,20 @@ describe('MenuService', () => {
     },
   };
 
-  const mockGateway = { emitToTenant: jest.fn() };
+  const mockEventBus = {
+    emitToTenant: jest.fn(),
+    emitToTenantPublicBySlug: jest.fn(),
+    emitToBranch: jest.fn(),
+    menuUpdated: jest.fn(),
+    orderCreated: jest.fn(),
+    orderUpdated: jest.fn(),
+    orderStatusChanged: jest.fn(),
+    orderReady: jest.fn(),
+    kotReady: jest.fn(),
+    orderTrackingEvent: jest.fn(),
+    emitToRoom: jest.fn(),
+    emitToRoomPublic: jest.fn(),
+  };
 
   const mockRedis = {
     get: jest.fn().mockResolvedValue(null),
@@ -91,14 +104,14 @@ describe('MenuService', () => {
       providers: [
         MenuService,
         { provide: PrismaService, useValue: mockPrisma },
-        { provide: GatewayService, useValue: mockGateway },
+        { provide: EventBusService, useValue: mockEventBus },
         { provide: RedisService, useValue: mockRedis },
       ],
     }).compile();
 
     service = module.get<MenuService>(MenuService);
     prisma = module.get(PrismaService) as jest.Mocked<PrismaService>;
-    gateway = module.get(GatewayService) as jest.Mocked<GatewayService>;
+    eventBus = module.get(EventBusService) as jest.Mocked<EventBusService>;
     redis = module.get(RedisService) as jest.Mocked<RedisService>;
   });
 
@@ -125,7 +138,7 @@ describe('MenuService', () => {
       });
 
       expect(result).toMatchObject({ name: 'Starters' });
-      expect(mockGateway.emitToTenant).toHaveBeenCalledWith(
+      expect(mockEventBus.emitToTenant).toHaveBeenCalledWith(
         'tenant-1',
         'menu:updated',
         expect.objectContaining({ type: 'category', action: 'created' }),
@@ -141,7 +154,7 @@ describe('MenuService', () => {
       const result = await service.updateCategory('cat-1', 'tenant-1', { name: 'Mains' });
 
       expect(result.name).toBe('Mains');
-      expect(mockGateway.emitToTenant).toHaveBeenCalledWith(
+      expect(mockEventBus.emitToTenant).toHaveBeenCalledWith(
         'tenant-1',
         'menu:updated',
         expect.objectContaining({ type: 'category', action: 'updated' }),
@@ -157,7 +170,7 @@ describe('MenuService', () => {
       const result = await service.removeCategory('cat-1', 'tenant-1');
 
       expect(result).toMatchObject({ message: 'Category deleted' });
-      expect(mockGateway.emitToTenant).toHaveBeenCalledWith(
+      expect(mockEventBus.emitToTenant).toHaveBeenCalledWith(
         'tenant-1',
         'menu:updated',
         expect.objectContaining({ type: 'category', action: 'deleted' }),
@@ -259,7 +272,7 @@ describe('MenuService', () => {
           }),
         }),
       );
-      expect(mockGateway.emitToTenant).toHaveBeenCalledWith(
+      expect(mockEventBus.emitToTenant).toHaveBeenCalledWith(
         'tenant-1',
         'menu:updated',
         expect.objectContaining({ type: 'item', action: 'created' }),
@@ -275,7 +288,7 @@ describe('MenuService', () => {
       const result = await service.updateItem('item-1', 'tenant-1', { price: 399 });
 
       expect(result.price).toBe(399);
-      expect(mockGateway.emitToTenant).toHaveBeenCalled();
+      expect(mockEventBus.emitToTenant).toHaveBeenCalled();
     });
   });
 
@@ -316,7 +329,7 @@ describe('MenuService', () => {
       const result = await service.uploadImages('item-1', 'tenant-1', [mockFile]);
 
       expect(result).toHaveLength(1);
-      expect(mockGateway.emitToTenant).toHaveBeenCalled();
+      expect(mockEventBus.emitToTenant).toHaveBeenCalled();
     });
   });
 
@@ -336,7 +349,7 @@ describe('MenuService', () => {
       const result = await service.deleteImage('item-1', 'img-1', 'tenant-1');
 
       expect(result).toMatchObject({ message: 'Image deleted' });
-      expect(mockGateway.emitToTenant).toHaveBeenCalled();
+      expect(mockEventBus.emitToTenant).toHaveBeenCalled();
     });
   });
 });

@@ -5,13 +5,15 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ReservationsService } from './reservations.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { RequirePermissions } from '../../common/decorators/roles.decorator';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 
 @ApiTags('reservations')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('reservations')
 export class ReservationsController {
   constructor(private readonly reservationsService: ReservationsService) {}
@@ -53,6 +55,7 @@ export class ReservationsController {
 
   @Post()
   @ApiOperation({ summary: 'Create a reservation' })
+  @RequirePermissions('reservations:write')
   create(
     @CurrentTenant() tenantId: string,
     @Body() dto: CreateReservationDto,
@@ -62,6 +65,7 @@ export class ReservationsController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update reservation' })
+  @RequirePermissions('reservations:write')
   update(
     @Param('id') id: string,
     @CurrentTenant() tenantId: string,
@@ -71,7 +75,8 @@ export class ReservationsController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Cancel/delete reservation' })
+  @ApiOperation({ summary: 'Cancel reservation' })
+  @RequirePermissions('reservations:delete')
   remove(@Param('id') id: string, @CurrentTenant() tenantId: string) {
     return this.reservationsService.remove(id, tenantId);
   }

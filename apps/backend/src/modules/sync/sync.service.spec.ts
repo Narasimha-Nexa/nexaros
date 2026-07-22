@@ -1,12 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SyncService } from './sync.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { GatewayService } from '../websockets/gateway.service';
+import { EventBusService } from '../../common/event-bus/event-bus.service';
 
 describe('SyncService', () => {
   let service: SyncService;
   let prisma: jest.Mocked<PrismaService>;
-  let gateway: jest.Mocked<GatewayService>;
+  let eventBus: jest.Mocked<EventBusService>;
 
   const mockOrder = {
     id: 'order-1',
@@ -45,7 +45,11 @@ describe('SyncService', () => {
     restaurantTable: { findMany: jest.fn() },
   };
 
-  const mockGateway = { emitToBranch: jest.fn() };
+  const mockEventBus = {
+    emitToBranch: jest.fn(),
+    emitToTenant: jest.fn(),
+    orderCreated: jest.fn(),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -54,13 +58,13 @@ describe('SyncService', () => {
       providers: [
         SyncService,
         { provide: PrismaService, useValue: mockPrisma },
-        { provide: GatewayService, useValue: mockGateway },
+        { provide: EventBusService, useValue: mockEventBus },
       ],
     }).compile();
 
     service = module.get<SyncService>(SyncService);
     prisma = module.get(PrismaService) as jest.Mocked<PrismaService>;
-    gateway = module.get(GatewayService) as jest.Mocked<GatewayService>;
+    eventBus = module.get(EventBusService) as jest.Mocked<EventBusService>;
   });
 
   describe('pushOfflineData', () => {

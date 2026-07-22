@@ -2,21 +2,53 @@ export interface Tenant {
   id: string;
   name: string;
   slug: string;
-  email: string;
-  phone: string;
-  businessType: string;
-  country: string;
-  state: string;
-  city: string;
+  subdomain?: string;
+  customDomain?: string;
+  email?: string;
+  phone?: string;
+  logo?: string;
   address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  gstNumber?: string;
+  businessType?: string;
+  timezone?: string;
+  currency?: string;
   isActive: boolean;
-  status?: string;
-  plan?: string;
-  ownerName?: string;
-  owner?: { id: string; name: string; email: string };
-  subscription?: { plan: string; status: string; amount: number };
+  onboardingStatus?: string;
   createdAt: string;
   updatedAt?: string;
+  owner?: { id: string; name: string; email: string };
+  subscription?: {
+    plan: string;
+    planSlug: string;
+    status: string;
+    trialEndsAt?: string;
+    currentPeriodEnd?: string;
+  } | null;
+  branchCount?: number;
+  userCount?: number;
+  orderCount?: number;
+}
+
+export interface TenantStats {
+  totalTenants: number;
+  activeTenants: number;
+  inactiveTenants: number;
+  createdToday: number;
+  createdThisMonth: number;
+  trialTenants: number;
+  paidTenants: number;
+  totalBranches: number;
+  totalUsers: number;
+  totalOrders: number;
+  planDistribution: Array<{
+    plan: string;
+    slug: string;
+    count: number;
+    price: number;
+  }>;
 }
 
 export interface Subscription {

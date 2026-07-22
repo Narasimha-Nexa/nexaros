@@ -8,6 +8,7 @@ import '../sync/offline_sync_service.dart';
 import '../sync/offline_order_service.dart';
 import '../sync/offline_payment_service.dart';
 import '../hardware/printer_service.dart';
+import '../services/event_bus.dart';
 
 class AppState extends ChangeNotifier {
   final ApiClient api = ApiClient();
@@ -18,7 +19,9 @@ class AppState extends ChangeNotifier {
   late final OfflineOrderService offlineOrders;
   late final OfflinePaymentService offlinePayments;
   final PrinterService printer = PrinterService();
+  late final EventBus eventBus;
   late final StreamSubscription _connectivitySub;
+  bool _eventBusInitialized = false;
 
   bool _isConnected = false;
   bool _isOnline = true;
@@ -34,6 +37,7 @@ class AppState extends ChangeNotifier {
     sync = OfflineSyncService(db, api);
     offlineOrders = OfflineOrderService(db, api);
     offlinePayments = OfflinePaymentService(db, api);
+    eventBus = EventBus(socket);
 
     // Wire ConnectivityMonitor into AppState for UI reactivity
     _connectivitySub = connectivityMonitor.isConnected.listen((online) {
@@ -60,15 +64,26 @@ class AppState extends ChangeNotifier {
     _isConnected = true;
     _branchId = branchId;
     printer.loadSettings();
+
+    // Initialize the centralized event bus after socket is connected
+    if (!_eventBusInitialized) {
+      eventBus.initialize();
+      _eventBusInitialized = true;
+    }
+
     notifyListeners();
   }
 
   void onLogout() {
+    eventBus.dispose();
+    _eventBusInitialized = false;
     socket.disconnect();
     _isConnected = false;
     notifyListeners();
   }
 
+  /// Legacy single-event listener — kept for backward compatibility
+  /// Prefer using EventBus for new feature providers.
   void listenToEvent(String event, Function(dynamic) callback) {
     socket.on(event, callback);
   }
@@ -79,6 +94,7 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    eventBus.dispose();
     sync.dispose();
     socket.disconnect();
     _connectivitySub.cancel();

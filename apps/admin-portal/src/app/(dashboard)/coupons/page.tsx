@@ -1,6 +1,6 @@
 'use client';
-import React, { useState, useEffect } from 'react';
-import { DataTable } from '@/components/ui/table';
+import React, { useState, useEffect, useRef } from 'react';
+import { DataTable, Pagination } from '@/components/ui/table';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,11 +12,17 @@ import { useToastStore } from '@/stores/ui.store';
 import { PageHeader } from '@/components/layout/page-header';
 import { adminApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
-import { Tag, Plus, Percent, Copy, Trash2, RefreshCw, PartyPopper } from 'lucide-react';
+import { Tag, Plus, Percent, Copy, Trash2, RefreshCw, PartyPopper, Search } from 'lucide-react';
+
+const PAGE_SIZE = 10;
 
 export default function CouponsPage() {
   const [coupons, setCoupons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
   const [showFestival, setShowFestival] = useState(false);
   const [form, setForm] = useState({ code: '', type: 'percentage', value: 0, maxUses: 100, validFrom: '', validUntil: '', minAmount: 0 });
@@ -24,11 +30,19 @@ export default function CouponsPage() {
   const [creating, setCreating] = useState(false);
   const { addToast } = useToastStore();
 
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => { setPage(1); }, [debouncedSearch]);
+
   const fetchCoupons = async () => {
     setLoading(true);
     try {
-      const result = await adminApi.getCoupons();
-      setCoupons(result.data || result.coupons || result || []);
+      const result: any = await adminApi.getCoupons(page, PAGE_SIZE, debouncedSearch || undefined);
+      setCoupons(result.coupons || result.data || []);
+      setTotal(result.total || (result.coupons || result.data || []).length);
     } catch (err: any) {
       addToast(err.message || 'Failed to load coupons', 'error');
     } finally {
@@ -36,7 +50,7 @@ export default function CouponsPage() {
     }
   };
 
-  useEffect(() => { fetchCoupons(); }, []);
+  useEffect(() => { fetchCoupons(); }, [page, debouncedSearch]);
 
   const handleCreate = async () => {
     setCreating(true);
@@ -77,6 +91,7 @@ export default function CouponsPage() {
 
   const activeCoupons = coupons.filter(c => c.status === 'active' || (!c.status && !c.expired));
   const totalRedemptions = coupons.reduce((sum, c) => sum + (c.usedCount || c.usageCount || 0), 0);
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   const columns = [
     {
@@ -143,15 +158,33 @@ export default function CouponsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Active Coupons" value={activeCoupons.length} change="Currently active" changeType="positive" />
-        <StatCard label="Total Coupons" value={coupons.length} change="All time" changeType="neutral" />
+        <StatCard label="Total Coupons" value={total} change="All time" changeType="neutral" />
         <StatCard label="Total Redemptions" value={totalRedemptions.toLocaleString('en-IN')} change="All coupons" changeType="neutral" />
-        <StatCard label="Coupon Codes" value={coupons.length} change="Created" changeType="neutral" />
+        <StatCard label="Coupon Codes" value={total} change="Created" changeType="neutral" />
       </div>
+
+      <Card padding="sm">
+        <div className="relative flex-1 max-w-sm">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-body" />
+          <input
+            type="text"
+            placeholder="Search coupons..."
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); }}
+            className="input pl-9 py-2 text-sm w-full"
+          />
+        </div>
+      </Card>
 
       {loading ? (
         <div className="space-y-3">{[...Array(5)].map((_, i) => <Card key={i} className="h-12 animate-pulse" />)}</div>
+      ) : coupons.length === 0 ? (
+        <Card className="p-10 text-center text-body-sm font-sans text-body">No coupons found</Card>
       ) : (
-        <DataTable columns={columns} data={coupons} keyExtractor={(r: any) => r.id} />
+        <>
+          <DataTable columns={columns} data={coupons} keyExtractor={(r: any) => r.id} />
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={total} pageSize={PAGE_SIZE} />
+        </>
       )}
 
       <Dialog open={showCreate} onClose={() => setShowCreate(false)} title="Create Coupon">

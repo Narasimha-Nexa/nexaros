@@ -142,4 +142,43 @@ export class MenuController {
   ) {
     return this.menuService.setPrimaryImage(id, imageId, tenantId);
   }
+
+  // ─── Combos ───
+
+  @Get('combos')
+  @ApiOperation({ summary: 'List all combos' })
+  findAllCombos(@CurrentTenant() tenantId: string) {
+    return this.menuService.findAllCombos(tenantId);
+  }
+
+  @Get('combos/:id')
+  @ApiOperation({ summary: 'Get combo by ID' })
+  findOneCombo(@Param('id') id: string, @CurrentTenant() tenantId: string) {
+    return this.menuService.findOneCombo(id, tenantId);
+  }
+
+  @Post('combos')
+  @ApiOperation({ summary: 'Create a combo' })
+  createCombo(
+    @CurrentTenant() tenantId: string,
+    @Body() dto: { name: string; description?: string; price: number; image?: string; items: { menuItemId: string; quantity?: number }[] },
+  ) {
+    return this.menuService.createCombo(tenantId, dto);
+  }
+
+  @Patch('combos/:id')
+  @ApiOperation({ summary: 'Update a combo' })
+  updateCombo(
+    @Param('id') id: string,
+    @CurrentTenant() tenantId: string,
+    @Body() dto: { name?: string; description?: string; price?: number; isActive?: boolean; image?: string; items?: { menuItemId: string; quantity?: number }[] },
+  ) {
+    return this.menuService.updateCombo(id, tenantId, dto);
+  }
+
+  @Delete('combos/:id')
+  @ApiOperation({ summary: 'Delete a combo' })
+  removeCombo(@Param('id') id: string, @CurrentTenant() tenantId: string) {
+    return this.menuService.removeCombo(id, tenantId);
+  }
 }

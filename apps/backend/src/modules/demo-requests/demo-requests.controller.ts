@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Body, Param, Query, UseGuards } from '@nest
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { DemoRequestsService } from './demo-requests.service';
 import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
+import { CreateDemoRequestDto } from './dto/create-demo-request.dto';
 
 @ApiTags('Demo Requests')
 @Controller('demo-requests')
@@ -10,8 +11,8 @@ export class DemoRequestsController {
 
   @Post()
   @ApiOperation({ summary: 'Submit a demo request (public)' })
-  async create(@Body() body: any) {
-    return this.demoRequestsService.create(body);
+  async create(@Body() dto: CreateDemoRequestDto) {
+    return this.demoRequestsService.create(dto);
   }
 
   @Get()

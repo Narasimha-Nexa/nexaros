@@ -25,6 +25,23 @@ export default function SettingsPage() {
   const [maintenanceMessage, setMaintenanceMessage] = useState('');
   const { addToast } = useToastStore();
 
+  const [generalName, setGeneralName] = useState('');
+  const [generalEmail, setGeneralEmail] = useState('');
+  const [generalCurrency, setGeneralCurrency] = useState('');
+  const [generalTimezone, setGeneralTimezone] = useState('Asia/Kolkata');
+
+  const [smtpHost, setSmtpHost] = useState('');
+  const [smtpPort, setSmtpPort] = useState('');
+  const [emailFromName, setEmailFromName] = useState('');
+  const [emailFromAddress, setEmailFromAddress] = useState('');
+
+  const [jwtExpiry, setJwtExpiry] = useState('');
+  const [refreshTokenExpiry, setRefreshTokenExpiry] = useState('');
+  const [maxLoginAttempts, setMaxLoginAttempts] = useState('');
+  const [lockoutDuration, setLockoutDuration] = useState('');
+
+  const [notifications, setNotifications] = useState<Record<string, boolean>>({});
+
   const fetchSettings = async () => {
     setLoading(true);
     try {
@@ -34,7 +51,26 @@ export default function SettingsPage() {
       ]);
       if (settingsRes) {
         const data = settingsRes.data || settingsRes.settings || settingsRes;
-        setSettings(Array.isArray(data) ? data : Object.entries(data).map(([key, value]) => ({ id: key, key, value })));
+        const arr = Array.isArray(data) ? data : Object.entries(data).map(([key, value]) => ({ id: key, key, value }));
+        setSettings(arr);
+        const get = (k: string) => arr.find((s: Setting) => s.key === k)?.value ?? '';
+        setGeneralName(get('platform_name'));
+        setGeneralEmail(get('support_email'));
+        setGeneralCurrency(get('default_currency'));
+        setGeneralTimezone(get('default_timezone') || 'Asia/Kolkata');
+        setSmtpHost(get('smtp_host'));
+        setSmtpPort(get('smtp_port'));
+        setEmailFromName(get('email_from_name'));
+        setEmailFromAddress(get('email_from_address'));
+        setJwtExpiry(get('jwt_expiry'));
+        setRefreshTokenExpiry(get('refresh_token_expiry'));
+        setMaxLoginAttempts(get('max_login_attempts'));
+        setLockoutDuration(get('lockout_duration'));
+        const notifKeys = ['notify_new_registration', 'notify_payment_failure', 'notify_expiration', 'notify_ticket', 'notify_security', 'notify_daily_summary'];
+        const notifDefaults: Record<string, boolean> = { notify_new_registration: true, notify_payment_failure: true, notify_expiration: true, notify_ticket: true, notify_security: true, notify_daily_summary: false };
+        const notifState: Record<string, boolean> = {};
+        for (const k of notifKeys) { const v = get(k); notifState[k] = v !== '' ? !!v : notifDefaults[k]; }
+        setNotifications(notifState);
       }
       if (maintenanceRes) {
         setMaintenanceMode(maintenanceRes.enabled || false);
@@ -49,21 +85,27 @@ export default function SettingsPage() {
 
   useEffect(() => { fetchSettings(); }, []);
 
-  const getSettingValue = (key: string) => {
-    const setting = settings.find((s) => s.key === key);
-    return setting?.value ?? '';
-  };
-
-  const handleSaveSetting = async (key: string, value: string, description?: string) => {
+  const handleSaveSettings = async (entries: Array<{ key: string; value: string; description?: string }>) => {
     setSaving(true);
     try {
-      await adminApi.setSetting(key, value, description);
-      addToast(`${key} updated`, 'success');
+      await Promise.all(entries.map((e) => adminApi.setSetting(e.key, e.value, e.description)));
+      addToast('Settings updated', 'success');
       fetchSettings();
     } catch (err: any) {
-      addToast(err.message || `Failed to update ${key}`, 'error');
+      addToast(err.message || 'Failed to update settings', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveNotification = async (key: string, enabled: boolean) => {
+    setNotifications((prev) => ({ ...prev, [key]: enabled }));
+    try {
+      await adminApi.setSetting(key, String(enabled), `${key} notification toggle`);
+      addToast('Notification preference updated', 'success');
+    } catch (err: any) {
+      addToast(err.message || 'Failed to update notification', 'error');
+      setNotifications((prev) => ({ ...prev, [key]: !enabled }));
     }
   };
 
@@ -90,7 +132,7 @@ export default function SettingsPage() {
 
       {loading ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {[...Array(4)].map((_, i) => <Card key={i} className="h-64 animate-pulse" />)}
+          {[...Array(4)].map((_, i) => <Card key={i}><div className="skeleton h-64 w-full" /></Card>)}
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -101,15 +143,21 @@ export default function SettingsPage() {
             </div>
             <div className="divider mb-4" />
             <div className="space-y-4">
-              <Input label="Platform Name" defaultValue={getSettingValue('platform_name') || 'NexaROS'} />
-              <Input label="Support Email" defaultValue={getSettingValue('support_email') || 'support@nexaros.com'} />
-              <Input label="Default Currency" defaultValue={getSettingValue('default_currency') || 'INR'} />
+              <Input label="Platform Name" value={generalName} onChange={(e) => setGeneralName(e.target.value)} />
+              <Input label="Support Email" value={generalEmail} onChange={(e) => setGeneralEmail(e.target.value)} />
+              <Input label="Default Currency" value={generalCurrency} onChange={(e) => setGeneralCurrency(e.target.value)} />
               <Select
                 label="Default Timezone"
-                value={getSettingValue('default_timezone') || 'Asia/Kolkata'}
+                value={generalTimezone}
+                onChange={(e: any) => setGeneralTimezone(typeof e === 'string' ? e : e.target.value)}
                 options={[{ value: 'Asia/Kolkata', label: 'IST (UTC+5:30)' }, { value: 'UTC', label: 'UTC' }]}
               />
-              <Button onClick={() => handleSaveSetting('platform_name', 'NexaROS', 'Platform display name')} isLoading={saving}>
+              <Button onClick={() => handleSaveSettings([
+                { key: 'platform_name', value: generalName, description: 'Platform display name' },
+                { key: 'support_email', value: generalEmail, description: 'Support contact email' },
+                { key: 'default_currency', value: generalCurrency, description: 'Default currency code' },
+                { key: 'default_timezone', value: generalTimezone, description: 'Default timezone' },
+              ])} isLoading={saving}>
                 <Save size={14} /> Save Changes
               </Button>
             </div>
@@ -122,11 +170,16 @@ export default function SettingsPage() {
             </div>
             <div className="divider mb-4" />
             <div className="space-y-4">
-              <Input label="SMTP Host" defaultValue={getSettingValue('smtp_host') || 'smtp.nexaros.com'} />
-              <Input label="SMTP Port" defaultValue={getSettingValue('smtp_port') || '587'} />
-              <Input label="From Name" defaultValue={getSettingValue('email_from_name') || 'NexaROS'} />
-              <Input label="From Email" defaultValue={getSettingValue('email_from_address') || 'noreply@nexaros.com'} />
-              <Button onClick={() => handleSaveSetting('smtp_host', getSettingValue('smtp_host') || 'smtp.nexaros.com', 'SMTP server host')} isLoading={saving}>
+              <Input label="SMTP Host" value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} />
+              <Input label="SMTP Port" value={smtpPort} onChange={(e) => setSmtpPort(e.target.value)} />
+              <Input label="From Name" value={emailFromName} onChange={(e) => setEmailFromName(e.target.value)} />
+              <Input label="From Email" value={emailFromAddress} onChange={(e) => setEmailFromAddress(e.target.value)} />
+              <Button onClick={() => handleSaveSettings([
+                { key: 'smtp_host', value: smtpHost, description: 'SMTP server host' },
+                { key: 'smtp_port', value: smtpPort, description: 'SMTP server port' },
+                { key: 'email_from_name', value: emailFromName, description: 'Email sender name' },
+                { key: 'email_from_address', value: emailFromAddress, description: 'Email sender address' },
+              ])} isLoading={saving}>
                 <Save size={14} /> Save Changes
               </Button>
             </div>
@@ -147,12 +200,25 @@ export default function SettingsPage() {
                 { key: 'notify_security', label: 'Security alerts', defaultVal: true },
                 { key: 'notify_daily_summary', label: 'Daily summary email', defaultVal: false },
               ].map((item) => {
-                const val = getSettingValue(item.key);
-                const enabled = val !== '' ? !!val : item.defaultVal;
+                const enabled = notifications[item.key] ?? item.defaultVal;
                 return (
-                  <div key={item.key} className="flex items-center justify-between">
+                  <div key={item.key} className="flex items-center justify-between py-1.5">
                     <span className="text-body-sm font-sans">{item.label}</span>
-                    <Badge variant={enabled ? 'filled' : 'outline'}>{enabled ? 'On' : 'Off'}</Badge>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={enabled}
+                      onClick={() => handleSaveNotification(item.key, !enabled)}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border transition-colors duration-200 ease-in-out focus-visible:outline-2 focus-visible:outline-ink ${
+                        enabled ? 'bg-ink border-ink' : 'bg-canvas-soft border-hairline'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ease-in-out ${
+                          enabled ? 'translate-x-[22px]' : 'translate-x-[2px]'
+                        }`}
+                      />
+                    </button>
                   </div>
                 );
               })}
@@ -166,11 +232,16 @@ export default function SettingsPage() {
             </div>
             <div className="divider mb-4" />
             <div className="space-y-4">
-              <Input label="JWT Expiry (seconds)" defaultValue={getSettingValue('jwt_expiry') || '3600'} hint="1 hour default" />
-              <Input label="Refresh Token Expiry (seconds)" defaultValue={getSettingValue('refresh_token_expiry') || '86400'} hint="24 hours default" />
-              <Input label="Max Login Attempts" defaultValue={getSettingValue('max_login_attempts') || '5'} />
-              <Input label="Lockout Duration (minutes)" defaultValue={getSettingValue('lockout_duration') || '30'} />
-              <Button onClick={() => handleSaveSetting('max_login_attempts', getSettingValue('max_login_attempts') || '5', 'Max login attempts before lockout')} isLoading={saving}>
+              <Input label="JWT Expiry (seconds)" value={jwtExpiry} onChange={(e) => setJwtExpiry(e.target.value)} hint="1 hour default" />
+              <Input label="Refresh Token Expiry (seconds)" value={refreshTokenExpiry} onChange={(e) => setRefreshTokenExpiry(e.target.value)} hint="24 hours default" />
+              <Input label="Max Login Attempts" value={maxLoginAttempts} onChange={(e) => setMaxLoginAttempts(e.target.value)} />
+              <Input label="Lockout Duration (minutes)" value={lockoutDuration} onChange={(e) => setLockoutDuration(e.target.value)} />
+              <Button onClick={() => handleSaveSettings([
+                { key: 'jwt_expiry', value: jwtExpiry, description: 'JWT token expiry in seconds' },
+                { key: 'refresh_token_expiry', value: refreshTokenExpiry, description: 'Refresh token expiry in seconds' },
+                { key: 'max_login_attempts', value: maxLoginAttempts, description: 'Max login attempts before lockout' },
+                { key: 'lockout_duration', value: lockoutDuration, description: 'Account lockout duration in minutes' },
+              ])} isLoading={saving}>
                 <Save size={14} /> Save Changes
               </Button>
             </div>
@@ -191,10 +262,19 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between">
             <span className="text-body-sm font-sans">Enable Maintenance Mode</span>
             <button
+              type="button"
+              role="switch"
+              aria-checked={maintenanceMode}
               onClick={() => setMaintenanceMode(!maintenanceMode)}
-              className={`w-12 h-6 rounded-none border ${maintenanceMode ? 'bg-ink border-ink' : 'bg-transparent border-hairline'} transition-colors`}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border transition-colors duration-200 ease-in-out focus-visible:outline-2 focus-visible:outline-ink ${
+                maintenanceMode ? 'bg-ink border-ink' : 'bg-canvas-soft border-hairline'
+              }`}
             >
-              <div className={`w-5 h-5 transition-transform ${maintenanceMode ? 'translate-x-[25px] bg-white' : 'translate-x-[1px] bg-body'}`} />
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ease-in-out ${
+                  maintenanceMode ? 'translate-x-[22px]' : 'translate-x-[2px]'
+                }`}
+              />
             </button>
           </div>
           <Input label="Maintenance Message" value={maintenanceMessage} onChange={(e) => setMaintenanceMessage(e.target.value)} placeholder="We'll be back soon!" />

@@ -7,22 +7,25 @@
     "dev": "pnpm --filter @nexaros/backend run start:dev",
     "dev:marketing": "pnpm --filter @nexaros/marketing-web run dev",
     "dev:customer": "pnpm --filter @nexaros/customer-web run dev",
-    "dev:all": "pnpm run --parallel dev dev:marketing dev:customer",
+    "dev:admin": "pnpm --filter @nexaros/admin-portal run dev",
+    "dev:all": "pnpm run --parallel dev dev:marketing dev:customer dev:admin",
     "build": "pnpm --filter @nexaros/backend run build",
     "lint": "pnpm -r run lint",
     "test": "pnpm -r run test",
-    "db:migrate": "pnpm --filter @nexaros/backend run db:migrate",
+    "db:generate": "pnpm --filter @nexaros/backend run db:generate",
+    "db:migrate": "pnpm --filter @nexaros/backend run db:migrate:prod",
     "db:seed": "pnpm --filter @nexaros/backend run db:seed",
     "db:studio": "pnpm --filter @nexaros/backend run db:studio",
-    "docker:up": "docker compose -f docker/docker-compose.yml up -d",
+    "docker:up": "docker compose -f docker/docker-compose.yml up -d nexaros-postgres nexaros-redis",
+    "docker:up:apps": "docker compose -f docker/docker-compose.yml up -d nexaros-backend nexaros-customer nexaros-marketing nexaros-admin",
+    "docker:up:full": "docker compose -f docker/docker-compose.yml up -d",
     "docker:down": "docker compose -f docker/docker-compose.yml down",
-    "docker:logs": "docker compose -f docker/docker-compose.yml logs -f"
+    "docker:restart": "docker compose -f docker/docker-compose.yml down && docker compose -f docker/docker-compose.yml up -d nexaros-postgres nexaros-redis",
+    "docker:logs": "docker compose -f docker/docker-compose.yml logs -f",
+    "docker:logs:infra": "docker compose -f docker/docker-compose.yml logs -f nexaros-postgres nexaros-redis"
   },
   "engines": {
     "node": ">=22.0.0",
     "pnpm": ">=9.0.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": ["*"]
   }
 }

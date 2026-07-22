@@ -89,4 +89,35 @@ export class PublicEventsGateway
       client.leave(`order:${data.orderId}`);
     }
   }
+
+  /**
+   * Join a tenant room — customers subscribe to `tenant:{slug}` to receive
+   * real-time updates for menu changes, restaurant info changes, offers, etc.
+   * The slug is the restaurant's URL-friendly identifier (e.g. "spice-garden").
+   */
+  @SubscribeMessage('join:tenant')
+  handleJoinTenant(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { slug: string },
+  ) {
+    if (!data?.slug) return { success: false, message: 'Slug is required' };
+
+    client.join(`tenant:${data.slug}`);
+    client.data.tenantSlug = data.slug;
+    console.log(`[WS:PUBLIC] Client ${client.id} joined tenant:${data.slug}`);
+    return { success: true, slug: data.slug };
+  }
+
+  /**
+   * Leave a tenant room.
+   */
+  @SubscribeMessage('leave:tenant')
+  handleLeaveTenant(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { slug: string },
+  ) {
+    if (data?.slug) {
+      client.leave(`tenant:${data.slug}`);
+    }
+  }
 }

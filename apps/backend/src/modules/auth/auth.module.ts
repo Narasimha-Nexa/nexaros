@@ -11,6 +11,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
     PrismaModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
+      global: true,
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
         secret: configService.get('JWT_SECRET'),

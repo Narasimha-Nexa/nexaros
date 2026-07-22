@@ -1,6 +1,6 @@
 import {
   Controller, Get, Post, Patch, Delete,
-  Param, Body, UseGuards,
+  Param, Body, UseGuards, HttpCode, HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { BranchesService } from './branches.service';
@@ -47,7 +47,18 @@ export class BranchesController {
     return this.branchesService.update(id, tenantId, dto);
   }
 
+  @Post(':id/status')
+  @ApiOperation({ summary: 'Update branch status (active/paused/closed/archived)' })
+  updateStatus(
+    @Param('id') id: string,
+    @CurrentTenant() tenantId: string,
+    @Body('status') status: string,
+  ) {
+    return this.branchesService.updateStatus(id, tenantId, status);
+  }
+
   @Delete(':id')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete branch' })
   remove(@Param('id') id: string, @CurrentTenant() tenantId: string) {
     return this.branchesService.remove(id, tenantId);

@@ -1,21 +1,37 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { GatewayService } from '../websockets/gateway.service';
+import { EventBusService } from '../../common/event-bus/event-bus.service';
 
 @Injectable()
 export class PaymentsService {
   constructor(
     private prisma: PrismaService,
-    private gateway: GatewayService,
+    private eventBus: EventBusService,
   ) {}
+
+  private async validateOrderTenant(orderId: string, tenantId: string) {
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, branch: { tenantId } },
+    });
+    if (!order) throw new NotFoundException('Order not found or does not belong to this tenant');
+    return order;
+  }
+
+  private async validatePaymentTenant(paymentId: string, tenantId: string) {
+    const payment = await this.prisma.payment.findFirst({
+      where: { id: paymentId, branch: { tenantId } },
+      include: { order: true },
+    });
+    if (!payment) throw new NotFoundException('Payment not found or does not belong to this tenant');
+    return payment;
+  }
 
   async createPayment(orderId: string, data: {
     method: string;
     amount: number;
     reference?: string;
-  }) {
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
-    if (!order) throw new NotFoundException('Order not found');
+  }, tenantId: string) {
+    const order = await this.validateOrderTenant(orderId, tenantId);
 
     const existingPayments = await this.prisma.payment.findMany({
       where: { orderId, status: 'COMPLETED' },
@@ -29,41 +45,53 @@ export class PaymentsService {
 
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    const payment = await this.prisma.payment.create({
-      data: {
-        orderId,
-        branchId: order.branchId,
-        method: data.method as any,
-        amount: data.amount,
-        reference: data.reference || `MOCK-${Date.now()}`,
-        status: 'COMPLETED',
-      },
-    });
-
     const newTotalPaid = alreadyPaid + data.amount;
-    if (newTotalPaid >= Number(order.totalAmount) - 0.01) {
-      // Only auto-complete if order is in a completable state
-      const completableStatuses = ['READY', 'ORDER_READY', 'SERVED', 'BILLING'];
-      if (completableStatuses.includes(order.status)) {
-        await this.prisma.order.update({
+    const isFullyPaid = newTotalPaid >= Number(order.totalAmount) - 0.01;
+    const completableStatuses = ['READY', 'ORDER_READY', 'SERVED', 'BILLING'];
+    const shouldComplete = isFullyPaid && completableStatuses.includes(order.status);
+
+    const payment = await this.prisma.$transaction(async (tx) => {
+      const createdPayment = await tx.payment.create({
+        data: {
+          orderId,
+          tenantId,
+          branchId: order.branchId,
+          method: data.method as any,
+          amount: data.amount,
+          reference: data.reference || `PAY-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+          status: 'COMPLETED',
+        },
+      });
+
+      if (shouldComplete) {
+        await tx.order.update({
           where: { id: orderId },
           data: { status: 'COMPLETED' },
         });
 
-        await this.prisma.orderStatusHistory.create({
+        await tx.orderStatusHistory.create({
           data: { orderId, status: 'COMPLETED', notes: 'Auto-completed: fully paid' },
         });
-
-        if (order.tableId) {
-          await this.prisma.restaurantTable.update({
-            where: { id: order.tableId },
-            data: { status: 'FREE' },
-          });
-        }
       }
+
+      return createdPayment;
+    });
+
+    if (shouldComplete && order.tableId) {
+      await this.prisma.restaurantTable.update({
+        where: { id: order.tableId },
+        data: { status: 'FREE' },
+      });
     }
 
-    this.gateway.emitToBranch(order.branchId, 'payment:received', {
+    if (shouldComplete) {
+      await this.eventBus.invoiceGenerated(order.tenantId || order.branchId, order.branchId, {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+      });
+    }
+
+    this.eventBus.emitToBranch(order.branchId, 'payment:received', {
       orderId,
       orderNumber: order.orderNumber,
       amount: data.amount,
@@ -75,7 +103,7 @@ export class PaymentsService {
     return payment;
   }
 
-  async getPayments(branchId: string, orderId?: string) {
+  async getPayments(branchId: string, tenantId: string, orderId?: string) {
     return this.prisma.payment.findMany({
       where: {
         branchId,
@@ -88,7 +116,8 @@ export class PaymentsService {
     });
   }
 
-  async getOrderPayments(orderId: string) {
+  async getOrderPayments(orderId: string, tenantId: string) {
+    await this.validateOrderTenant(orderId, tenantId);
     const payments = await this.prisma.payment.findMany({
       where: { orderId },
       orderBy: { receivedAt: 'asc' },
@@ -108,12 +137,8 @@ export class PaymentsService {
     };
   }
 
-  async refundPayment(paymentId: string) {
-    const payment = await this.prisma.payment.findUnique({
-      where: { id: paymentId },
-      include: { order: true },
-    });
-    if (!payment) throw new NotFoundException('Payment not found');
+  async refundPayment(paymentId: string, tenantId: string) {
+    const payment = await this.validatePaymentTenant(paymentId, tenantId);
     if (payment.status === 'REFUNDED') throw new BadRequestException('Payment already refunded');
 
     const updated = await this.prisma.payment.update({
@@ -121,7 +146,6 @@ export class PaymentsService {
       data: { status: 'REFUNDED' },
     });
 
-    // Record refund in order status history
     await this.prisma.orderStatusHistory.create({
       data: {
         orderId: payment.orderId,
@@ -130,7 +154,7 @@ export class PaymentsService {
       },
     });
 
-    this.gateway.emitToBranch(payment.branchId, 'payment:refunded', {
+    this.eventBus.emitToBranch(payment.branchId, 'payment:refunded', {
       orderId: payment.orderId,
       amount: payment.amount,
       method: payment.method,

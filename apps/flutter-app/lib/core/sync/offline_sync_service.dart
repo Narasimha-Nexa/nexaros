@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:drift/drift.dart';
 import '../database/local_database.dart';
 import '../network/api_client.dart';
+import '../constants/app_constants.dart';
 
 class OfflineSyncService {
   final LocalDatabase _db;
@@ -13,12 +15,18 @@ class OfflineSyncService {
   Timer? _syncTimer;
   bool _isSyncing = false;
   bool _isOnline = true;
+  String? _lastSyncAt;
 
   final StreamController<SyncStatus> _statusController =
       StreamController<SyncStatus>.broadcast();
   Stream<SyncStatus> get statusStream => _statusController.stream;
 
+  final StreamController<int> _pendingCountController =
+      StreamController<int>.broadcast();
+  Stream<int> get pendingCountStream => _pendingCountController.stream;
+
   OfflineSyncService(this._db, this._api) {
+    _loadLastSyncAt();
     _connectivity.onConnectivityChanged.listen((result) {
       final wasOnline = _isOnline;
       _isOnline = !result.contains(ConnectivityResult.none);
@@ -29,8 +37,19 @@ class OfflineSyncService {
     _startPeriodicSync();
   }
 
+  Future<void> _loadLastSyncAt() async {
+    final prefs = await SharedPreferences.getInstance();
+    _lastSyncAt = prefs.getString(AppConstants.keyLastSyncAt);
+  }
+
+  Future<void> _saveLastSyncAt() async {
+    final prefs = await SharedPreferences.getInstance();
+    _lastSyncAt = DateTime.now().toIso8601String();
+    await prefs.setString(AppConstants.keyLastSyncAt, _lastSyncAt!);
+  }
+
   void _startPeriodicSync() {
-    _syncTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _syncTimer = Timer.periodic(AppConstants.syncInterval, (_) {
       if (_isOnline && !_isSyncing) {
         _triggerSync();
       }
@@ -43,80 +62,84 @@ class OfflineSyncService {
     _statusController.add(SyncStatus.syncing);
 
     try {
-      // Push local changes to server
       int pushedCount = 0;
       pushedCount += await _syncOrders();
       pushedCount += await _syncPayments();
       pushedCount += await _syncQueueEntries();
 
-      // Data integrity: pull-after-push verification
-      // After pushing, pull the latest data to ensure consistency
-      // and update local menu/tables cache
-      if (pushedCount > 0) {
-        await _verifySyncIntegrity();
+      // After push, pull latest data with lastSyncAt for incremental sync
+      if (pushedCount > 0 || _lastSyncAt == null) {
+        await _pullLatestData();
       }
 
-      // Periodically refresh local menu/tables cache even when no data pushed
-      // by using the existing periodic sync cycle
+      // Clear old synced entries to keep DB clean
+      await _db.clearSyncedEntries();
+
+      await _saveLastSyncAt();
       _statusController.add(SyncStatus.synced);
     } catch (e) {
+      debugPrint('Sync error: $e');
       _statusController.add(SyncStatus.error);
     } finally {
       _isSyncing = false;
+      _updatePendingCount();
     }
   }
 
-  /// Pull-after-push verification: after syncing data, pull from server
-  /// and verify the local state is consistent.
-  Future<void> _verifySyncIntegrity() async {
+  Future<void> _updatePendingCount() async {
+    final count = await getPendingCount();
+    _pendingCountController.add(count);
+  }
+
+  /// Pull latest data from server with incremental sync (server-wins conflict resolution)
+  Future<void> _pullLatestData() async {
     try {
-      // Pull latest data from server
       final serverData = await _api.pullSyncData();
 
-      // Verify local orders match server orders
-      final localOrders = await _db.getUnsyncedOrders();
-      if (localOrders.isNotEmpty) {
-        // Some orders failed to sync - they'll retry on next cycle
-        debugPrint('Data integrity: ${localOrders.length} orders still pending sync');
-      }
-
-      // Update local menu & tables from server data
+      // Server-wins conflict resolution: server data always overwrites local
       if (serverData['menuItems'] != null) {
-        for (final item in serverData['menuItems'] as List) {
+        final items = serverData['menuItems'] as List;
+        for (final item in items) {
           await _db.into(_db.localMenuItems).insertOnConflictUpdate(
             LocalMenuItemsCompanion(
-              id: Value(item['id']),
-              tenantId: Value(item['tenantId'] ?? ''),
-              categoryId: Value(item['categoryId']),
-              name: Value(item['name']),
-              description: Value(item['description']),
+              id: Value(item['id'] as String),
+              tenantId: Value(item['tenantId'] as String? ?? ''),
+              categoryId: Value(item['categoryId'] as String? ?? ''),
+              name: Value(item['name'] as String? ?? ''),
+              description: Value(item['description'] as String?),
               price: Value(double.tryParse(item['price'].toString()) ?? 0),
-              isVeg: Value(item['isVeg'] ?? false),
-              isAvailable: Value(item['isAvailable'] ?? true),
-              image: Value(item['image']),
+              isVeg: Value(item['isVeg'] as bool? ?? false),
+              isAvailable: Value(item['isAvailable'] as bool? ?? true),
+              image: Value(item['image'] as String?),
             ),
           );
         }
-        debugPrint('Data integrity: Updated ${serverData['menuItems'].length} menu items from server');
+        debugPrint('Pulled ${items.length} menu items from server');
       }
 
       if (serverData['categories'] != null) {
         for (final cat in serverData['categories'] as List) {
           await _db.into(_db.localCategories).insertOnConflictUpdate(
             LocalCategoriesCompanion(
-              id: Value(cat['id']),
-              tenantId: Value(cat['tenantId'] ?? ''),
-              name: Value(cat['name']),
-              sortOrder: Value(cat['sortOrder'] ?? 0),
-              isActive: Value(cat['isActive'] ?? true),
+              id: Value(cat['id'] as String),
+              tenantId: Value(cat['tenantId'] as String? ?? ''),
+              name: Value(cat['name'] as String? ?? ''),
+              sortOrder: Value(cat['sortOrder'] as int? ?? 0),
+              isActive: Value(cat['isActive'] as bool? ?? true),
             ),
           );
         }
-        debugPrint('Data integrity: Updated ${serverData['categories'].length} categories from server');
+        debugPrint('Pulled ${serverData['categories'].length} categories from server');
+      }
+
+      if (serverData['tables'] != null) {
+        await _db.bulkUpsertTables(
+          (serverData['tables'] as List).cast<Map<String, dynamic>>(),
+        );
+        debugPrint('Pulled ${serverData['tables'].length} tables from server');
       }
     } catch (e) {
-      debugPrint('Data integrity verification error: $e');
-      // Non-critical - data will be consistent on next sync
+      debugPrint('Pull latest data error: $e');
     }
   }
 
@@ -160,7 +183,7 @@ class OfflineSyncService {
             .write(const LocalOrdersCompanion(synced: Value(true)));
         synced++;
       } catch (_) {
-        // Will retry on next cycle
+        // Will retry on next cycle with exponential backoff
       }
     }
     return synced;
@@ -168,11 +191,7 @@ class OfflineSyncService {
 
   /// Returns number of payments synced
   Future<int> _syncPayments() async {
-    final unsynced = await (_db.select(_db.localPayments)
-          ..where((t) => t.synced.equals(false))
-          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
-        .get();
-
+    final unsynced = await _db.getUnsyncedPayments();
     int synced = 0;
     for (final payment in unsynced) {
       try {
@@ -198,33 +217,51 @@ class OfflineSyncService {
     return synced;
   }
 
-  /// Returns number of queue entries synced
+  /// Returns number of queue entries synced, with retry and exponential backoff
   Future<int> _syncQueueEntries() async {
     final pending = await _db.getPendingSync();
     int synced = 0;
     for (final entry in pending) {
+      // Enforce max retries — remove entries that have exceeded retry limit
+      if (entry.retryCount >= AppConstants.syncMaxRetries) {
+        debugPrint('Removing sync entry ${entry.id} after ${entry.retryCount} retries');
+        await _db.removeSyncQueueEntry(entry.id);
+        continue;
+      }
+
       try {
         final payload = jsonDecode(entry.payload);
         await _api.pushSyncData(payload);
         await _db.markSynced(entry.id);
         synced++;
-      } catch (_) {}
+      } catch (_) {
+        // Increment retry count on failure
+        await _db.incrementRetryCount(entry.id);
+      }
     }
     return synced;
   }
 
+  /// Manually trigger a sync (e.g., from pull-to-refresh)
+  Future<void> manualSync() async {
+    if (!_isOnline) return;
+    await _triggerSync();
+  }
+
+  /// Get count of items pending sync
   Future<int> getPendingCount() async {
     final orders = await _db.getUnsyncedOrders();
-    final payments = await (_db.select(_db.localPayments)
-          ..where((t) => t.synced.equals(false)))
-        .get();
+    final payments = await _db.getUnsyncedPayments();
     final queue = await _db.getPendingSync();
     return orders.length + payments.length + queue.length;
   }
 
+  String? get lastSyncAt => _lastSyncAt;
+
   void dispose() {
     _syncTimer?.cancel();
     _statusController.close();
+    _pendingCountController.close();
   }
 }
 

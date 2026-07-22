@@ -1,20 +1,21 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/providers/riverpod_providers.dart';
 import '../../../core/providers/app_state.dart';
 import '../../../core/hardware/printer_service.dart';
 import '../../../core/sync/offline_sync_service.dart';
 
-class PrinterDiagnosticScreen extends StatefulWidget {
+class PrinterDiagnosticScreen extends ConsumerStatefulWidget {
   const PrinterDiagnosticScreen({super.key});
 
   @override
-  State<PrinterDiagnosticScreen> createState() => _PrinterDiagnosticScreenState();
+  ConsumerState<PrinterDiagnosticScreen> createState() => _PrinterDiagnosticScreenState();
 }
 
-class _PrinterDiagnosticScreenState extends State<PrinterDiagnosticScreen> {
+class _PrinterDiagnosticScreenState extends ConsumerState<PrinterDiagnosticScreen> {
   late final PrinterService _printer;
   late final AppState _appState;
   StreamSubscription? _syncSub;
@@ -35,7 +36,7 @@ class _PrinterDiagnosticScreenState extends State<PrinterDiagnosticScreen> {
   void initState() {
     super.initState();
     _printer = PrinterService();
-    _appState = context.read<AppState>();
+    _appState = ref.read(appStateProvider);
     _printer.loadSettings();
     _checkConnections();
     _loadPendingCount();

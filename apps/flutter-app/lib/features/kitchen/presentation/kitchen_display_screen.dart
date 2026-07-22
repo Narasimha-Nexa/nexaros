@@ -1,908 +1,454 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
-import '../../../core/providers/app_state.dart';
-import '../../../core/network/api_client.dart';
-import '../../../core/services/sound_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_dimens.dart';
+import '../../../core/providers/riverpod_providers.dart';
+import '../data/kitchen_models.dart';
+import '../providers/kitchen_provider.dart';
+import 'widgets/kitchen_order_card.dart';
+import 'widgets/kitchen_search_bar.dart';
 
-/// TV-optimized Kitchen Display System with kanban board layout.
-///
-/// Shows 4 columns: NEW (Pending+Confirmed), PREPARING, READY, COMPLETED
-/// Each order card shows order#, table#, items, elapsed timer, special notes,
-/// and a status-advance button.
-class KitchenDisplayScreen extends StatefulWidget {
+class KitchenDisplayScreen extends ConsumerStatefulWidget {
   const KitchenDisplayScreen({super.key});
-
   @override
-  State<KitchenDisplayScreen> createState() => _KitchenDisplayScreenState();
+  ConsumerState<KitchenDisplayScreen> createState() => _KitchenDisplayScreenState();
 }
 
-class _KitchenDisplayScreenState extends State<KitchenDisplayScreen>
-    with WidgetsBindingObserver {
-  late final ApiClient _api;
-  List<Map<String, dynamic>> _orders = [];
-  bool _isLoading = true;
-  Timer? _timer; // 1-second tick for order timers
-  Timer? _completedCleanupTimer; // periodic cleanup of completed orders
-  bool _fullScreen = false;
-
-  // Socket listener cleanup handled by AppState.removeSocketListener
+class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
+  Timer? _refreshTimer;
+  Timer? _timerTick;
+  String _selectedView = 'all'; // all, pending, cooking, ready, rush, delayed
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
+    _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) => _loadOrders());
+    _timerTick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadOrders());
+  }
 
-    final appState = context.read<AppState>();
-    _api = appState.api;
-    _loadOrders(branchId: appState.branchId);
-
-    _startTimer();
-    _setupSocketListeners();
+  void _loadOrders() {
+    ref.read(kitchenProvider).loadOrders();
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _timer?.cancel();
-    _completedCleanupTimer?.cancel();
-    _sound.dispose();
-    // Restore system UI if we were in full-screen
-    _exitFullScreen();
-    // Socket listeners cleaned up in _setupSocketListeners on next init
+    _refreshTimer?.cancel();
+    _timerTick?.cancel();
     super.dispose();
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      final appState = context.read<AppState>();
-      _loadOrders(branchId: appState.branchId);
-      // Re-enter full-screen if it was enabled
-      if (_fullScreen) _enterFullScreen();
-    }
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final kitchen = ref.watch(kitchenProvider);
+    final state = kitchen.state;
+    final orders = _getFilteredOrders(state);
+
+    return Scaffold(
+      backgroundColor: state.isTvMode ? Colors.black : cs.surface,
+      appBar: state.isTvMode ? null : _buildAppBar(cs, state, kitchen),
+      body: RepaintBoundary(
+        child: state.isTvMode ? _buildTvLayout(orders, state, kitchen) : _buildStandardLayout(orders, state, kitchen),
+      ),
+    );
   }
 
-  void _toggleFullScreen() {
-    setState(() {
-      _fullScreen = !_fullScreen;
-      if (_fullScreen) {
-        _enterFullScreen();
-      } else {
-        _exitFullScreen();
-      }
-    });
-  }
-
-  void _enterFullScreen() {
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-  }
-
-  void _exitFullScreen() {
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-  }
-
-  void _startTimer() {
-    // Tick every second to update elapsed timers
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
-    });
-    // Clean up completed orders every 30 seconds
-    _completedCleanupTimer =
-        Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted) _cleanupCompletedOrders();
-    });
-  }
-
-  void _setupSocketListeners() {
-    final appState = context.read<AppState>();
-    final branchId = appState.branchId;
-
-    // Remove stale listeners first to avoid duplicates
-    appState.removeSocketListener('order:created');
-    appState.removeSocketListener('order:status-changed');
-    appState.removeSocketListener('order:ready');
-
-    // New order arrives — play alert and refresh
-    appState.listenToEvent('order:created', (_) {
-      _playNewOrderAlert();
-      _loadOrders(branchId: branchId);
-    });
-
-    // Order status changed — refresh
-    appState.listenToEvent('order:status-changed', (_) {
-      _loadOrders(branchId: branchId);
-    });
-
-    // Order ready — refresh
-    appState.listenToEvent('order:ready', (_) {
-      _loadOrders(branchId: branchId);
-    });
-  }
-
-  Future<void> _loadOrders({String? branchId}) async {
-    try {
-      final rawOrders = await _api.getActiveKitchenOrders(
-        branchId: branchId,
-      );
-      if (mounted) {
-        setState(() {
-          _orders = rawOrders.cast<Map<String, dynamic>>();
-          _isLoading = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  final SoundService _sound = SoundService();
-
-  void _playNewOrderAlert() {
-    // Visual pulse is handled by the animated builder.
-    // Play a proper kitchen bell chime as audio cue.
-    _sound.playNewOrderChime();
-  }
-
-  void _cleanupCompletedOrders() {
-    // Orders in COMPLETED older than 5 minutes are removed from the view
-    final cutoff = DateTime.now().subtract(const Duration(minutes: 5));
-    setState(() {
-      _orders.removeWhere((o) {
-        final status = o['status'] as String? ?? '';
-        if (status != 'COMPLETED' && status != 'SERVED') return false;
-        final updatedAt = DateTime.tryParse(o['updatedAt'] ?? '');
-        return updatedAt != null && updatedAt.isBefore(cutoff);
-      });
-    });
-  }
-
-  Future<void> _updateStatus(String orderId, String newStatus) async {
-    try {
-      final appState = context.read<AppState>();
-      await _api.updateKitchenOrderStatus(
-        orderId,
-        newStatus,
-        branchId: appState.branchId,
-      );
-      // Socket event will trigger refresh
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString().replaceAll('Exception: ', '')}'),
-            backgroundColor: AppColors.danger,
+  PreferredSizeWidget _buildAppBar(ColorScheme cs, KitchenState state, KitchenProvider kitchen) {
+    return AppBar(
+      elevation: 0,
+      backgroundColor: cs.surface,
+      title: Row(children: [
+        const Icon(Icons.restaurant_menu, size: 20),
+        const SizedBox(width: 8),
+        Text('Kitchen Display', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+        const SizedBox(width: 16),
+        _CountBadge('New', state.pendingCount, KitchenOrderStatus.pending.color),
+        const SizedBox(width: 6),
+        _CountBadge('Cooking', state.preparingCount, KitchenOrderStatus.cooking.color),
+        const SizedBox(width: 6),
+        _CountBadge('Ready', state.readyCount, KitchenOrderStatus.ready.color),
+        if (state.rushCount > 0) ...[
+          const SizedBox(width: 6),
+          _CountBadge('Rush', state.rushCount, KitchenOrderStatus.rush.color),
+        ],
+        if (state.delayedCount > 0) ...[
+          const SizedBox(width: 6),
+          _CountBadge('Delayed', state.delayedCount, AppColors.danger),
+        ],
+      ]),
+      actions: [
+        if (state.selectedOrderIds.isNotEmpty)
+          IconButton(
+            icon: Badge(
+              label: Text('${state.selectedOrderIds.length}', style: const TextStyle(color: Colors.white, fontSize: 10)),
+              child: const Icon(Icons.checklist, size: 20),
+            ),
+            tooltip: 'Bulk Actions',
+            onPressed: () => _showBulkActions(state, kitchen),
           ),
-        );
-      }
-    }
+        IconButton(
+          icon: Icon(state.soundEnabled ? Icons.volume_up : Icons.volume_off, size: 20),
+          tooltip: state.soundEnabled ? 'Sound ON' : 'Sound OFF',
+          onPressed: () => kitchen.toggleSound(),
+        ),
+        IconButton(
+          icon: Icon(state.isTvMode ? Icons.fullscreen_exit : Icons.fullscreen, size: 20),
+          tooltip: state.isTvMode ? 'Exit TV Mode' : 'TV Mode',
+          onPressed: () => kitchen.toggleTvMode(),
+        ),
+        if (state.unreadNotificationCount > 0)
+          Badge(
+            label: Text('${state.unreadNotificationCount}', style: const TextStyle(color: Colors.white, fontSize: 10)),
+            child: IconButton(
+              icon: const Icon(Icons.notifications, size: 20),
+              onPressed: () {
+                kitchen.markNotificationsRead();
+                _showNotifications(state);
+              },
+            ),
+          )
+        else
+          IconButton(
+            icon: const Icon(Icons.notifications_none, size: 20),
+            onPressed: () => _showNotifications(state),
+          ),
+        IconButton(
+          icon: const Icon(Icons.refresh, size: 20),
+          onPressed: _loadOrders,
+        ),
+      ],
+    );
   }
 
-  Future<void> _reprintKot(String orderId) async {
-    try {
-      await _api.printKot(orderId);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('KOT resent to printer'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Print error: ${e.toString().replaceAll('Exception: ', '')}'),
-            backgroundColor: AppColors.danger,
-          ),
-        );
-      }
-    }
+  Widget _buildStandardLayout(List<KitchenOrder> orders, KitchenState state, KitchenProvider kitchen) {
+    return Column(children: [
+      // Search bar
+      const Padding(
+        padding: EdgeInsets.fromLTRB(12, 8, 12, 0),
+        child: KitchenSearchBar(),
+      ),
+      // View filter chips
+      _buildViewChips(state),
+      // Orders grid
+      Expanded(
+        child: orders.isEmpty
+            ? _buildEmptyState(state)
+            : RefreshIndicator(
+                onRefresh: () async => _loadOrders(),
+                child: _buildOrdersGrid(orders, state, kitchen, false),
+              ),
+      ),
+    ]);
   }
+
+  Widget _buildTvLayout(List<KitchenOrder> orders, KitchenState state, KitchenProvider kitchen) {
+    return Column(children: [
+      // TV top bar
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+        color: Colors.black,
+        child: Row(children: [
+          const Icon(Icons.restaurant_menu, color: Colors.white, size: 26),
+          const SizedBox(width: 12),
+          Text('KITCHEN DISPLAY', style: GoogleFonts.inter(
+            fontWeight: FontWeight.w800, fontSize: 18, color: Colors.white, letterSpacing: 2)),
+          const Spacer(),
+          _TvTab('ALL', state.activeOrders.length, AppColors.primary, _selectedView == 'all', () => setState(() => _selectedView = 'all')),
+          const SizedBox(width: 6),
+          _TvTab('NEW', state.pendingCount, KitchenOrderStatus.pending.color, _selectedView == 'pending', () => setState(() => _selectedView = 'pending')),
+          const SizedBox(width: 6),
+          _TvTab('COOKING', state.preparingCount, KitchenOrderStatus.cooking.color, _selectedView == 'cooking', () => setState(() => _selectedView = 'cooking')),
+          const SizedBox(width: 6),
+          _TvTab('READY', state.readyCount, KitchenOrderStatus.ready.color, _selectedView == 'ready', () => setState(() => _selectedView = 'ready')),
+          const SizedBox(width: 6),
+          _TvTab('RUSH', state.rushCount, Colors.red, _selectedView == 'rush', () => setState(() => _selectedView = 'rush')),
+          const SizedBox(width: 6),
+          _TvTab('DELAYED', state.delayedCount, AppColors.warning, _selectedView == 'delayed', () => setState(() => _selectedView = 'delayed')),
+          const SizedBox(width: 16),
+          Text(
+            '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
+            style: GoogleFonts.inter(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+        ]),
+      ),
+      // Search
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        color: Colors.grey[900],
+        child: const KitchenSearchBar(darkMode: true),
+      ),
+      // Orders
+      Expanded(
+        child: orders.isEmpty
+            ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Icon(Icons.check_circle_outline, size: 64, color: Colors.white24),
+                const SizedBox(height: 16),
+                Text('All Clear!', style: GoogleFonts.inter(fontSize: 24, color: Colors.white54, fontWeight: FontWeight.w700)),
+              ]))
+            : _buildOrdersGrid(orders, state, kitchen, true),
+      ),
+    ]);
+  }
+
+  Widget _buildViewChips(KitchenState state) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(children: [
+        _FilterChip('All', state.orders.length, _selectedView == 'all', AppColors.primary, () {
+          setState(() => _selectedView = 'all');
+          ref.read(kitchenProvider).clearFilters();
+        }),
+        const SizedBox(width: 6),
+        _FilterChip('New', state.pendingCount, _selectedView == 'pending', KitchenOrderStatus.pending.color, () {
+          setState(() => _selectedView = 'pending');
+          ref.read(kitchenProvider).updateFilter((f) => f.copyWith(statuses: [KitchenOrderStatus.pending]));
+        }),
+        const SizedBox(width: 6),
+        _FilterChip('Cooking', state.preparingCount, _selectedView == 'cooking', KitchenOrderStatus.cooking.color, () {
+          setState(() => _selectedView = 'cooking');
+          ref.read(kitchenProvider).updateFilter((f) => f.copyWith(statuses: [KitchenOrderStatus.preparing, KitchenOrderStatus.cooking]));
+        }),
+        const SizedBox(width: 6),
+        _FilterChip('Ready', state.readyCount, _selectedView == 'ready', KitchenOrderStatus.ready.color, () {
+          setState(() => _selectedView = 'ready');
+          ref.read(kitchenProvider).updateFilter((f) => f.copyWith(statuses: [KitchenOrderStatus.ready]));
+        }),
+        if (state.rushCount > 0) ...[
+          const SizedBox(width: 6),
+          _FilterChip('Rush', state.rushCount, _selectedView == 'rush', Colors.red, () {
+            setState(() => _selectedView = 'rush');
+            ref.read(kitchenProvider).updateFilter((f) => f.copyWith(showRushOnly: true));
+          }),
+        ],
+        if (state.delayedCount > 0) ...[
+          const SizedBox(width: 6),
+          _FilterChip('Delayed', state.delayedCount, _selectedView == 'delayed', AppColors.warning, () {
+            setState(() => _selectedView = 'delayed');
+            ref.read(kitchenProvider).updateFilter((f) => f.copyWith(showDelayedOnly: true));
+          }),
+        ],
+      ]),
+    );
+  }
+
+  Widget _buildOrdersGrid(List<KitchenOrder> orders, KitchenState state, KitchenProvider kitchen, bool isTvMode) {
+    final crossCount = isTvMode ? _tvCrossAxisCount(context) : _standardCrossAxisCount(context);
+    return GridView.builder(
+      padding: EdgeInsets.all(isTvMode ? 12 : AppDimens.base),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossCount,
+        childAspectRatio: isTvMode ? 0.85 : 0.78,
+        mainAxisSpacing: isTvMode ? 10 : AppDimens.sm,
+        crossAxisSpacing: isTvMode ? 10 : AppDimens.sm,
+      ),
+      itemCount: orders.length,
+      itemBuilder: (context, index) => KitchenOrderCard(
+        order: orders[index],
+        isTvMode: isTvMode,
+        isSelected: state.selectedOrderIds.contains(orders[index].id),
+        onSelect: () => kitchen.toggleOrderSelection(orders[index].id),
+        onStatusChange: (status) => kitchen.updateOrderStatus(orders[index].id, status),
+        onItemStatusChange: (itemId, status) => kitchen.updateItemStatus(orders[index].id, itemId, status),
+        onBump: () => kitchen.bumpOrder(orders[index].id),
+        onRush: () => kitchen.rushOrder(orders[index].id),
+        onHold: () => kitchen.holdOrder(orders[index].id),
+        onRecall: () => kitchen.recallOrder(orders[index].id),
+        onAssignChef: (chefId, chefName) => kitchen.assignChef(orders[index].id, chefId, chefName),
+        onFireCourse: (course) => kitchen.fireCourse(orders[index].id, course),
+        slaConfig: state.slaConfig,
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(KitchenState state) {
+    if (state.isLoading) return const Center(child: CircularProgressIndicator());
+    if (state.error != null) {
+      return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        const Icon(Icons.error_outline, size: 48, color: AppColors.danger),
+        const SizedBox(height: 12),
+        Text('Error: ${state.error}', style: GoogleFonts.inter(color: AppColors.danger)),
+        const SizedBox(height: 12),
+        ElevatedButton(onPressed: _loadOrders, child: const Text('Retry')),
+      ]));
+    }
+    return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      Icon(Icons.restaurant_menu, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.3)),
+      const SizedBox(height: 12),
+      Text('No orders in kitchen', style: GoogleFonts.inter(
+        fontSize: 16, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5))),
+    ]));
+  }
+
+  List<KitchenOrder> _getFilteredOrders(KitchenState state) {
+    var orders = state.orders;
+    switch (_selectedView) {
+      case 'pending': orders = state.pendingOrders; break;
+      case 'cooking': orders = state.preparingOrders; break;
+      case 'ready': orders = state.readyOrders; break;
+      case 'rush': orders = state.rushOrders; break;
+      case 'delayed': orders = state.delayedOrders; break;
+      default: orders = state.filteredOrders;
+    }
+    return orders;
+  }
+
+  int _tvCrossAxisCount(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    if (width > 1920) return 5;
+    if (width > 1400) return 4;
+    if (width > 1000) return 3;
+    return 2;
+  }
+
+  int _standardCrossAxisCount(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    if (width > 1200) return 4;
+    if (width > 900) return 3;
+    if (width > 600) return 2;
+    return 1;
+  }
+
+  void _showNotifications(KitchenState state) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.5, minChildSize: 0.3, maxChildSize: 0.8, expand: false,
+        builder: (ctx, scrollController) => ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.all(16),
+          children: [
+            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 16),
+            Text('Notifications', style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 18)),
+            const SizedBox(height: 12),
+            if (state.notifications.isEmpty)
+              Padding(padding: const EdgeInsets.all(24), child: Text('No notifications', style: GoogleFonts.inter(color: Colors.grey)))
+            else
+              ...state.notifications.take(20).map((n) => ListTile(
+                leading: Icon(n.type == KitchenNotificationType.orderRush ? Icons.bolt : Icons.notifications,
+                  color: n.type == KitchenNotificationType.orderDelayed ? AppColors.danger : AppColors.primary),
+                title: Text(n.title, style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13)),
+                subtitle: Text(n.message, style: GoogleFonts.inter(fontSize: 12, color: Colors.grey)),
+                dense: true,
+              )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showBulkActions(KitchenState state, KitchenProvider kitchen) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text('${state.selectedOrderIds.length} orders selected', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+        ),
+        ListTile(leading: const Icon(Icons.check_circle), title: const Text('Mark All Ready'),
+          onTap: () { Navigator.pop(ctx); kitchen.bulkUpdateStatus(state.selectedOrderIds, KitchenOrderStatus.ready); }),
+        ListTile(leading: const Icon(Icons.cancel), title: const Text('Cancel All'),
+          onTap: () { Navigator.pop(ctx); kitchen.bulkUpdateStatus(state.selectedOrderIds, KitchenOrderStatus.cancelled); }),
+        ListTile(leading: const Icon(Icons.clear_all), title: const Text('Clear Selection'),
+          onTap: () { Navigator.pop(ctx); kitchen.clearSelection(); }),
+      ])),
+    );
+  }
+}
+
+// ─── Helper Widgets ───
+
+class _CountBadge extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color color;
+  const _CountBadge(this.label, this.count, this.color);
 
   @override
   Widget build(BuildContext context) {
-    // Large, TV-optimized layout
-    return Scaffold(
-      backgroundColor: AppColors.gray900,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(48),
-        child: _buildHeader(),
-      ),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
-            )
-          : _orders.isEmpty
-              ? _buildEmptyState()
-              : _buildKanbanBoard(),
-    );
-  }
-
-  Widget _buildHeader() {
-    final now = DateTime.now();
-    final timeStr =
-        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-    final dateStr =
-        '${now.day}/${now.month}/${now.year}';
-
-    final pending = _orders.where((o) =>
-            o['status'] == 'PENDING' || o['status'] == 'CONFIRMED')
-        .length;
-    final preparing =
-        _orders.where((o) => o['status'] == 'PREPARING').length;
-    final ready = _orders.where((o) => o['status'] == 'READY').length;
-
     return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: const BoxDecoration(
-        color: AppColors.gray800,
-        border: Border(bottom: BorderSide(color: AppColors.gray700)),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: count > 0 ? color.withValues(alpha: 0.15) : Colors.transparent,
+        borderRadius: BorderRadius.circular(AppDimens.radiusFull),
+        border: count > 0 ? Border.all(color: color.withValues(alpha: 0.3)) : null,
       ),
-      child: Row(
-        children: [
-          Text(
-            '🍳 KITCHEN',
-            style: GoogleFonts.inter(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppColors.white,
-              letterSpacing: 1.2,
-            ),
-          ),
-          const SizedBox(width: 24),
-          _buildHeaderStat('NEW', pending, AppColors.danger),
-          const SizedBox(width: 12),
-          _buildHeaderStat('PREP', preparing, AppColors.orderPreparing),
-          const SizedBox(width: 12),
-          _buildHeaderStat('READY', ready, AppColors.orderReady),
-          // Sound mute toggle
-          IconButton(
-            icon: Icon(
-              _sound.muted ? Icons.volume_off : Icons.volume_up,
-              color: _sound.muted ? AppColors.gray500 : AppColors.gray300,
-              size: 18,
-            ),
-            tooltip: _sound.muted ? 'Unmute sound' : 'Mute sound',
-            onPressed: () {
-              setState(() => _sound.toggleMute());
-            },
-          ),
-          // Full-screen toggle
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Text(label, style: GoogleFonts.inter(fontSize: 11, color: count > 0 ? color : Colors.grey, fontWeight: FontWeight.w500)),
+        if (count > 0) ...[
           const SizedBox(width: 4),
-          IconButton(
-            icon: Icon(
-              _fullScreen ? Icons.fullscreen_exit : Icons.fullscreen,
-              color: _fullScreen ? AppColors.primary : AppColors.gray300,
-              size: 18,
-            ),
-            tooltip: _fullScreen ? 'Exit full screen' : 'Full screen',
-            onPressed: _toggleFullScreen,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            '$dateStr  $timeStr',
-            style: GoogleFonts.jetBrainsMono(
-              fontSize: 14,
-              color: AppColors.gray400,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeaderStat(String label, int count, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
           Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            '$label: $count',
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(10)),
+            child: Text('$count', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
           ),
         ],
-      ),
+      ]),
     );
   }
+}
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.restaurant_menu, size: 80, color: AppColors.gray600),
-          const SizedBox(height: 16),
-          Text(
-            'No Active Orders',
-            style: GoogleFonts.inter(
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-              color: AppColors.gray400,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'New orders will appear here in real-time',
-            style: GoogleFonts.inter(fontSize: 16, color: AppColors.gray500),
-          ),
-          const SizedBox(height: 24),
-          OutlinedButton.icon(
-            onPressed: () {
-              final appState = context.read<AppState>();
-              _loadOrders(branchId: appState.branchId);
-            },
-            icon: const Icon(Icons.refresh),
-            label: const Text('Refresh'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.gray300,
-              side: const BorderSide(color: AppColors.gray600),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final int count;
+  final bool isSelected;
+  final Color color;
+  final VoidCallback onTap;
+  const _FilterChip(this.label, this.count, this.isSelected, this.color, this.onTap);
 
-  Widget _buildKanbanBoard() {
-    final columns = _buildColumns();
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final screenWidth = constraints.maxWidth;
-
-        // Responsive column count
-        int columnCount;
-        if (screenWidth > 1600) {
-          columnCount = 4; // Full 4 columns on large screens
-        } else if (screenWidth > 1100) {
-          columnCount = 3; // Hide COMPLETED on medium
-        } else {
-          columnCount = 2; // Only NEW+PREPARING on smaller KDS
-        }
-
-        final visibleColumns = columns.take(columnCount).toList();
-
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SizedBox(
-            width: columnCount * 320.0,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: visibleColumns
-                  .map((col) => SizedBox(width: 320, child: col))
-                  .toList(),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  List<Widget> _buildColumns() {
-    final newOrders = _orders
-        .where((o) =>
-            o['status'] == 'PENDING' || o['status'] == 'CONFIRMED')
-        .toList();
-    final preparingOrders =
-        _orders.where((o) => o['status'] == 'PREPARING').toList();
-    final readyOrders =
-        _orders.where((o) => o['status'] == 'READY').toList();
-    final completedOrders = _orders
-        .where(
-            (o) => o['status'] == 'COMPLETED' || o['status'] == 'SERVED')
-        .toList();
-
-    return [
-      _buildColumn(
-        title: 'NEW',
-        count: newOrders.length,
-        color: AppColors.danger,
-        bgColor: const Color(0x1AEF4444),
-        orders: newOrders,
-        nextStatus: 'PREPARING',
-        nextLabel: '▶ START',
-        nextColor: AppColors.orderPreparing,
-        shouldPulse: true,
-      ),
-      _buildColumn(
-        title: 'PREPARING',
-        count: preparingOrders.length,
-        color: AppColors.orderPreparing,
-        bgColor: const Color(0x1AF97316),
-        orders: preparingOrders,
-        nextStatus: 'READY',
-        nextLabel: '✅ DONE',
-        nextColor: AppColors.orderReady,
-        shouldPulse: false,
-      ),
-      _buildColumn(
-        title: 'READY',
-        count: readyOrders.length,
-        color: AppColors.orderReady,
-        bgColor: const Color(0x1A10B981),
-        orders: readyOrders,
-        nextStatus: 'SERVED',
-        nextLabel: '🍽 SERVE',
-        nextColor: AppColors.orderServed,
-        shouldPulse: false,
-      ),
-      _buildColumn(
-        title: 'COMPLETED',
-        count: completedOrders.length,
-        color: AppColors.gray500,
-        bgColor: const Color(0x1A64748B),
-        orders: completedOrders,
-        nextStatus: null,
-        nextLabel: null,
-        nextColor: null,
-        shouldPulse: false,
-      ),
-    ];
-  }
-
-  Widget _buildColumn({
-    required String title,
-    required int count,
-    required Color color,
-    required Color bgColor,
-    required List<Map<String, dynamic>> orders,
-    required String? nextStatus,
-    required String? nextLabel,
-    required Color? nextColor,
-    required bool shouldPulse,
-  }) {
-    final isNewColumn = title == 'NEW';
-
-    return Container(
-      margin: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppColors.gray800,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.gray700),
-      ),
-      child: Column(
-        children: [
-          // Column header
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.2),
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(10)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  title,
-                  style: GoogleFonts.inter(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                    letterSpacing: 1,
-                  ),
-                ),
-                const Spacer(),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.gray700,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    '$count',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Orders list
-          Expanded(
-            child: orders.isEmpty
-                ? Center(
-                    child: Text(
-                      'No orders',
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        color: AppColors.gray500,
-                      ),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(8),
-                    itemCount: orders.length,
-                    itemBuilder: (ctx, i) {
-                      final isNew = isNewColumn && i < 3;
-                      return _buildOrderCard(
-                        orders[i],
-                        nextStatus: nextStatus,
-                        nextLabel: nextLabel,
-                        nextColor: nextColor,
-                        isHighlighted: isNew && shouldPulse,
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOrderCard(
-    Map<String, dynamic> order, {
-    required String? nextStatus,
-    required String? nextLabel,
-    required Color? nextColor,
-    bool isHighlighted = false,
-  }) {
-    final status = order['status'] as String? ?? 'PENDING';
-    final orderNumber = order['orderNumber'] ?? '-';
-    final table = order['table'] as Map<String, dynamic>?;
-    final tableNumber = table?['number'] ?? '-';
-    final items = (order['items'] as List<dynamic>?) ?? [];
-    final notes = order['notes'] as String? ?? '';
-    final createdAt = DateTime.tryParse(order['createdAt'] ?? '') ?? DateTime.now();
-
-    // Compute elapsed time
-    final elapsed = DateTime.now().difference(createdAt);
-    final elapsedMinutes = elapsed.inMinutes;
-    final elapsedSeconds = elapsed.inSeconds.remainder(60);
-    final elapsedStr =
-        '${elapsedMinutes.toString().padLeft(2, '0')}:${elapsedSeconds.toString().padLeft(2, '0')}';
-
-    // Urgency color: >10 min = danger, >5 min = warning
-    Color timerColor = AppColors.success;
-    if (elapsedMinutes >= 10) {
-      timerColor = AppColors.danger;
-    } else if (elapsedMinutes >= 5) {
-      timerColor = AppColors.warning;
-    }
-
-    // Count veg / non-veg items
-    final vegCount = items.where((i) {
-      final mi = i['menuItem'] as Map<String, dynamic>?;
-      return mi?['isVeg'] == true;
-    }).length;
-    final nonVegCount = items.length - vegCount;
-
-    final isCompleted = status == 'COMPLETED' || status == 'SERVED';
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: isCompleted ? AppColors.gray800.withValues(alpha: 0.5) : AppColors.gray700,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isHighlighted
-              ? AppColors.warning.withValues(alpha: 0.6)
-              : AppColors.gray600,
-          width: isHighlighted ? 2 : 1,
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? color : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(AppDimens.radiusFull),
         ),
-        boxShadow: isHighlighted
-            ? [
-                BoxShadow(
-                  color: AppColors.warning.withValues(alpha: 0.2),
-                  blurRadius: 8,
-                  spreadRadius: 1,
-                ),
-              ]
-            : null,
+        child: Text(label, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: isSelected ? Colors.white : Colors.grey[600])),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header: Order # + Table # + Timer
-            Row(
-              children: [
-                // Order number
-                Text(
-                  '#$orderNumber',
-                  style: GoogleFonts.inter(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.white,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                // Table
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.gray600,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    'T$tableNumber',
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.gray200,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // Order type
-                if (order['type'] != null) ...[
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppColors.info.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      (order['type'] as String).replaceAll('_', ' '),
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: AppColors.info,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-                const Spacer(),
-                // Timer
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: timerColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.timer,
-                        size: 14,
-                        color: timerColor,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        elapsedStr,
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: timerColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+    );
+  }
+}
 
-            const SizedBox(height: 8),
+class _TvTab extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color color;
+  final bool isSelected;
+  final VoidCallback onTap;
+  const _TvTab(this.label, this.count, this.color, this.isSelected, this.onTap);
 
-            // Items list
-            if (items.isNotEmpty) ...[
-              ...items.take(6).map((item) {
-                final mi = item['menuItem'] as Map<String, dynamic>?;
-                final itemName = item['name'] ?? mi?['name'] ?? '';
-                final qty = item['quantity'] ?? 1;
-                final isVeg = mi?['isVeg'] == true;
-                final itemNotes = item['notes'] as String? ?? '';
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 3),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Veg/Non-veg indicator
-                      Container(
-                        width: 14,
-                        height: 14,
-                        margin: const EdgeInsets.only(top: 3, right: 6),
-                        decoration: BoxDecoration(
-                          color: isVeg
-                              ? AppColors.success.withValues(alpha: 0.2)
-                              : AppColors.danger.withValues(alpha: 0.2),
-                          border: Border.all(
-                            color: isVeg ? AppColors.success : AppColors.danger,
-                            width: 2,
-                          ),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                        child: Center(
-                          child: Container(
-                            width: 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color: isVeg
-                                  ? AppColors.success
-                                  : AppColors.danger,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ),
-                      ),
-                      // Quantity
-                      Text(
-                        '${qty}x ',
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.white,
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          itemName,
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
-                            color: AppColors.gray200,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      // Item notes indicator
-                      if (itemNotes.isNotEmpty)
-                        const Icon(Icons.info_outline,
-                            size: 14, color: AppColors.warning),
-                    ],
-                  ),
-                );
-              }),
-              if (items.length > 6)
-                Text(
-                  '+${items.length - 6} more items',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: AppColors.gray400,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-            ],
-
-            // Special notes (highlighted)
-            if (notes.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: AppColors.warning.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(
-                    color: AppColors.warning.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.warning_amber_rounded,
-                        size: 14, color: AppColors.warning),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        notes,
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.warning,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-
-            // Veg / Non-veg summary
-            if (vegCount > 0 || nonVegCount > 0) ...[
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  if (vegCount > 0)
-                    Text(
-                      '🟢 $vegCount veg',
-                      style: GoogleFonts.inter(
-                          fontSize: 11, color: AppColors.gray400),
-                    ),
-                  if (vegCount > 0 && nonVegCount > 0)
-                    const SizedBox(width: 8),
-                  if (nonVegCount > 0)
-                    Text(
-                      '🔴 $nonVegCount non-veg',
-                      style: GoogleFonts.inter(
-                          fontSize: 11, color: AppColors.gray400),
-                    ),
-                ],
-              ),
-            ],
-
-            // Actions
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                // Status advance button
-                if (nextStatus != null && nextLabel != null) ...[
-                  Expanded(
-                    child: SizedBox(
-                      height: 36,
-                      child: ElevatedButton(
-                        onPressed: () => _updateStatus(
-                            order['id'], nextStatus),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: nextColor ?? AppColors.primary,
-                          foregroundColor: AppColors.white,
-                          padding: EdgeInsets.zero,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          textStyle: GoogleFonts.inter(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        child: Text(nextLabel),
-                      ),
-                    ),
-                  ),
-                ],
-                // KOT reprint
-                const SizedBox(width: 6),
-                SizedBox(
-                  height: 36,
-                  child: OutlinedButton(
-                    onPressed: () => _reprintKot(order['id']),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.gray300,
-                      side: const BorderSide(color: AppColors.gray500),
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                    child: const Icon(Icons.print, size: 18),
-                  ),
-                ),
-              ],
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withValues(alpha: 0.3) : Colors.white10,
+          borderRadius: BorderRadius.circular(8),
+          border: isSelected ? Border.all(color: color, width: 2) : null,
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text(label, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+          if (count > 0) ...[
+            const SizedBox(width: 5),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(10)),
+              child: Text('$count', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
             ),
           ],
-        ),
+        ]),
       ),
     );
   }

@@ -1,13 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrdersService } from './orders.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { GatewayService } from '../websockets/gateway.service';
+import { EventBusService } from '../../common/event-bus/event-bus.service';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 
 describe('OrdersService', () => {
   let service: OrdersService;
   let prisma: jest.Mocked<PrismaService>;
-  let gateway: jest.Mocked<GatewayService>;
+  let eventBus: jest.Mocked<EventBusService>;
 
   // Fixtures
   const mockOrder = {
@@ -70,7 +70,20 @@ describe('OrdersService', () => {
     orderStatusHistory: { create: jest.fn() },
   };
 
-  const mockGateway = { emitToBranch: jest.fn(), emitToOrder: jest.fn() };
+  const mockEventBus = {
+    emitToBranch: jest.fn(),
+    emitToTenant: jest.fn(),
+    orderCreated: jest.fn(),
+    orderUpdated: jest.fn(),
+    orderStatusChanged: jest.fn(),
+    orderReady: jest.fn(),
+    kotReady: jest.fn(),
+    orderTrackingEvent: jest.fn(),
+    menuUpdated: jest.fn(),
+    emitToRoom: jest.fn(),
+    emitToTenantPublicBySlug: jest.fn(),
+    emitToRoomPublic: jest.fn(),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -79,13 +92,13 @@ describe('OrdersService', () => {
       providers: [
         OrdersService,
         { provide: PrismaService, useValue: mockPrisma },
-        { provide: GatewayService, useValue: mockGateway },
+        { provide: EventBusService, useValue: mockEventBus },
       ],
     }).compile();
 
     service = module.get<OrdersService>(OrdersService);
     prisma = module.get(PrismaService) as jest.Mocked<PrismaService>;
-    gateway = module.get(GatewayService) as jest.Mocked<GatewayService>;
+    eventBus = module.get(EventBusService) as jest.Mocked<EventBusService>;
   });
 
   describe('findAll', () => {
@@ -120,17 +133,18 @@ describe('OrdersService', () => {
 
   describe('findOne', () => {
     it('should return order when found', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue({ ...mockOrder, branch: { tenantId: 'tenant-1' } });
       mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
 
-      const result = await service.findOne('order-1');
+      const result = await service.findOne('order-1', 'tenant-1');
 
       expect(result).toMatchObject({ id: 'order-1', orderNumber: 101 });
     });
 
     it('should throw NotFoundException when order not found', async () => {
-      mockPrisma.order.findUnique.mockResolvedValue(null);
+      mockPrisma.order.findFirst.mockResolvedValue(null);
 
-      await expect(service.findOne('missing')).rejects.toThrow(NotFoundException);
+      await expect(service.findOne('missing', 'tenant-1')).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -198,9 +212,9 @@ describe('OrdersService', () => {
     it('should emit order:created event', async () => {
       await service.create('branch-1', createDto as any);
 
-      expect(mockGateway.emitToBranch).toHaveBeenCalledWith(
+      expect(mockEventBus.orderCreated).toHaveBeenCalledWith(
+        expect.any(String),
         'branch-1',
-        'order:created',
         expect.objectContaining({ orderNumber: 101 }),
       );
     });
@@ -223,6 +237,7 @@ describe('OrdersService', () => {
 
   describe('addItem', () => {
     beforeEach(() => {
+      mockPrisma.order.findFirst.mockResolvedValue({ ...mockOrder, branch: { tenantId: 'tenant-1' } });
       mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
       mockPrisma.orderItem.findMany.mockResolvedValue([
         { ...mockOrderItem, totalPrice: 500 },
@@ -238,10 +253,10 @@ describe('OrdersService', () => {
         name: 'Lassi',
         quantity: 1,
         unitPrice: 80,
-      });
+      }, 'tenant-1');
 
       expect(result.orderItem).toBeDefined();
-      expect(mockGateway.emitToBranch).toHaveBeenCalledWith(
+      expect(mockEventBus.emitToBranch).toHaveBeenCalledWith(
         'branch-1',
         'order:updated',
         expect.objectContaining({ action: 'item_added' }),
@@ -249,24 +264,25 @@ describe('OrdersService', () => {
     });
 
     it('should throw NotFoundException when order not found', async () => {
-      mockPrisma.order.findUnique.mockResolvedValue(null);
+      mockPrisma.order.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.addItem('missing', { menuItemId: 'm', name: 'x', quantity: 1, unitPrice: 10 }),
+        service.addItem('missing', { menuItemId: 'm', name: 'x', quantity: 1, unitPrice: 10 }, 'tenant-1'),
       ).rejects.toThrow(NotFoundException);
     });
 
     it('should throw BadRequestException when order is completed', async () => {
-      mockPrisma.order.findUnique.mockResolvedValue({ ...mockOrder, status: 'COMPLETED' });
+      mockPrisma.order.findFirst.mockResolvedValue({ ...mockOrder, status: 'COMPLETED', branch: { tenantId: 'tenant-1' } });
 
       await expect(
-        service.addItem('order-1', { menuItemId: 'm', name: 'x', quantity: 1, unitPrice: 10 }),
+        service.addItem('order-1', { menuItemId: 'm', name: 'x', quantity: 1, unitPrice: 10 }, 'tenant-1'),
       ).rejects.toThrow(BadRequestException);
     });
   });
 
   describe('removeItem', () => {
     beforeEach(() => {
+      mockPrisma.order.findFirst.mockResolvedValue({ ...mockOrder, branch: { tenantId: 'tenant-1' } });
       mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
       mockPrisma.orderItem.findFirst.mockResolvedValue(mockOrderItem);
       mockPrisma.orderItem.findMany.mockResolvedValue([]);
@@ -276,10 +292,10 @@ describe('OrdersService', () => {
     it('should remove item from order', async () => {
       mockPrisma.orderItem.delete.mockResolvedValue(mockOrderItem);
 
-      const result = await service.removeItem('order-1', 'item-1');
+      const result = await service.removeItem('order-1', 'item-1', 'tenant-1');
 
       expect(result.removed).toBe(true);
-      expect(mockGateway.emitToBranch).toHaveBeenCalledWith(
+      expect(mockEventBus.emitToBranch).toHaveBeenCalledWith(
         'branch-1',
         'order:updated',
         expect.objectContaining({ action: 'item_removed' }),
@@ -289,7 +305,7 @@ describe('OrdersService', () => {
     it('should throw NotFoundException when item is not on order', async () => {
       mockPrisma.orderItem.findFirst.mockResolvedValue(null);
 
-      await expect(service.removeItem('order-1', 'wrong-item')).rejects.toThrow(NotFoundException);
+      await expect(service.removeItem('order-1', 'wrong-item', 'tenant-1')).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -358,7 +374,7 @@ describe('OrdersService', () => {
 
       await service.updateStatus('order-1', 'READY');
 
-      expect(mockGateway.emitToBranch).toHaveBeenCalledWith(
+      expect(mockEventBus.emitToBranch).toHaveBeenCalledWith(
         'branch-1',
         'order:ready',
         expect.objectContaining({ orderId: 'order-1' }),
@@ -387,6 +403,7 @@ describe('OrdersService', () => {
 
   describe('printKot', () => {
     beforeEach(() => {
+      mockPrisma.order.findFirst.mockResolvedValue({ ...mockOrder, branch: { tenantId: 'tenant-1' } });
       mockPrisma.order.findUnique.mockResolvedValue({
         ...mockOrder,
         items: [{ ...mockOrderItem, menuItem: { name: 'Butter Chicken', isVeg: false } }],
@@ -395,7 +412,7 @@ describe('OrdersService', () => {
     });
 
     it('should mark KOT as printed', async () => {
-      await service.printKot('order-1');
+      await service.printKot('order-1', 'tenant-1');
 
       expect(mockPrisma.order.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -406,9 +423,9 @@ describe('OrdersService', () => {
     });
 
     it('should emit kot:ready event', async () => {
-      await service.printKot('order-1');
+      await service.printKot('order-1', 'tenant-1');
 
-      expect(mockGateway.emitToBranch).toHaveBeenCalledWith(
+      expect(mockEventBus.emitToBranch).toHaveBeenCalledWith(
         'branch-1',
         'kot:ready',
         expect.objectContaining({ orderId: 'order-1', orderNumber: 101 }),

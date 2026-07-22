@@ -7,8 +7,20 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import * as jwt from 'jsonwebtoken';
 
-const ADMIN_JWT_SECRET =
-  process.env.ADMIN_JWT_SECRET || 'admin-secret-key-change-in-production';
+function getAdminJwtSecret(): string {
+  const secret = process.env.ADMIN_JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('ADMIN_JWT_SECRET must be set in production');
+    }
+    if (!process.env.JWT_SECRET) {
+      throw new Error('Either ADMIN_JWT_SECRET or JWT_SECRET must be set');
+    }
+    console.warn('ADMIN_JWT_SECRET not set — falling back to JWT_SECRET. Set ADMIN_JWT_SECRET for production.');
+    return process.env.JWT_SECRET!;
+  }
+  return secret;
+}
 
 @Injectable()
 export class AdminAuthGuard implements CanActivate {
@@ -23,7 +35,7 @@ export class AdminAuthGuard implements CanActivate {
 
     const token = authHeader.slice(7);
     try {
-      const payload = jwt.verify(token, ADMIN_JWT_SECRET) as {
+      const payload = jwt.verify(token, getAdminJwtSecret()) as {
         adminId: string;
         email: string;
         role: string;

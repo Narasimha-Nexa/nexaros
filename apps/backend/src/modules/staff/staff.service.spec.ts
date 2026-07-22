@@ -10,6 +10,7 @@ describe('StaffService', () => {
   const mockStaff = {
     id: 'staff-1',
     branchId: 'branch-1',
+    tenantId: 'tenant-1',
     userId: null,
     roleId: 'role-1',
     name: 'John Waiter',
@@ -51,20 +52,23 @@ describe('StaffService', () => {
       findUnique: jest.fn().mockResolvedValue({
         id: 'branch-1',
         tenantId: 'tenant-1',
-        tenant: {
-          subscriptions: [{ plan: { features: { maxStaff: 50 } } }],
-        },
+      }),
+      findFirst: jest.fn().mockResolvedValue({
+        id: 'branch-1',
+        tenantId: 'tenant-1',
+        isActive: true,
       }),
     },
     tenant: {
       findUnique: jest.fn().mockResolvedValue({
         id: 'tenant-1',
-        subscriptions: [{ plan: { features: { maxStaff: 50 } } }],
+        subscriptions: [{ plan: { maxStaff: 50 } }],
       }),
     },
     shift: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
@@ -78,6 +82,12 @@ describe('StaffService', () => {
       findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+    },
+    leaveRequest: {
+      findFirst: jest.fn(),
+    },
+    payroll: {
+      findFirst: jest.fn(),
     },
   };
 
@@ -102,7 +112,7 @@ describe('StaffService', () => {
       mockPrisma.staff.findMany.mockResolvedValue([mockStaff]);
       mockPrisma.staff.count.mockResolvedValue(1);
 
-      const result = await service.findAllStaff('branch-1');
+      const result = await service.findAllStaff('branch-1', 'tenant-1');
 
       expect(result.staff).toHaveLength(1);
       expect(result.total).toBe(1);
@@ -111,17 +121,18 @@ describe('StaffService', () => {
 
   describe('findOneStaff', () => {
     it('should return staff when found', async () => {
+      mockPrisma.staff.findFirst.mockResolvedValue(mockStaff);
       mockPrisma.staff.findUnique.mockResolvedValue(mockStaff);
 
-      const result = await service.findOneStaff('staff-1');
+      const result = await service.findOneStaff('staff-1', 'tenant-1');
 
       expect(result).toMatchObject({ name: 'John Waiter' });
     });
 
     it('should throw NotFoundException when staff not found', async () => {
-      mockPrisma.staff.findUnique.mockResolvedValue(null);
+      mockPrisma.staff.findFirst.mockResolvedValue(null);
 
-      await expect(service.findOneStaff('missing')).rejects.toThrow(NotFoundException);
+      await expect(service.findOneStaff('missing', 'tenant-1')).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -133,7 +144,7 @@ describe('StaffService', () => {
         name: 'John Waiter',
         roleId: 'role-1',
         phone: '+911234567890',
-      });
+      }, 'tenant-1');
 
       expect(result).toMatchObject({ name: 'John Waiter' });
       expect(mockPrisma.staff.create).toHaveBeenCalledWith(
@@ -146,10 +157,10 @@ describe('StaffService', () => {
 
   describe('updateStaff', () => {
     it('should update staff details', async () => {
-      mockPrisma.staff.findUnique.mockResolvedValue(mockStaff);
+      mockPrisma.staff.findFirst.mockResolvedValue(mockStaff);
       mockPrisma.staff.update.mockResolvedValue({ ...mockStaff, name: 'John Updated' });
 
-      const result = await service.updateStaff('staff-1', { name: 'John Updated' });
+      const result = await service.updateStaff('staff-1', { name: 'John Updated' }, 'tenant-1');
 
       expect(result.name).toBe('John Updated');
     });
@@ -157,10 +168,10 @@ describe('StaffService', () => {
 
   describe('removeStaff', () => {
     it('should soft-delete staff by setting isActive to false', async () => {
-      mockPrisma.staff.findUnique.mockResolvedValue(mockStaff);
+      mockPrisma.staff.findFirst.mockResolvedValue(mockStaff);
       mockPrisma.staff.update.mockResolvedValue({ ...mockStaff, isActive: false });
 
-      await service.removeStaff('staff-1');
+      await service.removeStaff('staff-1', 'tenant-1');
 
       expect(mockPrisma.staff.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -171,9 +182,9 @@ describe('StaffService', () => {
     });
 
     it('should throw NotFoundException when staff not found', async () => {
-      mockPrisma.staff.findUnique.mockResolvedValue(null);
+      mockPrisma.staff.findFirst.mockResolvedValue(null);
 
-      await expect(service.removeStaff('missing')).rejects.toThrow(NotFoundException);
+      await expect(service.removeStaff('missing', 'tenant-1')).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -187,7 +198,7 @@ describe('StaffService', () => {
         name: 'Morning',
         startTime: '09:00',
         endTime: '17:00',
-      });
+      }, 'tenant-1');
 
       expect(result).toMatchObject({ name: 'Morning' });
     });
@@ -202,9 +213,11 @@ describe('StaffService', () => {
         date: new Date('2026-07-14'),
         status: 'ASSIGNED',
       };
+      mockPrisma.staff.findFirst.mockResolvedValue(mockStaff);
+      mockPrisma.shift.findFirst.mockResolvedValue(mockShift);
       mockPrisma.staffShift.create.mockResolvedValue(assignment);
 
-      const result = await service.assignShift('staff-1', 'shift-1', '2026-07-14');
+      const result = await service.assignShift('staff-1', 'shift-1', '2026-07-14', 'tenant-1');
 
       expect(result).toMatchObject({ staffId: 'staff-1', shiftId: 'shift-1' });
     });
@@ -214,45 +227,50 @@ describe('StaffService', () => {
 
   describe('clockIn', () => {
     it('should create attendance record with check-in time', async () => {
+      mockPrisma.staff.findFirst.mockResolvedValue(mockStaff);
       mockPrisma.attendance.findFirst.mockResolvedValue(null);
       mockPrisma.attendance.create.mockResolvedValue(mockAttendance);
 
-      const result = await service.clockIn('staff-1');
+      const result = await service.clockIn('staff-1', 'tenant-1');
 
       expect(result.status).toBe('PRESENT');
       expect(result.checkIn).toBeDefined();
     });
 
     it('should throw BadRequestException when already clocked in today', async () => {
+      mockPrisma.staff.findFirst.mockResolvedValue(mockStaff);
       mockPrisma.attendance.findFirst.mockResolvedValue(mockAttendance);
 
-      await expect(service.clockIn('staff-1')).rejects.toThrow(BadRequestException);
+      await expect(service.clockIn('staff-1', 'tenant-1')).rejects.toThrow(BadRequestException);
     });
   });
 
   describe('clockOut', () => {
     it('should update attendance with check-out time', async () => {
+      mockPrisma.staff.findFirst.mockResolvedValue(mockStaff);
       mockPrisma.attendance.findFirst.mockResolvedValue(mockAttendance);
       mockPrisma.attendance.update.mockResolvedValue({ ...mockAttendance, checkOut: new Date() });
 
-      const result = await service.clockOut('staff-1');
+      const result = await service.clockOut('staff-1', 'tenant-1');
 
       expect(result.checkOut).toBeDefined();
     });
 
     it('should throw BadRequestException when not clocked in', async () => {
+      mockPrisma.staff.findFirst.mockResolvedValue(mockStaff);
       mockPrisma.attendance.findFirst.mockResolvedValue(null);
 
-      await expect(service.clockOut('staff-1')).rejects.toThrow(BadRequestException);
+      await expect(service.clockOut('staff-1', 'tenant-1')).rejects.toThrow(BadRequestException);
     });
 
     it('should throw BadRequestException when already clocked out', async () => {
+      mockPrisma.staff.findFirst.mockResolvedValue(mockStaff);
       mockPrisma.attendance.findFirst.mockResolvedValue({
         ...mockAttendance,
         checkOut: new Date(),
       });
 
-      await expect(service.clockOut('staff-1')).rejects.toThrow(BadRequestException);
+      await expect(service.clockOut('staff-1', 'tenant-1')).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -260,7 +278,7 @@ describe('StaffService', () => {
     it('should return today attendance records', async () => {
       mockPrisma.attendance.findMany.mockResolvedValue([mockAttendance]);
 
-      const result = await service.getTodayAttendance('branch-1');
+      const result = await service.getTodayAttendance('branch-1', 'tenant-1');
 
       expect(result).toHaveLength(1);
     });

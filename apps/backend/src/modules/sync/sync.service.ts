@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { GatewayService } from '../websockets/gateway.service';
+import { EventBusService } from '../../common/event-bus/event-bus.service';
 import { PushSyncDto } from './dto/push-sync.dto';
 
 export interface SyncResult {
@@ -13,7 +13,7 @@ export interface SyncResult {
 export class SyncService {
   constructor(
     private prisma: PrismaService,
-    private gateway: GatewayService,
+    private eventBus: EventBusService,
   ) {}
 
   async pushOfflineData(tenantId: string, dto: PushSyncDto) {
@@ -82,6 +82,7 @@ export class SyncService {
           const order = await this.prisma.order.create({
             data: {
               branchId: localOrder.branchId!,
+              tenantId,
               tableId: localOrder.tableId || undefined,
               staffId: localOrder.staffId || undefined,
               orderNumber,
@@ -130,7 +131,7 @@ export class SyncService {
           });
 
           // Emit real-time event
-          this.gateway.emitToBranch(localOrder.branchId!, 'order:created', {
+          this.eventBus.emitToBranch(localOrder.branchId!, 'order:created', {
             id: order.id,
             orderNumber: order.orderNumber,
             type: order.type,
@@ -155,6 +156,7 @@ export class SyncService {
             data: {
               orderId: localPayment.orderId!,
               branchId: localPayment.branchId!,
+              tenantId: tenantId,
               method: (localPayment.method as any) || 'CASH',
               amount: localPayment.amount || 0,
               reference: localPayment.reference || undefined,

@@ -12,17 +12,24 @@ export class QueueService {
     @Inject(`QUEUE_${QueueNames.REPORTS}`) private reportQueue: Queue,
     @Inject(`QUEUE_${QueueNames.ORDERS}`) private orderQueue: Queue,
     @Inject(`QUEUE_${QueueNames.SUBSCRIPTIONS}`) private subQueue: Queue,
+    @Inject(`QUEUE_${QueueNames.ORDER_INGEST}`) private orderIngestQueue: Queue,
+    @Inject(`QUEUE_${QueueNames.CHANNEL_AGGREGATOR_STATUS}`) private aggregatorStatusQueue: Queue,
+    @Inject(`QUEUE_${QueueNames.CHANNEL_CONVERSATION_STATUS}`) private conversationStatusQueue: Queue,
+    @Inject(`QUEUE_${QueueNames.DEAD_LETTER}`) private deadLetterQueue: Queue,
   ) {}
 
   private getQueue(name: QueueNames): Queue {
-    const map: Record<QueueNames, Queue> = {
+    return {
       [QueueNames.NOTIFICATIONS]: this.notifQueue,
       [QueueNames.INVOICES]: this.invoiceQueue,
       [QueueNames.REPORTS]: this.reportQueue,
       [QueueNames.ORDERS]: this.orderQueue,
       [QueueNames.SUBSCRIPTIONS]: this.subQueue,
-    };
-    return map[name];
+      [QueueNames.ORDER_INGEST]: this.orderIngestQueue,
+      [QueueNames.CHANNEL_AGGREGATOR_STATUS]: this.aggregatorStatusQueue,
+      [QueueNames.CHANNEL_CONVERSATION_STATUS]: this.conversationStatusQueue,
+      [QueueNames.DEAD_LETTER]: this.deadLetterQueue,
+    }[name];
   }
 
   // ── Notifications ──
@@ -77,6 +84,35 @@ export class QueueService {
     event: 'created' | 'status_changed' | 'ready' | 'completed' | 'cancelled';
   }): Promise<Job | null> {
     return this.addJob(QueueNames.ORDERS, 'process', data);
+  }
+
+  // ── Order Ingest (async webhook processing) ──
+
+  async enqueueOrderIngest(data: {
+    idempotencyKey: string;
+    channel: string;
+    channelOrderId: string;
+    tenantId: string;
+    branchId: string;
+    canonicalOrderJson: Record<string, unknown>;
+  }): Promise<Job | null> {
+    return this.addJob(QueueNames.ORDER_INGEST, 'ingest', data);
+  }
+
+  // ── Channel Status Sync (dedicated queues per worker type) ──
+
+  async enqueueAggregatorStatusSync(data: {
+    orderId: string;
+    event: string;
+  }): Promise<Job | null> {
+    return this.addJob(QueueNames.CHANNEL_AGGREGATOR_STATUS, 'aggregator-status-sync', data);
+  }
+
+  async enqueueConversationStatusSync(data: {
+    orderId: string;
+    event: string;
+  }): Promise<Job | null> {
+    return this.addJob(QueueNames.CHANNEL_CONVERSATION_STATUS, 'conversation-status-sync', data);
   }
 
   // ── Subscriptions ──

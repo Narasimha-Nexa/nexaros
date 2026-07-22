@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 import '../database/local_database.dart';
+import '../constants/app_constants.dart';
 import '../network/api_client.dart';
 
 class OfflineOrderService {
@@ -22,6 +24,15 @@ class OfflineOrderService {
     String? notes,
     required List<OfflineOrderItem> items,
   }) async {
+    // Enforce offline order limit
+    final offlineCount = await _db.getOfflineOrderCount();
+    if (offlineCount >= AppConstants.maxOfflineOrders) {
+      throw OfflineLimitException(
+        'Maximum offline orders (${AppConstants.maxOfflineOrders}) reached. '
+        'Please sync before creating more orders.',
+      );
+    }
+
     // Try online first
     try {
       final result = await _api.createOrder({
@@ -87,12 +98,43 @@ class OfflineOrderService {
     await _saveOrderLocally(localId, branchId, tableId, staffId, type,
         customerName, discountAmount, notes, items, false, orderNumber);
 
-    // Add to sync queue
+    // Build the full order payload for the sync queue
+    double subtotal = 0;
+    for (final item in items) {
+      subtotal += item.unitPrice * item.quantity;
+    }
+    final totalAmount = subtotal - (discountAmount ?? 0);
+
+    final payload = jsonEncode({
+      'localId': localId,
+      'branchId': branchId,
+      'tableId': tableId,
+      'type': type,
+      'status': 'PENDING',
+      'customerName': customerName,
+      'customerPhone': customerPhone,
+      'guestCount': guestCount,
+      'subtotal': subtotal,
+      'discountAmount': discountAmount ?? 0,
+      'totalAmount': totalAmount,
+      'notes': notes,
+      'items': items
+          .map((i) => {
+                'menuItemId': i.menuItemId,
+                'name': i.name,
+                'quantity': i.quantity,
+                'unitPrice': i.unitPrice,
+                'notes': i.notes,
+              })
+          .toList(),
+    });
+
+    // Add to sync queue with full payload
     await _db.addToSyncQueue(LocalSyncQueueCompanion(
       entityType: const Value('order'),
       entityId: Value(localId),
       action: const Value('create'),
-      payload: Value(''),
+      payload: Value(payload),
     ));
 
     return OfflineOrderResult(
@@ -150,6 +192,26 @@ class OfflineOrderService {
       );
     }
   }
+
+  Future<void> updateOrderStatus(String orderId, String status) async {
+    await _db.updateOrderStatus(orderId, status);
+    await _db.addToSyncQueueWithPayload(
+      entityType: 'order',
+      entityId: orderId,
+      action: 'update_status',
+      payload: {'status': status},
+    );
+  }
+
+  Future<void> cancelOrder(String orderId) async {
+    await _db.deleteLocalOrder(orderId);
+    await _db.addToSyncQueueWithPayload(
+      entityType: 'order',
+      entityId: orderId,
+      action: 'cancel',
+      payload: {'reason': 'Cancelled offline'},
+    );
+  }
 }
 
 class OfflineOrderItem {
@@ -178,4 +240,11 @@ class OfflineOrderResult {
     required this.orderNumber,
     required this.isOffline,
   });
+}
+
+class OfflineLimitException implements Exception {
+  final String message;
+  OfflineLimitException(this.message);
+  @override
+  String toString() => message;
 }

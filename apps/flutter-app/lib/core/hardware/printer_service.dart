@@ -2,8 +2,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'esc_pos_builder.dart';
+import '../constants/app_constants.dart';
 
-/// Represents a discovered network printer
 class DiscoveredPrinter {
   final String ip;
   final int port;
@@ -22,9 +22,11 @@ class DiscoveredPrinter {
 class PrinterService {
   static const _prefKeyPrinterIp = 'printer_ip';
   static const _prefKeyPrinterPort = 'printer_port';
-  static const _prefKeyPrinterType = 'printer_type'; // 'network' or 'usb'
+  static const _prefKeyPrinterType = 'printer_type';
   static const _prefKeyKotPrinterIp = 'kot_printer_ip';
   static const _prefKeyKotPrinterPort = 'kot_printer_port';
+  static const int _maxReconnectAttempts = 3;
+  static const Duration _reconnectDelay = Duration(milliseconds: 500);
 
   PrinterType _printerType = PrinterType.network;
   String _printerIp = '192.168.1.100';
@@ -79,24 +81,22 @@ class PrinterService {
 
   Future<bool> printReceipt(Uint8List data) async {
     if (_printerType == PrinterType.network) {
-      return _sendToNetworkPrinter(_printerIp, _printerPort, data);
+      return _sendToNetworkPrinterWithRetry(_printerIp, _printerPort, data);
     }
-    // USB printing requires platform channel (android/ios specific)
     return _sendToUsbPrinter(data);
   }
 
   Future<bool> printKot(Uint8List data) async {
     if (_printerType == PrinterType.network) {
-      return _sendToNetworkPrinter(_kotPrinterIp, _kotPrinterPort, data);
+      return _sendToNetworkPrinterWithRetry(_kotPrinterIp, _kotPrinterPort, data);
     }
     return _sendToUsbPrinter(data);
   }
 
   Future<bool> openCashDrawer() async {
-    // ESC/POS command to open cash drawer: ESC p 0 25 250
     final data = Uint8List.fromList([0x1B, 0x70, 0x00, 0x19, 0xFA]);
     if (_printerType == PrinterType.network) {
-      return _sendToNetworkPrinter(_printerIp, _printerPort, data);
+      return _sendToNetworkPrinterWithRetry(_printerIp, _printerPort, data);
     }
     return _sendToUsbPrinter(data);
   }
@@ -127,9 +127,23 @@ class PrinterService {
     return printKot(receipt);
   }
 
+  /// Send with auto-reconnect on failure
+  Future<bool> _sendToNetworkPrinterWithRetry(String ip, int port, Uint8List data) async {
+    for (int attempt = 0; attempt < _maxReconnectAttempts; attempt++) {
+      final result = await _sendToNetworkPrinter(ip, port, data);
+      if (result) return true;
+      // Wait before retry
+      await Future.delayed(_reconnectDelay * (attempt + 1));
+      debugPrint('Printer reconnect attempt ${attempt + 1}/$_maxReconnectAttempts');
+    }
+    debugPrint('Printer failed after $_maxReconnectAttempts attempts: $ip:$port');
+    return false;
+  }
+
   Future<bool> _sendToNetworkPrinter(String ip, int port, Uint8List data) async {
     try {
-      final socket = await Socket.connect(ip, port, timeout: const Duration(seconds: 5));
+      final socket = await Socket.connect(ip, port,
+          timeout: AppConstants.printerTimeout);
       socket.add(data);
       await socket.flush();
       await socket.close();
@@ -141,15 +155,14 @@ class PrinterService {
   }
 
   Future<bool> _sendToUsbPrinter(Uint8List data) async {
-    // USB printing requires platform-specific implementation
-    // For now, log the data and return false
     debugPrint('USB printing not yet implemented. Data length: ${data.length}');
     return false;
   }
 
   Future<bool> checkPrinterConnection() async {
     try {
-      final socket = await Socket.connect(_printerIp, _printerPort, timeout: const Duration(seconds: 3));
+      final socket = await Socket.connect(_printerIp, _printerPort,
+          timeout: const Duration(seconds: 3));
       await socket.close();
       return true;
     } catch (_) {
@@ -159,7 +172,8 @@ class PrinterService {
 
   Future<bool> checkKotPrinterConnection() async {
     try {
-      final socket = await Socket.connect(_kotPrinterIp, _kotPrinterPort, timeout: const Duration(seconds: 3));
+      final socket = await Socket.connect(_kotPrinterIp, _kotPrinterPort,
+          timeout: const Duration(seconds: 3));
       await socket.close();
       return true;
     } catch (_) {
@@ -168,11 +182,10 @@ class PrinterService {
   }
 
   /// Auto-detect network printers on the local subnet
-  /// Scans common IPs on port 9100 (standard ESC/POS port)
   Future<List<DiscoveredPrinter>> discoverPrinters() async {
     final discovered = <DiscoveredPrinter>[];
     final subnets = ['192.168.1.', '192.168.0.', '10.0.0.'];
-    final semaphore = Semaphore(10); // Limit concurrent connections
+    final semaphore = Semaphore(10);
 
     final futures = <Future<void>>[];
 
@@ -183,14 +196,10 @@ class PrinterService {
       }
     }
 
-    // Wait for all scans to complete with timeout
     try {
       await Future.wait(futures).timeout(const Duration(seconds: 15));
-    } catch (_) {
-      // Timeout or connection errors are acceptable
-    }
+    } catch (_) {}
 
-    // Sort by response time (fastest first)
     discovered.sort((a, b) => a.responseTimeMs.compareTo(b.responseTimeMs));
     return discovered;
   }
@@ -233,8 +242,6 @@ class PrinterService {
   }
 }
 
-/// Simple semaphore for concurrency control
-/// Simple semaphore for concurrency control (polling-based)
 class Semaphore {
   final int _max;
   int _acquired = 0;

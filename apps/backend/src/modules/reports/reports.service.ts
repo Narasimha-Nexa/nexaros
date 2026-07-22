@@ -305,6 +305,210 @@ export class ReportsService {
   }
 
   /**
+   * Customer analytics — acquisition, retention, segmentation
+   */
+  async customerAnalytics(tenantId: string, dto: ReportFilterDto) {
+    const dateFilter = this.buildDateFilter(dto.startDate, dto.endDate);
+    const branchFilter = dto.branchId ? { branchId: dto.branchId } : {};
+
+    // Total customers
+    const totalCustomers = await this.prisma.customer.count({
+      where: { tenantId, createdAt: dateFilter },
+    });
+
+    // New customers (by month)
+    const customers = await this.prisma.customer.findMany({
+      where: { tenantId, createdAt: dateFilter },
+      select: { createdAt: true, totalOrders: true, totalSpent: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const acquisitionByMonth = new Map<string, { month: string; count: number }>();
+    for (const c of customers) {
+      const key = `${c.createdAt.getFullYear()}-${String(c.createdAt.getMonth() + 1).padStart(2, '0')}`;
+      if (!acquisitionByMonth.has(key)) acquisitionByMonth.set(key, { month: key, count: 0 });
+      acquisitionByMonth.get(key)!.count++;
+    }
+
+    // Segments by total spent
+    const segments = { high: 0, medium: 0, low: 0, new: 0 };
+    for (const c of customers) {
+      const spent = Number(c.totalSpent);
+      if (c.totalOrders === 0) segments.new++;
+      else if (spent >= 5000) segments.high++;
+      else if (spent >= 1000) segments.medium++;
+      else segments.low++;
+    }
+
+    // Retention (repeat customers)
+    const repeatCustomers = customers.filter(c => c.totalOrders > 1).length;
+
+    // Average order value per customer
+    const totalRevenue = customers.reduce((sum, c) => sum + Number(c.totalSpent), 0);
+    const totalOrders = customers.reduce((sum, c) => sum + c.totalOrders, 0);
+
+    return {
+      totalCustomers,
+      newCustomers: customers.filter(c => c.totalOrders === 0).length,
+      repeatCustomers,
+      retentionRate: customers.length > 0 ? Math.round((repeatCustomers / customers.length) * 100) : 0,
+      avgOrderValuePerCustomer: totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0,
+      totalRevenue,
+      acquisitionByMonth: Array.from(acquisitionByMonth.values()),
+      segments,
+    };
+  }
+
+  /**
+   * Kitchen analytics — preparation times, order volume, KDS metrics
+   */
+  async kitchenAnalytics(tenantId: string, dto: ReportFilterDto) {
+    const dateFilter = this.buildDateFilter(dto.startDate, dto.endDate);
+    const branchFilter = dto.branchId ? { branchId: dto.branchId } : {};
+
+    const orders = await this.prisma.order.findMany({
+      where: {
+        branch: { tenantId },
+        ...branchFilter,
+        createdAt: dateFilter,
+        status: { in: ['PREPARING', 'READY', 'SERVED', 'COMPLETED'] },
+      },
+      select: {
+        id: true, createdAt: true, updatedAt: true, orderNumber: true, totalAmount: true,
+        status: true,
+        items: {
+          select: { id: true, status: true, quantity: true, name: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Orders by status
+    const statusCount = { pending: 0, preparing: 0, ready: 0, served: 0, completed: 0 };
+    for (const o of orders) {
+      switch (o.status) {
+        case 'PENDING': statusCount.pending++; break;
+        case 'PREPARING': statusCount.preparing++; break;
+        case 'READY': statusCount.ready++; break;
+        case 'SERVED': statusCount.served++; break;
+        default: statusCount.completed++;
+      }
+    }
+
+    // Average preparation time (using createdAt → updatedAt as proxy)
+    let totalPrepTime = 0;
+    let prepCount = 0;
+    for (const o of orders) {
+      if (o.status !== 'PENDING') {
+        const prepTime = (o.updatedAt.getTime() - o.createdAt.getTime()) / 60000;
+        if (prepTime > 0 && prepTime < 120) {
+          totalPrepTime += prepTime;
+          prepCount++;
+        }
+      }
+    }
+
+    // Items prepared by category
+    const itemStatusCount = { pending: 0, preparing: 0, ready: 0, cancelled: 0 };
+    for (const o of orders) {
+      for (const item of o.items) {
+        switch (item.status) {
+          case 'PENDING': itemStatusCount.pending += item.quantity; break;
+          case 'PREPARING': itemStatusCount.preparing += item.quantity; break;
+          case 'READY': itemStatusCount.ready += item.quantity; break;
+          default: itemStatusCount.cancelled += item.quantity;
+        }
+      }
+    }
+
+    return {
+      totalOrders: orders.length,
+      statusBreakdown: statusCount,
+      itemStatusBreakdown: itemStatusCount,
+      avgPrepTime: prepCount > 0 ? Math.round(totalPrepTime / prepCount) : 0,
+      totalPrepTime: Math.round(totalPrepTime),
+      prepCount,
+      totalRevenue: orders.reduce((sum, o) => sum + Number(o.totalAmount), 0),
+      avgOrderValue: orders.length > 0 ? Math.round(orders.reduce((sum, o) => sum + Number(o.totalAmount), 0) / orders.length) : 0,
+    };
+  }
+
+  /**
+   * Delivery analytics — times, partner stats, zone analysis
+   */
+  async deliveryAnalytics(tenantId: string, dto: ReportFilterDto) {
+    const dateFilter = this.buildDateFilter(dto.startDate, dto.endDate);
+
+    const deliveries = await this.prisma.delivery.findMany({
+      where: {
+        order: { branch: { tenantId } },
+        createdAt: dateFilter,
+      },
+      include: {
+        partner: { select: { id: true, name: true, vehicleType: true } },
+        order: { select: { totalAmount: true, orderNumber: true } },
+        locations: {
+          select: { latitude: true, longitude: true, timestamp: true },
+          orderBy: { timestamp: 'asc' },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Status breakdown
+    const statusBreakdown = { pending: 0, assigned: 0, dispatched: 0, inTransit: 0, delivered: 0, failed: 0, cancelled: 0 };
+    let totalDeliveryTime = 0;
+    let deliveredCount = 0;
+
+    for (const d of deliveries) {
+      switch (d.status) {
+        case 'PENDING': statusBreakdown.pending++; break;
+        case 'ASSIGNED': statusBreakdown.assigned++; break;
+        case 'PICKED_UP': statusBreakdown.dispatched++; break;
+        case 'IN_TRANSIT': statusBreakdown.inTransit++; break;
+        case 'DELIVERED': statusBreakdown.delivered++;
+          if (d.deliveredAt) {
+            const time = (d.deliveredAt.getTime() - d.createdAt.getTime()) / 60000;
+            if (time > 0 && time < 240) {
+              totalDeliveryTime += time;
+              deliveredCount++;
+            }
+          }
+          break;
+        case 'FAILED': statusBreakdown.failed++; break;
+        case 'CANCELLED': statusBreakdown.cancelled++; break;
+      }
+    }
+
+    // Partner performance
+    const partnerMap = new Map<string, { name: string; deliveries: number; totalRevenue: number; vehicleType: string }>();
+    for (const d of deliveries) {
+      if (!d.partner) continue;
+      const id = d.partner.id;
+      if (!partnerMap.has(id)) {
+        partnerMap.set(id, { name: d.partner.name, deliveries: 0, totalRevenue: 0, vehicleType: d.partner.vehicleType || 'Unknown' });
+      }
+      const entry = partnerMap.get(id)!;
+      entry.deliveries++;
+      entry.totalRevenue += Number(d.order?.totalAmount || 0);
+    }
+
+    // Zone analysis (using location data)
+    const zoneCount = deliveries.filter(d => d.locations.length > 0).length;
+
+    return {
+      totalDeliveries: deliveries.length,
+      statusBreakdown,
+      avgDeliveryTime: deliveredCount > 0 ? Math.round(totalDeliveryTime / deliveredCount) : 0,
+      totalDelivered: deliveredCount,
+      totalRevenue: deliveries.reduce((sum, d) => sum + Number(d.order?.totalAmount || 0), 0),
+      partnerPerformance: Array.from(partnerMap.values()).sort((a, b) => b.deliveries - a.deliveries),
+      activePartners: partnerMap.size,
+      zoneCoverage: zoneCount,
+    };
+  }
+
+  /**
    * Export report data in requested format (stub — returns data ready for export)
    */
   async exportReport(tenantId: string, type: string, dto: ReportFilterDto) {
@@ -324,5 +528,50 @@ export class ReportsService {
       // In production, this would generate and return a PDF/Excel file URL
       downloadUrl: null,
     };
+  }
+
+  async financeReport(tenantId: string, type: string, dto: ReportFilterDto) {
+    const where: any = { tenantId, deletedAt: null };
+    if (dto.startDate || dto.endDate) {
+      where.date = {};
+      if (dto.startDate) where.date.gte = new Date(dto.startDate);
+      if (dto.endDate) where.date.lte = new Date(dto.endDate);
+    }
+
+    switch (type) {
+      case 'income': {
+        where.type = 'INCOME';
+        const transactions = await this.prisma.transaction.findMany({ where, orderBy: { date: 'desc' } });
+        const total = transactions.reduce((sum, t) => sum + Number(t.amount), 0);
+        return { type: 'income', total, count: transactions.length, transactions };
+      }
+      case 'expenses': {
+        where.type = 'EXPENSE';
+        const transactions = await this.prisma.transaction.findMany({ where, orderBy: { date: 'desc' } });
+        const total = transactions.reduce((sum, t) => sum + Number(t.amount), 0);
+        return { type: 'expenses', total, count: transactions.length, transactions };
+      }
+      case 'tax': {
+        const allTransactions = await this.prisma.transaction.findMany({ where, orderBy: { date: 'desc' } });
+        const totalIncome = allTransactions.filter(t => t.type === 'INCOME').reduce((sum, t) => sum + Number(t.amount), 0);
+        const totalExpenses = allTransactions.filter(t => t.type === 'EXPENSE').reduce((sum, t) => sum + Number(t.amount), 0);
+        const gstOnSales = totalIncome * 0.05;
+        const gstOnPurchases = totalExpenses * 0.18;
+        return {
+          type: 'tax',
+          totalIncome,
+          totalExpenses,
+          gstOnSales: Math.round(gstOnSales * 100) / 100,
+          gstOnPurchases: Math.round(gstOnPurchases * 100) / 100,
+          netGstPayable: Math.round((gstOnSales - gstOnPurchases) * 100) / 100,
+        };
+      }
+      default: {
+        const transactions = await this.prisma.transaction.findMany({ where, orderBy: { date: 'desc' } });
+        const totalIncome = transactions.filter(t => t.type === 'INCOME').reduce((sum, t) => sum + Number(t.amount), 0);
+        const totalExpenses = transactions.filter(t => t.type === 'EXPENSE').reduce((sum, t) => sum + Number(t.amount), 0);
+        return { type: 'overview', totalIncome, totalExpenses, netProfit: totalIncome - totalExpenses, transactionCount: transactions.length };
+      }
+    }
   }
 }

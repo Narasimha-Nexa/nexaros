@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { DataTable, Pagination } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
 import { PageHeader } from '@/components/layout/page-header';
@@ -11,6 +12,8 @@ import { adminApi } from '@/lib/api';
 import { formatDate, timeAgo } from '@/lib/utils';
 import { FileText, Download, RefreshCw, Search } from 'lucide-react';
 
+const PAGE_SIZE = 20;
+
 export default function AuditLogsPage() {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -18,12 +21,24 @@ export default function AuditLogsPage() {
   const [total, setTotal] = useState(0);
   const [severityFilter, setSeverityFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const { addToast } = useToastStore();
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => { setPage(1); }, [debouncedSearch, severityFilter]);
 
   const fetchLogs = async () => {
     setLoading(true);
     try {
-      const result = await adminApi.getAuditLogs(page, 20);
+      const result: any = await adminApi.getAuditLogs(
+        page, PAGE_SIZE,
+        debouncedSearch || undefined,
+        severityFilter !== 'all' ? severityFilter : undefined,
+      );
       const logsData = result.data || result.logs || [];
       setLogs(logsData);
       setTotal(result.total || logsData.length);
@@ -34,16 +49,7 @@ export default function AuditLogsPage() {
     }
   };
 
-  useEffect(() => { fetchLogs(); }, [page]);
-
-  const filtered = logs.filter((log) => {
-    const matchesSeverity = severityFilter === 'all' || log.severity === severityFilter;
-    const matchesSearch = !search || 
-      log.action?.toLowerCase().includes(search.toLowerCase()) ||
-      log.actor?.toLowerCase().includes(search.toLowerCase()) ||
-      log.details?.toLowerCase().includes(search.toLowerCase());
-    return matchesSeverity && matchesSearch;
-  });
+  useEffect(() => { fetchLogs(); }, [page, debouncedSearch, severityFilter]);
 
   const columns = [
     {
@@ -100,7 +106,17 @@ export default function AuditLogsPage() {
         actions={
           <>
             <Button variant="outline" size="sm" onClick={fetchLogs}><RefreshCw size={14} /> Refresh</Button>
-            <Button variant="outline" size="sm" disabled><Download size={14} /> Export CSV</Button>
+            <Button variant="outline" size="sm" onClick={() => {
+              const headers = ['Action', 'Entity', 'Entity ID', 'IP Address', 'Created At'];
+              const rows = logs.map((log: any) => [log.action, log.entity, log.entityId, log.ipAddress || '', log.createdAt]);
+              const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+              const blob = new Blob([csv], { type: 'text/csv' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url; a.download = `audit-logs-${new Date().toISOString().split('T')[0]}.csv`; a.click();
+              URL.revokeObjectURL(url);
+              addToast('CSV exported', 'success');
+            }}><Download size={14} /> Export CSV</Button>
           </>
         }
       />
@@ -110,10 +126,9 @@ export default function AuditLogsPage() {
         <div className="flex items-center gap-3">
           <div className="relative flex-1 max-w-sm">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-body" />
-            <input
-              type="text"
+            <Input
               placeholder="Search logs..."
-              className="input pl-9 py-2 text-sm"
+              className="pl-9"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -133,15 +148,15 @@ export default function AuditLogsPage() {
       </Card>
 
       {loading ? (
-        <div className="space-y-3">{[...Array(8)].map((_, i) => <Card key={i} className="h-12 animate-pulse" />)}</div>
-      ) : filtered.length === 0 ? (
-        <Card padding="lg" className="text-center">
+        <div className="divide-y divide-hairline">{[...Array(8)].map((_, i) => <div key={i} className="skeleton h-[52px] w-full" />)}</div>
+      ) : logs.length === 0 ? (
+        <Card padding="md" className="text-center">
           <p className="text-body-sm text-body font-sans">No audit logs found.</p>
         </Card>
       ) : (
         <>
-          <DataTable columns={columns} data={filtered} keyExtractor={(r: any) => r.id} />
-          <Pagination page={page} totalPages={Math.ceil(total / 20)} onPageChange={setPage} total={total} />
+          <DataTable columns={columns} data={logs} keyExtractor={(r: any) => r.id} />
+          <Pagination page={page} totalPages={Math.ceil(total / PAGE_SIZE)} onPageChange={setPage} total={total} />
         </>
       )}
     </div>

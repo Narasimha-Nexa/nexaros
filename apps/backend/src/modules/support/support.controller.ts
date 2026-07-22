@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Body, Param, Query, UseGuards } from '@nest
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { SupportService } from './support.service';
 import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
+import { CreateSupportTicketDto } from './dto/create-support-ticket.dto';
 
 @ApiTags('Support Tickets')
 @Controller('support')
@@ -10,8 +11,8 @@ export class SupportController {
 
   @Post('tickets')
   @ApiOperation({ summary: 'Create a support ticket (customer)' })
-  async createTicket(@Body() body: any) {
-    return this.supportService.createTicket(body);
+  async createTicket(@Body() dto: CreateSupportTicketDto) {
+    return this.supportService.createTicket(dto);
   }
 
   @Get('tickets')

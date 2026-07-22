@@ -6,7 +6,8 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Building2, Users, CreditCard, Settings, Shield,
   FileText, LifeBuoy, Bell, BarChart3, Database, Cpu, Webhook,
-  Tag, MessageSquare, Server, Activity, BookOpen, ChevronLeft, ChevronRight, PlusCircle, X
+  Tag, MessageSquare, Server, Activity, BookOpen, ChevronLeft, ChevronRight, PlusCircle, X, Key, GitBranch, HardDrive, MapPin, Globe,
+  Sparkles, AlertTriangle, GitCompareArrows
 } from 'lucide-react';
 import { useSidebarStore } from '@/stores/ui.store';
 
@@ -28,10 +29,12 @@ const navSections: { title?: string; items: NavItem[] }[] = [
     items: [
       { label: 'Create Restaurant', href: '/provision', icon: <PlusCircle size={18} /> },
       { label: 'Tenants', href: '/tenants', icon: <Building2 size={18} /> },
+      { label: 'Branches', href: '/branches', icon: <MapPin size={18} /> },
       { label: 'Staff', href: '/staff', icon: <Users size={18} /> },
       { label: 'Subscriptions', href: '/subscriptions', icon: <CreditCard size={18} /> },
       { label: 'Plans', href: '/plans', icon: <Tag size={18} /> },
       { label: 'Features', href: '/features', icon: <Webhook size={18} /> },
+      { label: 'Website', href: '/website', icon: <Globe size={18} /> },
       { label: 'Coupons', href: '/coupons', icon: <Tag size={18} /> },
       { label: 'Reports', href: '/reports', icon: <BarChart3 size={18} /> },
       { label: 'Demo Requests', href: '/demo-requests', icon: <MessageSquare size={18} /> },
@@ -42,13 +45,27 @@ const navSections: { title?: string; items: NavItem[] }[] = [
     items: [
       { label: 'Support', href: '/support', icon: <LifeBuoy size={18} /> },
       { label: 'Notifications', href: '/notifications', icon: <Bell size={18} /> },
+      { label: 'Workflows', href: '/workflows', icon: <GitBranch size={18} /> },
+    ],
+  },
+  {
+    title: 'Intelligence',
+    items: [
+      { label: 'AI Dashboard', href: '/ai', icon: <Sparkles size={18} /> },
+      { label: 'Analytics', href: '/analytics', icon: <BarChart3 size={18} /> },
+      { label: 'Benchmarking', href: '/analytics/benchmarking', icon: <GitCompareArrows size={18} /> },
+      { label: 'Copilot', href: '/copilot', icon: <Sparkles size={18} /> },
+      { label: 'Alert Center', href: '/alerts', icon: <AlertTriangle size={18} /> },
     ],
   },
   {
     title: 'Security',
     items: [
       { label: 'Audit Logs', href: '/audit-logs', icon: <FileText size={18} /> },
+      { label: 'Admin Users', href: '/admin-users', icon: <Shield size={18} /> },
       { label: 'Security', href: '/security', icon: <Shield size={18} /> },
+      { label: 'API Keys', href: '/api-keys', icon: <Key size={18} /> },
+      { label: 'Webhooks', href: '/webhooks', icon: <Webhook size={18} /> },
     ],
   },
   {
@@ -57,6 +74,7 @@ const navSections: { title?: string; items: NavItem[] }[] = [
       { label: 'Settings', href: '/settings', icon: <Settings size={18} /> },
       { label: 'Monitoring', href: '/monitoring', icon: <Activity size={18} /> },
       { label: 'Database', href: '/database', icon: <Database size={18} /> },
+      { label: 'Backups', href: '/backups', icon: <HardDrive size={18} /> },
     ],
   },
 ];

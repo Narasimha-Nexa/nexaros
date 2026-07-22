@@ -23,6 +23,11 @@ export class CreateNotificationDto {
   @ApiPropertyOptional()
   @IsString()
   @IsOptional()
+  actorId?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
   recipientEmail?: string;
 
   @ApiPropertyOptional()

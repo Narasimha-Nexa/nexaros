@@ -10,7 +10,7 @@ export function Skeleton({ className, count = 1 }: SkeletonProps) {
   return (
     <>
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className={cn('skeleton rounded', className)} />
+        <div key={i} className={cn('skeleton min-h-[1em]', className)} />
       ))}
     </>
   );
@@ -18,25 +18,25 @@ export function Skeleton({ className, count = 1 }: SkeletonProps) {
 
 export function StatSkeleton() {
   return (
-    <div className="card p-6">
-      <Skeleton className="h-3 w-24 mb-4" />
-      <Skeleton className="h-10 w-32 mb-2" />
-      <Skeleton className="h-3 w-16" />
+    <div className="card p-5">
+      <Skeleton className="h-[11px] w-24 mb-4" />
+      <Skeleton className="h-9 w-32 mb-2" />
+      <Skeleton className="h-[11px] w-16" />
     </div>
   );
 }
 
 export function TableSkeleton({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
   return (
-    <div className="card">
-      <div className="p-4 border-b border-hairline">
-        <Skeleton className="h-8 w-48" />
+    <div className="card overflow-hidden">
+      <div className="px-4 py-3 border-b border-hairline bg-canvas-soft">
+        <Skeleton className="h-[11px] w-48" />
       </div>
       <div className="divide-y divide-hairline">
         {Array.from({ length: rows }).map((_, i) => (
           <div key={i} className="flex gap-4 p-4">
             {Array.from({ length: cols }).map((_, j) => (
-              <Skeleton key={j} className="flex-1 h-4" />
+              <Skeleton key={j} className="flex-1 h-[14px]" />
             ))}
           </div>
         ))}
@@ -47,10 +47,10 @@ export function TableSkeleton({ rows = 5, cols = 4 }: { rows?: number; cols?: nu
 
 export function CardSkeleton() {
   return (
-    <div className="card p-6">
-      <Skeleton className="h-4 w-32 mb-4" />
+    <div className="card p-5">
+      <Skeleton className="h-[14px] w-32 mb-4" />
       <Skeleton className="h-20 w-full mb-4" />
-      <Skeleton className="h-3 w-48" />
+      <Skeleton className="h-[11px] w-48" />
     </div>
   );
 }

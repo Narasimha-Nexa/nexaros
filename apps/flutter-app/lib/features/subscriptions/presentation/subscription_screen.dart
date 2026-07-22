@@ -1,59 +1,52 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/providers/riverpod_providers.dart';
 import '../../../core/providers/subscription_provider.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/network/api_client.dart';
+import '../../../shared/widgets/shared_widgets.dart';
+import '../data/subscription_models.dart';
+import '../data/subscription_service.dart';
 import 'coupon_redemption_screen.dart';
 
-class SubscriptionScreen extends StatefulWidget {
+final subscriptionServiceProvider = Provider<SubscriptionService>((ref) {
+  return SubscriptionService(ref.watch(apiClientProvider));
+});
+
+final subscriptionPlansProvider = FutureProvider<List<SubscriptionPlan>>((ref) async {
+  final service = ref.watch(subscriptionServiceProvider);
+  return service.getAvailablePlans();
+});
+
+final subscriptionRecordProvider = FutureProvider<SubscriptionRecord?>((ref) async {
+  final service = ref.watch(subscriptionServiceProvider);
+  return service.getActiveSubscription();
+});
+
+class SubscriptionScreen extends ConsumerStatefulWidget {
   const SubscriptionScreen({super.key});
 
   @override
-  State<SubscriptionScreen> createState() => _SubscriptionScreenState();
+  ConsumerState<SubscriptionScreen> createState() => _SubscriptionScreenState();
 }
 
-class _SubscriptionScreenState extends State<SubscriptionScreen> {
-  List<dynamic> _plans = [];
-  bool _isLoadingPlans = true;
-  String? _planError;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPlans();
-  }
-
-  Future<void> _loadPlans() async {
-    try {
-      final api = context.read<ApiClient>();
-      final data = await api.requestWithRetry(() => api.getAvailablePlans());
-      if (mounted) {
-        setState(() {
-          _plans = data is List ? data : (data['plans'] ?? []);
-          _isLoadingPlans = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() { _planError = e.toString(); _isLoadingPlans = false; });
-    }
-  }
-
+class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<SubscriptionProvider>();
+    final provider = ref.watch(subscriptionProvider);
     final info = provider.info;
+    final plansAsync = ref.watch(subscriptionPlansProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: Text('Subscription', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
         backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
+        foregroundColor: AppColors.white,
       ),
       body: RefreshIndicator(
         onRefresh: () async {
           await provider.loadEntitlements();
-          await _loadPlans();
+          ref.invalidate(subscriptionPlansProvider);
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -65,7 +58,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               const SizedBox(height: 24),
               _buildEntitlementsGrid(info),
               const SizedBox(height: 24),
-              _buildPlansSection(),
+              _buildPlansSection(plansAsync),
               if (info.isGracePeriod || info.isPaymentPending) ...[
                 const SizedBox(height: 24),
                 _buildPaymentPromiseCard(provider),
@@ -78,9 +71,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   }
 
   Widget _buildCurrentStatus(SubscriptionInfo info) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    return NxCard(
+      elevated: true,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -237,39 +229,26 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
-  Widget _buildPlansSection() {
+  Widget _buildPlansSection(AsyncValue<List<SubscriptionPlan>> plansAsync) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Available Plans', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
-        if (_isLoadingPlans)
-          const Center(child: CircularProgressIndicator())
-        else if (_planError != null)
-          Center(child: Text(_planError!, style: GoogleFonts.inter(color: AppColors.danger)))
-        else if (_plans.isEmpty)
-          Center(child: Text('No plans available', style: GoogleFonts.inter(color: AppColors.gray500)))
-        else
-          ..._plans.map((plan) => _buildPlanCard(plan)),
+        plansAsync.when(
+          loading: () => const NxFullScreenLoader(),
+          error: (e, _) => Center(child: Text('Failed to load plans', style: GoogleFonts.inter(color: AppColors.danger))),
+          data: (plans) => plans.isEmpty
+              ? const NxEmptyState(icon: Icons.card_giftcard, title: 'No plans available')
+              : Column(children: plans.map((plan) => _buildPlanCard(plan)).toList()),
+        ),
       ],
     );
   }
 
-  Widget _buildPlanCard(dynamic plan) {
-    final price = plan['price'] ?? 0;
-    final cycle = plan['billingCycle'] ?? 'MONTHLY';
-    final features = <String>[];
-
-    if (plan['entitlements'] != null) {
-      for (final e in (plan['entitlements'] as List)) {
-        if (e['enabled'] == true) features.add(e['moduleKey'] ?? '');
-      }
-    }
-
-    return Card(
-      elevation: 1,
+  Widget _buildPlanCard(SubscriptionPlan plan) {
+    return NxCard(
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -281,17 +260,17 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(plan['name'] ?? '', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold)),
-                      if (plan['description'] != null)
-                        Text(plan['description']!, style: GoogleFonts.inter(fontSize: 12, color: AppColors.gray500)),
+                      Text(plan.name, style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold)),
+                      if (plan.description != null)
+                        Text(plan.description!, style: GoogleFonts.inter(fontSize: 12, color: AppColors.gray500)),
                     ],
                   ),
                 ),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text('₹${price.toStringAsFixed(0)}', style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                    Text('/${cycle == 'MONTHLY' ? 'mo' : 'yr'}', style: GoogleFonts.inter(fontSize: 12, color: AppColors.gray500)),
+                    Text('₹${plan.price.toStringAsFixed(0)}', style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                    Text('/${billingCycleLabel(plan.billingCycle).toLowerCase()}', style: GoogleFonts.inter(fontSize: 12, color: AppColors.gray500)),
                   ],
                 ),
               ],
@@ -300,7 +279,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             Wrap(
               spacing: 6,
               runSpacing: 6,
-              children: features.take(8).map((f) => Chip(
+              children: plan.enabledModuleKeys.take(8).map((f) => Chip(
                 label: Text(f, style: GoogleFonts.inter(fontSize: 10)),
                 backgroundColor: const Color(0xFFEFF6FF),
                 padding: EdgeInsets.zero,
@@ -315,9 +294,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 onPressed: () => _showUpgradeDialog(plan),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
+                  foregroundColor: AppColors.white,
                 ),
-                child: Text('Upgrade to ${plan['name']}', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                child: Text('Upgrade to ${plan.name}', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
               ),
             ),
           ],
@@ -326,14 +305,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
-  void _showUpgradeDialog(dynamic plan) {
+  void _showUpgradeDialog(SubscriptionPlan plan) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => CouponRedemptionScreen(
-          planId: plan['id'] ?? '',
-          planName: plan['name'] ?? '',
-          planPrice: (plan['price'] ?? 0).toDouble(),
+          planId: plan.id,
+          planName: plan.name,
+          planPrice: plan.price,
         ),
       ),
     );
@@ -343,9 +322,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     final reasonController = TextEditingController();
     final dateController = TextEditingController();
 
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    return NxCard(
+      elevated: true,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -397,7 +375,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 onPressed: () async {
                   if (reasonController.text.isEmpty || dateController.text.isEmpty) return;
                   try {
-                    final api = context.read<ApiClient>();
+                    final api = ref.read(apiClientProvider);
                     final tenantId = api.branchId ?? '';
                     await api.createPaymentPromise(tenantId, reasonController.text, dateController.text);
                     await provider.loadEntitlements();
@@ -416,7 +394,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFF97316),
-                  foregroundColor: Colors.white,
+                  foregroundColor: AppColors.white,
                 ),
                 child: Text('Submit Promise', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
               ),

@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import '../../../core/network/api_client.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/providers/riverpod_providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/shared_widgets.dart';
 
-class WasteTrackingScreen extends StatefulWidget {
+class WasteTrackingScreen extends ConsumerStatefulWidget {
   const WasteTrackingScreen({super.key});
 
   @override
-  State<WasteTrackingScreen> createState() => _WasteTrackingScreenState();
+  ConsumerState<WasteTrackingScreen> createState() => _WasteTrackingScreenState();
 }
 
-class _WasteTrackingScreenState extends State<WasteTrackingScreen> {
-  final _api = ApiClient();
+class _WasteTrackingScreenState extends ConsumerState<WasteTrackingScreen> {
+  late final _api;
   List<dynamic> _inventoryItems = [];
   List<Map<String, dynamic>> _wasteRecords = [];
   bool _isLoading = true;
@@ -20,6 +22,7 @@ class _WasteTrackingScreenState extends State<WasteTrackingScreen> {
   @override
   void initState() {
     super.initState();
+    _api = ref.read(appStateProvider).api;
     _loadData();
   }
 
@@ -125,23 +128,13 @@ class _WasteTrackingScreenState extends State<WasteTrackingScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const NxFullScreenLoader()
           : _wasteRecords.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.delete_outline, size: 64, color: AppColors.gray300),
-                      const SizedBox(height: 12),
-                      Text('No waste recorded', style: GoogleFonts.inter(color: AppColors.gray500)),
-                      const SizedBox(height: 8),
-                      TextButton.icon(
-                        onPressed: _recordWaste,
-                        icon: const Icon(Icons.add),
-                        label: const Text('Record Waste'),
-                      ),
-                    ],
-                  ),
+              ? NxEmptyState(
+                  icon: Icons.delete_outline,
+                  title: 'No waste recorded',
+                  actionLabel: 'Record Waste',
+                  onAction: _recordWaste,
                 )
               : RefreshIndicator(
                   onRefresh: _loadData,
@@ -159,7 +152,7 @@ class _WasteTrackingScreenState extends State<WasteTrackingScreen> {
     final qty = double.tryParse(record['quantity']?.toString() ?? '0') ?? 0;
     final notes = record['notes'] as String? ?? '';
 
-    return Card(
+    return NxCard(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
         padding: const EdgeInsets.all(12),

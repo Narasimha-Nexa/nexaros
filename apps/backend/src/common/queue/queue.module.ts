@@ -17,7 +17,7 @@ function createRedisConnection(): any {
 }
 
 const queueProviders = Object.values(QueueNames).map((name) => ({
-  provide: `QUEUE_${name.toUpperCase()}`,
+  provide: `QUEUE_${name}`,
   useFactory: () => {
     const connection = createRedisConnection();
     return new Queue(name, {

@@ -1,8 +1,14 @@
-import 'dart:io';
+import 'dart:convert';
 import 'package:drift/drift.dart';
-import 'package:drift/native.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import '../constants/app_constants.dart';
+
+/// Platform-compatible database executor.
+/// Resolved at compile time via conditional imports:
+///   - dart.library.js  → WebDatabase (sql.js/IndexedDB)
+///   - dart.library.io  → NativeDatabase (file-based SQLite)
+import 'connect_stub.dart'
+  if (dart.library.io) 'connect_native.dart'
+  if (dart.library.js) 'connect_web.dart';
 
 part 'local_database.g.dart';
 
@@ -99,6 +105,7 @@ class LocalSyncQueue extends Table {
   TextColumn get entityId => text()();
   TextColumn get action => text()();
   TextColumn get payload => text()();
+  IntColumn get retryCount => integer().withDefault(const Constant(0))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
 }
@@ -118,7 +125,17 @@ class LocalDatabase extends _$LocalDatabase {
   LocalDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (m) => m.createAll(),
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await m.addColumn(localSyncQueue, localSyncQueue.retryCount);
+      }
+    },
+  );
 
   // ─── Menu Queries ───
 
@@ -135,6 +152,29 @@ class LocalDatabase extends _$LocalDatabase {
         .get();
   }
 
+  Future<void> updateMenuAvailability(String itemId, bool isAvailable) {
+    return (update(localMenuItems)..where((t) => t.id.equals(itemId)))
+        .write(LocalMenuItemsCompanion(isAvailable: Value(isAvailable)));
+  }
+
+  Future<void> bulkUpsertMenuItems(List<Map<String, dynamic>> items) async {
+    for (final item in items) {
+      await into(localMenuItems).insertOnConflictUpdate(
+        LocalMenuItemsCompanion(
+          id: Value(item['id'] as String),
+          tenantId: Value(item['tenantId'] as String? ?? ''),
+          categoryId: Value(item['categoryId'] as String? ?? ''),
+          name: Value(item['name'] as String? ?? ''),
+          description: Value(item['description'] as String?),
+          price: Value(double.tryParse(item['price'].toString()) ?? 0),
+          isVeg: Value(item['isVeg'] as bool? ?? false),
+          isAvailable: Value(item['isAvailable'] as bool? ?? true),
+          image: Value(item['image'] as String?),
+        ),
+      );
+    }
+  }
+
   // ─── Table Queries ───
 
   Future<List<LocalTable>> getAllTables(String branchId) {
@@ -142,6 +182,26 @@ class LocalDatabase extends _$LocalDatabase {
           ..where((t) => t.branchId.equals(branchId))
           ..orderBy([(t) => OrderingTerm.asc(t.number)]))
         .get();
+  }
+
+  Future<void> updateTableStatus(String tableId, String status) {
+    return (update(localTables)..where((t) => t.id.equals(tableId)))
+        .write(LocalTablesCompanion(status: Value(status)));
+  }
+
+  Future<void> bulkUpsertTables(List<Map<String, dynamic>> tables) async {
+    for (final table in tables) {
+      await into(localTables).insertOnConflictUpdate(
+        LocalTablesCompanion(
+          id: Value(table['id'] as String),
+          branchId: Value(table['branchId'] as String? ?? ''),
+          number: Value(table['number'] as int? ?? 0),
+          name: Value(table['name'] as String?),
+          capacity: Value(table['capacity'] as int? ?? 4),
+          status: Value(table['status'] as String? ?? 'FREE'),
+        ),
+      );
+    }
   }
 
   // ─── Order Queries ───
@@ -152,6 +212,53 @@ class LocalDatabase extends _$LocalDatabase {
 
   Future<List<LocalOrder>> getUnsyncedOrders() {
     return (select(localOrders)
+          ..where((t) => t.synced.equals(false))
+          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+        .get();
+  }
+
+  Future<LocalOrder?> getOrderById(String id) {
+    return (select(localOrders)..where((t) => t.id.equals(id))).getSingleOrNull();
+  }
+
+  Future<void> updateOrderStatus(String orderId, String status) {
+    return (update(localOrders)..where((t) => t.id.equals(orderId)))
+        .write(LocalOrdersCompanion(status: Value(status)));
+  }
+
+  Future<void> deleteLocalOrder(String orderId) async {
+    await (delete(localOrderItems)..where((t) => t.orderId.equals(orderId))).go();
+    await (delete(localOrders)..where((t) => t.id.equals(orderId))).go();
+  }
+
+  Future<List<LocalOrder>> getOrdersByBranch(String branchId, {String? status}) {
+    final query = select(localOrders)
+      ..where((t) => t.branchId.equals(branchId))
+      ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]);
+    if (status != null) {
+      query.where((t) => t.status.equals(status));
+    }
+    return query.get();
+  }
+
+  Future<int> getOfflineOrderCount() async {
+    final result = await customSelect(
+      'SELECT COUNT(*) as cnt FROM local_orders WHERE synced = 0',
+    ).getSingle();
+    return result.data['cnt'] as int;
+  }
+
+  // ─── Payment Queries ───
+
+  Future<List<LocalPayment>> getPaymentsForOrder(String orderId) {
+    return (select(localPayments)
+          ..where((t) => t.orderId.equals(orderId))
+          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+        .get();
+  }
+
+  Future<List<LocalPayment>> getUnsyncedPayments() {
+    return (select(localPayments)
           ..where((t) => t.synced.equals(false))
           ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
         .get();
@@ -170,16 +277,65 @@ class LocalDatabase extends _$LocalDatabase {
         .get();
   }
 
-  Future markSynced(int id) {
+  Future<void> markSynced(int id) {
     return (update(localSyncQueue)..where((t) => t.id.equals(id)))
         .write(const LocalSyncQueueCompanion(synced: Value(true)));
   }
+
+  Future<void> incrementRetryCount(int id) {
+    return (update(localSyncQueue)..where((t) => t.id.equals(id)))
+        .write(const LocalSyncQueueCompanion(retryCount: Value(1)));
+  }
+
+  Future<void> removeSyncQueueEntry(int id) {
+    return (delete(localSyncQueue)..where((t) => t.id.equals(id))).go();
+  }
+
+  Future<int> getSyncQueueCount() async {
+    final result = await customSelect(
+      'SELECT COUNT(*) as cnt FROM local_sync_queue WHERE synced = 0',
+    ).getSingle();
+    return result.data['cnt'] as int;
+  }
+
+  Future<void> clearSyncedEntries() {
+    return (delete(localSyncQueue)..where((t) => t.synced.equals(true))).go();
+  }
+
+  // ─── Menu Availability Toggle (synced via queue) ───
+
+  Future<void> toggleMenuAvailabilityOffline(String itemId, bool isAvailable) async {
+    await updateMenuAvailability(itemId, isAvailable);
+    await addToSyncQueue(LocalSyncQueueCompanion(
+      entityType: const Value('menu_item'),
+      entityId: Value(itemId),
+      action: const Value('update_availability'),
+      payload: Value(jsonEncode({'isAvailable': isAvailable})),
+    ));
+  }
+
+  // ─── Generic Sync Helper ───
+
+  Future<void> addToSyncQueueWithPayload({
+    required String entityType,
+    required String entityId,
+    required String action,
+    required Map<String, dynamic> payload,
+  }) {
+    final queueCount = getSyncQueueCount();
+    return queueCount.then((count) {
+      if (count >= AppConstants.maxSyncQueueSize) return Future.value();
+      return addToSyncQueue(LocalSyncQueueCompanion(
+        entityType: Value(entityType),
+        entityId: Value(entityId),
+        action: Value(action),
+        payload: Value(jsonEncode(payload)),
+      ));
+    });
+  }
 }
 
-LazyDatabase _openConnection() {
-  return LazyDatabase(() async {
-    final dbFolder = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dbFolder.path, 'nexaros', 'nexaros.sqlite'));
-    return NativeDatabase.createInBackground(file);
-  });
-}
+/// Opens the platform-appropriate database connection.
+/// - Native: file-based SQLite at {appDocDir}/nexaros/nexaros.sqlite
+/// - Web: IndexedDB-backed SQLite via sql.js WASM
+QueryExecutor _openConnection() => connect();

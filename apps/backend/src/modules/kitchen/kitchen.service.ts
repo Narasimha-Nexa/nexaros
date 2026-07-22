@@ -1,12 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { GatewayService } from '../websockets/gateway.service';
+import { EventBusService } from '../../common/event-bus/event-bus.service';
 
 @Injectable()
 export class KitchenService {
   constructor(
     private prisma: PrismaService,
-    private gateway: GatewayService,
+    private eventBus: EventBusService,
   ) {}
 
   async getActiveOrders(branchId: string) {
@@ -105,7 +105,7 @@ export class KitchenService {
     }
 
     const broadcastBranch = branchId || order.branchId;
-    this.gateway.emitToBranch(broadcastBranch, 'order:status-changed', {
+    this.eventBus.emitToBranch(broadcastBranch, 'order:status-changed', {
       orderId: updated.id,
       orderNumber: updated.orderNumber,
       status: updated.status,
@@ -113,7 +113,7 @@ export class KitchenService {
     });
 
     // Notify customer tracking page
-    this.gateway.emitToOrder(id, 'order:status-changed', {
+    this.eventBus.orderTrackingEvent(id, 'order:status-changed', {
       orderId: updated.id,
       orderNumber: updated.orderNumber,
       status: updated.status,
@@ -121,13 +121,13 @@ export class KitchenService {
     });
 
     if (status === 'READY') {
-      this.gateway.emitToBranch(broadcastBranch, 'order:ready', {
+      this.eventBus.emitToBranch(broadcastBranch, 'order:ready', {
         orderId: updated.id,
         orderNumber: updated.orderNumber,
         tableNumber: updated.table?.number,
       });
 
-      this.gateway.emitToOrder(id, 'order:ready', {
+      this.eventBus.orderTrackingEvent(id, 'order:ready', {
         orderId: updated.id,
         orderNumber: updated.orderNumber,
         tableNumber: updated.table?.number,
@@ -161,10 +161,10 @@ export class KitchenService {
     };
 
     // Emit to staff devices (branch room)
-    this.gateway.emitToBranch(item.order.branchId, 'item:status-changed', payload);
+    this.eventBus.emitToBranch(item.order.branchId, 'item:status-changed', payload);
 
     // Emit to customer tracking page (order room on /public namespace)
-    this.gateway.emitToOrder(orderId, 'item:status-changed', payload);
+    this.eventBus.orderTrackingEvent(orderId, 'item:status-changed', payload);
 
     return updated;
   }
@@ -222,7 +222,7 @@ export class KitchenService {
           });
 
           if (newStock <= 0) {
-            this.gateway.emitToBranch(order.branchId, 'inventory:low', {
+            this.eventBus.emitToBranch(order.branchId, 'inventory:low', {
               itemId: recipe.inventoryItemId,
               itemName: recipe.inventoryItem.name,
               currentStock: newStock,
@@ -262,7 +262,7 @@ export class KitchenService {
           });
 
           if (newStock <= 0) {
-            this.gateway.emitToBranch(order.branchId, 'inventory:low', {
+            this.eventBus.emitToBranch(order.branchId, 'inventory:low', {
               itemId: invItem.id,
               itemName: invItem.name,
               currentStock: newStock,

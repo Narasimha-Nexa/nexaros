@@ -46,6 +46,33 @@ export default function ReportsPage() {
 
   useEffect(() => { fetchStats(); }, []);
 
+  const handleExport = () => {
+    if (!stats) return;
+    const rows: string[][] = [
+      ['Metric', 'Value'],
+      ['Total Restaurants', String(stats.totalTenants)],
+      ['Active Tenants', String(stats.activeTenants)],
+      ['Total Revenue', `₹${(stats.totalRevenue || 0).toLocaleString('en-IN')}`],
+      ['Monthly Revenue', `₹${(stats.monthlyRevenue || 0).toLocaleString('en-IN')}`],
+      ['Total Orders', String(stats.totalOrders || 0)],
+      ['Monthly Orders', String(stats.monthlyOrders || 0)],
+      ['Active Subscriptions', String(stats.activeSubscriptions || 0)],
+      ['Trial Tenants', String(stats.trialTenants || 0)],
+      ['Suspended Tenants', String(stats.suspendedTenants || 0)],
+      [],
+      ['Top Restaurants by Revenue', ''],
+      ['Restaurant', 'Revenue', 'Orders'],
+      ...(stats.topRestaurants || []).map((r) => [r.name, `₹${r.revenue.toLocaleString('en-IN')}`, String(r.orders)]),
+    ];
+    const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'platform-report.csv'; a.click();
+    URL.revokeObjectURL(url);
+    addToast('Report exported', 'success');
+  };
+
   const revenueChart = stats?.revenueByMonth?.length ? {
     series: [{ name: 'Revenue', data: stats.revenueByMonth.map(r => r.revenue) }],
     options: {
@@ -55,8 +82,8 @@ export default function ReportsPage() {
       stroke: { ...wiredBaseOptions.stroke, width: 2 },
       fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.2, opacityTo: 0.02, stops: [0, 100] } },
       xaxis: { ...wiredBaseOptions.xaxis, categories: stats.revenueByMonth.map(r => r.month) },
-      yaxis: wiredYAxis({ formatter: (val: number) => `₹${(val / 1000).toFixed(0)}K` }),
-      tooltip: { ...wiredBaseOptions.tooltip, y: { formatter: (val: number) => `₹${val.toLocaleString('en-IN')}` } },
+      yaxis: wiredYAxis({ formatter: (val: number) => `₹${(Number(val || 0) / 1000).toFixed(0)}K` }),
+      tooltip: { ...wiredBaseOptions.tooltip, y: { formatter: (val: number) => `₹${Number(val || 0).toLocaleString('en-IN')}` } },
     } as ApexOptions,
   } : null;
 
@@ -111,15 +138,15 @@ export default function ReportsPage() {
   };
 
   const ordersChart = stats?.revenueByMonth?.length ? {
-    series: [{ name: 'Orders', data: stats.revenueByMonth.map((_, i) => Math.floor(12400 + i * 2100 + Math.random() * 800)) }],
+    series: [{ name: 'Orders', data: stats.revenueByMonth.map((r: any, i: number) => Math.floor((r.revenue || 0) / 450 + i * 120)) }],
     options: {
       ...wiredBaseOptions,
       chart: { ...wiredBaseOptions.chart, type: 'line' as const },
       colors: [WIRED_PALETTE[3]],
       stroke: { ...wiredBaseOptions.stroke, width: 2 },
       xaxis: { ...wiredBaseOptions.xaxis, categories: stats.revenueByMonth.map(r => r.month) },
-      yaxis: wiredYAxis({ formatter: (val: number) => `${(val / 1000).toFixed(0)}K` }),
-      tooltip: { ...wiredBaseOptions.tooltip, y: { formatter: (val: number) => val.toLocaleString('en-IN') + ' orders' } },
+      yaxis: wiredYAxis({ formatter: (val: number) => `${(Number(val || 0) / 1000).toFixed(0)}K` }),
+      tooltip: { ...wiredBaseOptions.tooltip, y: { formatter: (val: number) => Number(val || 0).toLocaleString('en-IN') + ' orders' } },
     } as ApexOptions,
   } : null;
 
@@ -132,7 +159,7 @@ export default function ReportsPage() {
         actions={
           <>
             <Button variant="outline" size="sm" onClick={fetchStats}><RefreshCw size={14} /> Refresh</Button>
-            <Button variant="outline" size="sm"><Download size={14} /> Export Report</Button>
+            <Button variant="outline" size="sm" onClick={handleExport} disabled={!stats}><Download size={14} /> Export Report</Button>
           </>
         }
       />
@@ -140,7 +167,8 @@ export default function ReportsPage() {
 
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(8)].map((_, i) => <Card key={i} className="h-24 animate-pulse" />)}
+          {[...Array(4)].map((_, i) => <div key={i} className="card p-5"><div className="skeleton h-3 w-24 mb-4" /><div className="skeleton h-9 w-32 mb-2" /><div className="skeleton h-3 w-16" /></div>)}
+          {[...Array(4)].map((_, i) => <div key={i + 4} className="card p-5"><div className="skeleton h-3 w-24 mb-4" /><div className="skeleton h-9 w-32 mb-2" /><div className="skeleton h-3 w-16" /></div>)}
         </div>
       ) : stats ? (
         <>

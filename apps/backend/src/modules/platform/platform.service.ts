@@ -1,6 +1,21 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
+function formatAuditDetails(log: any): string {
+  const data = log?.newData;
+  if (!data || typeof data !== 'object') return log?.details || '';
+  if (data.restaurantName) {
+    return `Provisioned ${data.restaurantName} (${data.subdomain || '—'}) · plan: ${data.plan || '—'}`;
+  }
+  if (data.email) return `Email: ${data.email}`;
+  if (data.title) return String(data.title);
+  try {
+    return JSON.stringify(data);
+  } catch {
+    return '';
+  }
+}
+
 @Injectable()
 export class PlatformService {
   constructor(private prisma: PrismaService) {}
@@ -102,7 +117,7 @@ export class PlatformService {
         action: log.action,
         entity: log.entity,
         entityId: log.entityId,
-        details: log.newData,
+        details: formatAuditDetails(log),
         timestamp: log.createdAt,
         actor: log.adminUser?.name || log.adminUser?.email || 'System',
       })),

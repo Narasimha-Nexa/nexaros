@@ -29,6 +29,6 @@ import { RazorpayPaymentGateway } from '../../common/providers/razorpay-payment.
       inject: [ConfigService],
     },
   ],
-  exports: [BillingService],
+  exports: [BillingService, PaymentGateway],
 })
 export class BillingModule {}

@@ -1,64 +1,62 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../../core/network/api_client.dart';
-import '../../../core/providers/app_state.dart';
+import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/providers/riverpod_providers.dart';
+import '../providers/pos_provider.dart';
 import '../../../core/sync/offline_order_service.dart';
 import '../../../core/hardware/receipt_formatter.dart';
-import '../../orders/presentation/order_list_screen.dart';
+import '../../../shared/widgets/shared_widgets.dart';
 
-class POSScreen extends StatefulWidget {
+class POSScreen extends ConsumerStatefulWidget {
   final String? tableId;
   final String? orderId;
   const POSScreen({super.key, this.tableId, this.orderId});
 
   @override
-  State<POSScreen> createState() => _POSScreenState();
+  ConsumerState<POSScreen> createState() => _POSScreenState();
 }
 
-class _POSScreenState extends State<POSScreen> {
-  final _api = ApiClient();
-  late final AppState _appState;
-  List<dynamic> _categories = [];
-  List<dynamic> _menuItems = [];
-  List<dynamic> _filteredItems = [];
-  final List<Map<String, dynamic>> _cart = [];
-  String? _selectedCategoryId;
-  String _searchQuery = '';
-  bool _isLoading = true;
+class _POSScreenState extends ConsumerState<POSScreen> {
+  late final _appState;
   bool _isCreatingOrder = false;
   bool _isOffline = false;
   String? _currentOrderId;
   int? _currentOrderNumber;
   String _orderType = 'DINE_IN';
+  bool _authChecked = false;
 
   @override
   void initState() {
     super.initState();
-    _appState = context.read<AppState>();
+    _appState = ref.read(appStateProvider);
     _currentOrderId = widget.orderId;
     _checkPinAuth();
-    _loadMenu();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_authChecked) {
+      _authChecked = true;
+      final pos = ref.read(posProvider.notifier);
+      if (pos.state.menuItems.isEmpty) pos.loadMenu();
+    }
   }
 
   Future<bool> _checkPinAuth() async {
-    // If user is already authenticated via normal login, skip PIN
-    if (await _api.hasValidSession()) return true;
-
-    // Otherwise show PIN dialog for POS-only staff access
+    final api = _appState.api;
+    if (await api.hasValidSession()) return true;
     if (!mounted) return false;
     final pinCtrl = TextEditingController();
     final authenticated = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.lock_outline, size: 20),
-            SizedBox(width: 8),
-            Text('Staff PIN Required'),
-          ],
-        ),
+        title: const Row(children: [
+          Icon(Icons.lock_outline, size: 20),
+          SizedBox(width: 8),
+          Text('Staff PIN Required'),
+        ]),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -77,10 +75,7 @@ class _POSScreenState extends State<POSScreen> {
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, pinCtrl.text.length >= 4),
             child: const Text('Verify'),
@@ -91,117 +86,32 @@ class _POSScreenState extends State<POSScreen> {
     return authenticated == true;
   }
 
-  Future<void> _loadMenu() async {
-    setState(() => _isLoading = true);
-    try {
-      final results = await Future.wait([
-        _api.getCategories(),
-        _api.getMenuItems(),
-      ]);
-      if (mounted) {
-        setState(() {
-          _categories = results[0];
-          _menuItems = results[1];
-          _filteredItems = _menuItems;
-          _isLoading = false;
-          _isOffline = false;
-        });
-      }
-    } catch (e) {
-      // Fallback to local DB when offline
-      _loadMenuFromLocal();
-    }
-  }
+  double get _cartSubtotal => ref.read(posProvider).cart.subtotal;
+  double get _taxAmount => _cartSubtotal * 0.05;
+  double get _finalTotal => _cartSubtotal + _taxAmount;
 
-  Future<void> _loadMenuFromLocal() async {
-    try {
-      final categories = await _appState.db.getAllCategories('');
-      final items = await _appState.db.getAllMenuItems('');
-      if (mounted) {
-        setState(() {
-          _categories = categories.map((c) => {'id': c.id, 'name': c.name}).toList();
-          _menuItems = items.map((i) => ({
-            'id': i.id,
-            'name': i.name,
-            'price': i.price.toString(),
-            'categoryId': i.categoryId,
-            'isVeg': i.isVeg,
-            'isAvailable': i.isAvailable,
-          })).toList();
-          _filteredItems = _menuItems;
-          _isLoading = false;
-          _isOffline = true;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  void _filterMenu(String? categoryId, String search) {
-    setState(() {
-      _selectedCategoryId = categoryId;
-      _searchQuery = search;
-      _filteredItems = _menuItems.where((item) {
-        final matchesCategory = categoryId == null || item['categoryId'] == categoryId;
-        final matchesSearch = search.isEmpty || item['name'].toLowerCase().contains(search.toLowerCase());
-        final isAvailable = item['isAvailable'] == true;
-        return matchesCategory && matchesSearch && isAvailable;
-      }).toList();
-    });
-  }
-
-  void _addToCart(Map<String, dynamic> item) {
-    final existing = _cart.indexWhere((c) => c['menuItemId'] == item['id']);
-    if (existing >= 0) {
-      setState(() => _cart[existing]['quantity']++);
-    } else {
-      setState(() {
-        _cart.add({
-          'menuItemId': item['id'],
-          'name': item['name'],
-          'unitPrice': double.tryParse(item['price'].toString()) ?? 0,
-          'quantity': 1,
-          'isVeg': item['isVeg'] ?? false,
-        });
-      });
-    }
-  }
-
-  void _removeFromCart(int index) {
-    if (_cart[index]['quantity'] > 1) {
-      setState(() => _cart[index]['quantity']--);
-    } else {
-      setState(() => _cart.removeAt(index));
-    }
-  }
-
-  double get _cartTotal => _cart.fold(0, (sum, c) => sum + (c['unitPrice'] * c['quantity']));
-  int get _cartItemCount => _cart.fold(0, (sum, c) => sum + (c['quantity'] as int));
-
-  Future<void> _placeOrder() async {
-    if (_cart.isEmpty) return;
+  Future<void> _placeOrder(PosProvider pos) async {
+    if (pos.cart.isEmpty) return;
     setState(() => _isCreatingOrder = true);
     try {
-      final items = _cart.map((c) => OfflineOrderItem(
-        menuItemId: c['menuItemId'],
-        name: c['name'],
-        quantity: c['quantity'],
-        unitPrice: c['unitPrice'],
+      final items = pos.cart.items.map((c) => OfflineOrderItem(
+        menuItemId: c.menuItemId,
+        name: c.name,
+        quantity: c.quantity,
+        unitPrice: c.unitPrice,
       )).toList();
 
       if (_currentOrderId != null && !_isOffline) {
-        // Online: add items to existing order
-        for (final item in _cart) {
-          await _api.addItemToOrder(_currentOrderId!, {
-            'menuItemId': item['menuItemId'],
-            'name': item['name'],
-            'quantity': item['quantity'],
-            'unitPrice': item['unitPrice'],
+        final api = _appState.api;
+        for (final item in pos.cart.items) {
+          await api.addItemToOrder(_currentOrderId!, {
+            'menuItemId': item.menuItemId,
+            'name': item.name,
+            'quantity': item.quantity,
+            'unitPrice': item.unitPrice,
           });
         }
       } else {
-        // Use offline-capable order service
         final result = await _appState.offlineOrders.createOrder(
           branchId: _appState.branchId ?? '',
           tableId: widget.tableId,
@@ -212,19 +122,16 @@ class _POSScreenState extends State<POSScreen> {
         _currentOrderNumber = result.orderNumber;
       }
 
-      // Auto-print KOT after successful order creation
       if (mounted && _currentOrderId != null) {
         _printKotForOrder(_currentOrderId!, items);
       }
 
       if (mounted) {
-        final msg = _isOffline
-            ? 'Order saved offline! #$_currentOrderNumber'
-            : 'Order placed successfully!';
+        final msg = _isOffline ? 'Order saved offline! #$_currentOrderNumber' : 'Order placed successfully!';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg), backgroundColor: _isOffline ? Colors.orange : AppColors.success),
+          SnackBar(content: Text(msg), backgroundColor: _isOffline ? AppColors.warning : AppColors.success),
         );
-        setState(() => _cart.clear());
+        pos.clearCart();
       }
     } catch (e) {
       if (mounted) {
@@ -242,21 +149,13 @@ class _POSScreenState extends State<POSScreen> {
         restaurantName: 'NexaROS',
         tableName: widget.tableId != null ? 'Table ${widget.tableId}' : 'Takeaway',
         orderNumber: _currentOrderNumber ?? 0,
-        items: items
-            .map((i) => ReceiptItem(
-                  name: i.name,
-                  quantity: i.quantity,
-                  unitPrice: i.unitPrice,
-                  totalPrice: i.unitPrice * i.quantity,
-                ))
-            .toList(),
+        items: items.map((i) => ReceiptItem(
+          name: i.name, quantity: i.quantity, unitPrice: i.unitPrice, totalPrice: i.unitPrice * i.quantity,
+        )).toList(),
         date: DateTime.now(),
       );
-
       final printed = await _appState.printer.printKot(kotData);
-      if (!printed) {
-        debugPrint('KOT printing failed - will retry when printer is available');
-      }
+      if (!printed) debugPrint('KOT printing failed');
     } catch (e) {
       debugPrint('KOT printing error: $e');
     }
@@ -264,207 +163,185 @@ class _POSScreenState extends State<POSScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width > 900;
     return Scaffold(
       appBar: AppBar(
-        title: Text('New Order', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+        title: const Text('New Order'),
         actions: [
           if (_isOffline)
             Container(
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.orange.shade50,
+                color: AppColors.warning.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.wifi_off, size: 14, color: Colors.orange.shade700),
-                  const SizedBox(width: 4),
-                  Text('Offline', style: GoogleFonts.inter(fontSize: 11, color: Colors.orange.shade700, fontWeight: FontWeight.w500)),
-                ],
-              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.wifi_off, size: 14, color: AppColors.warning),
+                const SizedBox(width: 4),
+                Text('Offline', style: TextStyle(fontSize: 11, color: AppColors.warning, fontWeight: FontWeight.w500)),
+              ]),
             ),
           if (_currentOrderId != null)
             TextButton.icon(
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OrderListScreen())),
+              onPressed: () => context.push('/shell/orders'),
               icon: const Icon(Icons.receipt_long, size: 18),
               label: const Text('View Orders'),
             ),
-          const SizedBox(width: 8),
         ],
       ),
-      body: isWide ? _buildWideLayout() : _buildNarrowLayout(),
+      body: Builder(
+        builder: (context) {
+          final pos = ref.watch(posProvider);
+          final deviceType = ResponsiveLayout.deviceType(context);
+          return deviceType != DeviceType.mobile ? _buildWideLayout(pos) : _buildNarrowLayout(pos);
+        },
+      ),
     );
   }
 
-  Widget _buildWideLayout() {
+  Widget _buildWideLayout(PosProvider pos) {
+    final cs = Theme.of(context).colorScheme;
     return Row(
       children: [
-        Expanded(flex: 3, child: _buildMenuPanel()),
-        Container(width: 380, color: AppColors.white, child: _buildCartPanel()),
+        Expanded(flex: 3, child: _buildMenuPanel(pos)),
+        Container(
+          width: 380,
+          decoration: BoxDecoration(
+            color: cs.surface,
+            border: Border(left: BorderSide(color: cs.outline)),
+          ),
+          child: _buildCartPanel(pos),
+        ),
       ],
     );
   }
 
-  Widget _buildNarrowLayout() {
+  Widget _buildNarrowLayout(PosProvider pos) {
+    final cs = Theme.of(context).colorScheme;
     return Column(
       children: [
-        Expanded(child: _buildMenuPanel()),
-        if (_cart.isNotEmpty)
+        Expanded(child: _buildMenuPanel(pos)),
+        if (!pos.cart.isEmpty)
           Container(
             padding: const EdgeInsets.all(12),
-            color: AppColors.white,
-            child: Row(
-              children: [
-                Text('$_cartItemCount items', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-                const Spacer(),
-                Text('₹${_cartTotal.toStringAsFixed(2)}', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.primary)),
-                const SizedBox(width: 12),
-                ElevatedButton(
-                  onPressed: _isCreatingOrder ? null : _placeOrder,
-                  child: _isCreatingOrder
-                      ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Text('Place Order'),
-                ),
-              ],
-            ),
+            color: cs.surface,
+            child: Row(children: [
+              Text('${pos.cart.itemCount} items', style: const TextStyle(fontWeight: FontWeight.w600)),
+              const Spacer(),
+              Text('₹${_cartSubtotal.toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: cs.primary)),
+              const SizedBox(width: 12),
+              ElevatedButton(
+                onPressed: _isCreatingOrder ? null : () => _placeOrder(pos),
+                child: _isCreatingOrder
+                    ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Place Order'),
+              ),
+            ]),
           ),
       ],
     );
   }
 
-  Widget _buildMenuPanel() {
+  Widget _buildMenuPanel(PosProvider pos) {
+    final cs = Theme.of(context).colorScheme;
+    final deviceType = ResponsiveLayout.deviceType(context);
     return Column(
       children: [
-        // Search + Category chips
         Container(
-          color: AppColors.white,
+          color: cs.surface,
           padding: const EdgeInsets.all(12),
-          child: Column(
-            children: [
-              TextField(
-                onChanged: (v) => _filterMenu(_selectedCategoryId, v),
-                decoration: InputDecoration(
-                  hintText: 'Search menu items...',
-                  prefixIcon: const Icon(Icons.search, size: 20),
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 36,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: FilterChip(
-                        label: const Text('All'),
-                        selected: _selectedCategoryId == null,
-                        onSelected: (_) => _filterMenu(null, _searchQuery),
-                        selectedColor: AppColors.primary100,
-                        checkmarkColor: AppColors.primary,
-                        labelStyle: GoogleFonts.inter(fontSize: 12),
-                      ),
+          child: Column(children: [
+            NxSearchBar(
+              hintText: 'Search menu items...',
+              onChanged: (v) => pos.searchMenu(v),
+              onClear: () => pos.searchMenu(''),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 36,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: FilterChip(
+                      label: const Text('All', style: TextStyle(fontSize: 12)),
+                      selected: pos.state.selectedCategoryId == null,
+                      onSelected: (_) => pos.selectCategory(null),
                     ),
-                    ..._categories.map((cat) => Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: FilterChip(
-                        label: Text(cat['name']),
-                        selected: _selectedCategoryId == cat['id'],
-                        onSelected: (_) => _filterMenu(cat['id'], _searchQuery),
-                        selectedColor: AppColors.primary100,
-                        checkmarkColor: AppColors.primary,
-                        labelStyle: GoogleFonts.inter(fontSize: 12),
-                      ),
-                    )),
-                  ],
-                ),
+                  ),
+                  ...pos.state.categories.map((cat) => Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: FilterChip(
+                      label: Text(cat['name'] ?? '', style: const TextStyle(fontSize: 12)),
+                      selected: pos.state.selectedCategoryId == cat['id'],
+                      onSelected: (_) => pos.selectCategory(cat['id']),
+                    ),
+                  )),
+                ],
               ),
-            ],
-          ),
+            ),
+          ]),
         ),
-        // Menu grid
         Expanded(
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _filteredItems.isEmpty
-                  ? Center(child: Text('No items found', style: GoogleFonts.inter(color: AppColors.gray400)))
+          child: pos.state.isLoading
+              ? const NxFullScreenLoader()
+              : pos.state.filteredMenuItems.isEmpty
+                  ? const NxEmptyState(icon: Icons.restaurant_menu, title: 'No items found')
                   : GridView.builder(
                       padding: const EdgeInsets.all(12),
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: isWide ? 3 : 2,
+                        crossAxisCount: deviceType == DeviceType.desktop ? 4 : deviceType == DeviceType.tablet ? 3 : 2,
                         childAspectRatio: 1.4,
                         crossAxisSpacing: 10,
                         mainAxisSpacing: 10,
                       ),
-                      itemCount: _filteredItems.length,
-                      itemBuilder: (ctx, i) => _buildMenuCard(_filteredItems[i]),
+                      itemCount: pos.state.filteredMenuItems.length,
+                      itemBuilder: (ctx, i) => _buildMenuCard(pos.state.filteredMenuItems[i], pos),
                     ),
         ),
       ],
     );
   }
 
-  bool get isWide => MediaQuery.of(context).size.width > 900;
-
-  Widget _buildMenuCard(Map<String, dynamic> item) {
+  Widget _buildMenuCard(Map<String, dynamic> item, PosProvider pos) {
     final price = double.tryParse(item['price'].toString()) ?? 0;
+    final cs = Theme.of(context).colorScheme;
     return Card(
       child: InkWell(
-        onTap: () => _addToCart(item),
-        borderRadius: BorderRadius.circular(8),
+        onTap: () => pos.addToCart(item),
+        borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: item['isVeg'] == true ? AppColors.success : AppColors.danger, width: 1.5),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                    child: Center(
-                      child: Container(
-                        width: 5,
-                        height: 5,
-                        decoration: BoxDecoration(
-                          color: item['isVeg'] == true ? AppColors.success : AppColors.danger,
-                          shape: BoxShape.circle,
-                        ),
+              Row(children: [
+                Container(
+                  width: 10, height: 10,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: item['isVeg'] == true ? AppColors.success : AppColors.danger, width: 1.5),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                  child: Center(
+                    child: Container(
+                      width: 5, height: 5,
+                      decoration: BoxDecoration(
+                        color: item['isVeg'] == true ? AppColors.success : AppColors.danger,
+                        shape: BoxShape.circle,
                       ),
                     ),
                   ),
-                  const Spacer(),
-                  if (item['isAvailable'] == false)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(color: AppColors.danger.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
-                      child: const Text('Unavailable', style: TextStyle(fontSize: 9, color: AppColors.danger)),
-                    ),
-                ],
-              ),
+                ),
+                const Spacer(),
+                if (item['isAvailable'] == false)
+                  NxStatusBadge(label: 'Unavailable', color: AppColors.danger, small: true),
+              ]),
               const SizedBox(height: 6),
               Expanded(
-                child: Text(
-                  item['name'] ?? '',
-                  style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                child: Text(item['name'] ?? '', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.onSurface), maxLines: 2, overflow: TextOverflow.ellipsis),
               ),
-              Text(
-                '₹${price.toStringAsFixed(0)}',
-                style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.primary),
-              ),
+              Text('₹${price.toStringAsFixed(0)}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: cs.primary)),
             ],
           ),
         ),
@@ -472,154 +349,123 @@ class _POSScreenState extends State<POSScreen> {
     );
   }
 
-  Widget _buildCartPanel() {
+  Widget _buildCartPanel(PosProvider pos) {
+    final cs = Theme.of(context).colorScheme;
     return Column(
       children: [
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.gray200))),
-          child: Row(
-            children: [
-              Text('Order', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600)),
-              const Spacer(),
-              if (_currentOrderId != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: AppColors.primary100, borderRadius: BorderRadius.circular(4)),
-                  child: Text('Table Order', style: GoogleFonts.inter(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600)),
-                ),
-            ],
-          ),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: cs.outline))),
+          child: Row(children: [
+            Text('Order', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: cs.onSurface)),
+            const Spacer(),
+            if (_currentOrderId != null)
+              NxStatusBadge(label: 'Table Order', color: AppColors.primary),
+          ]),
         ),
-        // Order type selector
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             children: ['DINE_IN', 'TAKEAWAY', 'DELIVERY'].map((type) {
-              final isSelected = _orderType == type;
               final labels = {'DINE_IN': 'Dine In', 'TAKEAWAY': 'Takeaway', 'DELIVERY': 'Delivery'};
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: ChoiceChip(
-                  label: Text(labels[type]!, style: GoogleFonts.inter(fontSize: 12)),
-                  selected: isSelected,
-                  onSelected: (_) => setState(() => _orderType = type),
-                  selectedColor: AppColors.primary100,
-                  checkmarkColor: AppColors.primary,
+                  label: Text(labels[type]!, style: const TextStyle(fontSize: 12)),
+                  selected: _orderType == type,
+                  onSelected: (_) {
+                    setState(() => _orderType = type);
+                    pos.setOrderType(type);
+                  },
                 ),
               );
             }).toList(),
           ),
         ),
-        // Cart items
         Expanded(
-          child: _cart.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.shopping_cart_outlined, size: 48, color: AppColors.gray300),
-                      const SizedBox(height: 8),
-                      Text('Tap items to add', style: GoogleFonts.inter(color: AppColors.gray400)),
-                    ],
-                  ),
-                )
+          child: pos.cart.isEmpty
+              ? const NxEmptyState(icon: Icons.shopping_cart_outlined, title: 'Tap items to add')
               : ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
-                  itemCount: _cart.length,
-                  itemBuilder: (ctx, i) => _buildCartItem(i),
+                  itemCount: pos.cart.items.length,
+                  itemBuilder: (ctx, i) => _buildCartItem(pos.cart.items[i], pos),
                 ),
         ),
-        // Totals
-        if (_cart.isNotEmpty)
+        if (!pos.cart.isEmpty)
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.gray200))),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Subtotal', style: GoogleFonts.inter(color: AppColors.gray600)),
-                    Text('₹${_cartTotal.toStringAsFixed(2)}', style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
-                  ],
+            decoration: BoxDecoration(border: Border(top: BorderSide(color: cs.outline))),
+            child: Column(children: [
+              _totalRow('Subtotal', '₹${_cartSubtotal.toStringAsFixed(2)}'),
+              const SizedBox(height: 4),
+              _totalRow('Tax (5%)', '₹${_taxAmount.toStringAsFixed(2)}'),
+              const Divider(),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                Text('Total', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: cs.onSurface)),
+                Text('₹${_finalTotal.toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: cs.primary)),
+              ]),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity, height: 44,
+                child: ElevatedButton(
+                  onPressed: _isCreatingOrder ? null : () => _placeOrder(pos),
+                  child: _isCreatingOrder
+                      ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : Text(_currentOrderId != null ? 'Add to Order' : 'Place Order'),
                 ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Tax (5%)', style: GoogleFonts.inter(color: AppColors.gray600)),
-                    Text('₹${(_cartTotal * 0.05).toStringAsFixed(2)}', style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
-                  ],
-                ),
-                const Divider(),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Total', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 16)),
-                    Text('₹${(_cartTotal * 1.05).toStringAsFixed(2)}', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.primary)),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  height: 44,
-                  child: ElevatedButton(
-                    onPressed: _isCreatingOrder ? null : _placeOrder,
-                    child: _isCreatingOrder
-                        ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : Text(_currentOrderId != null ? 'Add to Order' : 'Place Order'),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ]),
           ),
       ],
     );
   }
 
-  Widget _buildCartItem(int index) {
-    final item = _cart[index];
+  Widget _totalRow(String label, String value) {
+    return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+      Text(label, style: TextStyle(color: AppColors.gray600)),
+      Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
+    ]);
+  }
+
+  Widget _buildCartItem(dynamic item, PosProvider pos) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: item['isVeg'] == true ? AppColors.success : AppColors.danger,
-              shape: BoxShape.circle,
-            ),
+      child: Row(children: [
+        Container(
+          width: 8, height: 8,
+          decoration: BoxDecoration(
+            color: item.isVeg ? AppColors.success : AppColors.danger,
+            shape: BoxShape.circle,
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item['name'], style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500)),
-                Text('₹${item['unitPrice'].toStringAsFixed(0)} each', style: GoogleFonts.inter(fontSize: 11, color: AppColors.gray500)),
-              ],
-            ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(item.name, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: cs.onSurface)),
+              Text('₹${item.unitPrice.toStringAsFixed(0)} each', style: TextStyle(fontSize: 11, color: AppColors.gray500)),
+            ],
           ),
-          IconButton(
-            onPressed: () => _removeFromCart(index),
-            icon: const Icon(Icons.remove_circle_outline, size: 20, color: AppColors.danger),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Text('${item['quantity']}', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-          ),
-          IconButton(
-            onPressed: () => setState(() => _cart[index]['quantity']++),
-            icon: const Icon(Icons.add_circle_outline, size: 20, color: AppColors.primary),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-          ),
-        ],
-      ),
+        ),
+        IconButton(
+          onPressed: () => pos.removeFromCart(item.id),
+          icon: const Icon(Icons.remove_circle_outline, size: 20, color: AppColors.danger),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Text('${item.quantity}', style: const TextStyle(fontWeight: FontWeight.w600)),
+        ),
+        IconButton(
+          onPressed: () => pos.updateCartQuantity(item.id, item.quantity + 1),
+          icon: const Icon(Icons.add_circle_outline, size: 20, color: AppColors.primary),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+        ),
+      ]),
     );
   }
 }

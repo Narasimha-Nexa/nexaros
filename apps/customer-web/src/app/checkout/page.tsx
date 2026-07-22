@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { MapPin, Truck, Store, UtensilsCrossed, Calendar, ChevronRight, Plus } from 'lucide-react';
@@ -27,6 +27,16 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'online'>('online');
   const [gstNumber, setGstNumber] = useState('');
 
+  useEffect(() => {
+    if (items.length === 0) {
+      router.push('/cart');
+    }
+  }, [items.length, router]);
+
+  if (items.length === 0) {
+    return null;
+  }
+
   const handleApplyCoupon = async () => {
     if (!couponInput.trim()) return;
     setCouponLoading(true);
@@ -48,26 +58,6 @@ export default function CheckoutPage() {
   const handlePlaceOrder = async () => {
     setPlacing(true);
     try {
-      if (paymentMethod === 'online') {
-        const { openRazorpayCheckout } = await import('@/lib/razorpay');
-        const loaded = await import('@/lib/razorpay').then(m => m.loadRazorpayScript());
-        if (!loaded) throw new Error('Failed to load payment gateway');
-
-        const paymentResponse = await openRazorpayCheckout({
-          amount: getTotal(),
-          name: 'NexaROS',
-          description: 'Order Payment',
-          orderId: '',
-          prefill: { name: customerName, email: customerEmail, contact: customerPhone },
-          theme: { color: '#2563eb' },
-        });
-
-        if (!paymentResponse) {
-          setPlacing(false);
-          return;
-        }
-      }
-
       const order = await api.createOrder({
         items: items.map((i) => ({ menuItemId: i.menuItem.id, name: i.menuItem.name, quantity: i.quantity, unitPrice: i.unitPrice })),
         type: orderType,
@@ -78,7 +68,35 @@ export default function CheckoutPage() {
         instructions,
         couponCode: couponCode || undefined,
         tip,
+        paymentMethod,
       });
+
+      if (paymentMethod === 'online' && order) {
+        const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+        const orderRes = await fetch(`${API_BASE}/billing/create-order`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: getTotal(), receipt: order.id }),
+        });
+
+        if (orderRes.ok) {
+          const { orderId: razorpayOrderId } = await orderRes.json();
+          if (razorpayOrderId) {
+            const { openRazorpayCheckout } = await import('@/lib/razorpay');
+            const loaded = await import('@/lib/razorpay').then(m => m.loadRazorpayScript());
+            if (loaded) {
+              await openRazorpayCheckout({
+                amount: getTotal(),
+                name: 'NexaROS',
+                description: `Order #${order.orderNumber || order.id}`,
+                orderId: razorpayOrderId,
+                prefill: { name: customerName, email: customerEmail, contact: customerPhone },
+                theme: { color: '#2563eb' },
+              });
+            }
+          }
+        }
+      }
 
       const { useAuthStore } = await import('@/lib/store/auth-store');
       useAuthStore.getState().addOrder(order as any);
@@ -89,14 +107,6 @@ export default function CheckoutPage() {
     }
     setPlacing(false);
   };
-
-  if (items.length === 0) {
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-16">
-        <EmptyState icon="🛒" title="Your cart is empty" description="Add items from our menu to get started" action={<Link href="/menu"><Button>Browse Menu</Button></Link>} />
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
