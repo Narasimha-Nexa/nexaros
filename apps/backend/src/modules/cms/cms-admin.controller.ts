@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Put, Patch, Post, Param, Body, UseGuards, Request, HttpCode,
+  Controller, Get, Put, Patch, Post, Delete, Param, Body, Query, UseGuards, Request, HttpCode,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
@@ -79,5 +79,33 @@ export class CmsAdminController {
   @HttpCode(200)
   reset(@Param('tenantId') tenantId: string, @Request() req: any) {
     return this.cmsService.resetToDefaults(tenantId, this.audit(req));
+  }
+
+  @ApiOperation({ summary: 'Save a revision snapshot of current config' })
+  @Post('revisions')
+  @HttpCode(200)
+  saveRevision(
+    @Param('tenantId') tenantId: string,
+    @Body() body: { label?: string },
+    @Request() req: any,
+  ) {
+    return this.cmsService.saveRevision(tenantId, body.label, this.audit(req));
+  }
+
+  @ApiOperation({ summary: 'List revision history' })
+  @Get('revisions')
+  listRevisions(@Param('tenantId') tenantId: string) {
+    return this.cmsService.listRevisions(tenantId);
+  }
+
+  @ApiOperation({ summary: 'Revert config to a previous revision' })
+  @Post('revisions/:revisionId/revert')
+  @HttpCode(200)
+  revertRevision(
+    @Param('tenantId') tenantId: string,
+    @Param('revisionId') revisionId: string,
+    @Request() req: any,
+  ) {
+    return this.cmsService.revertToRevision(tenantId, revisionId, this.audit(req));
   }
 }

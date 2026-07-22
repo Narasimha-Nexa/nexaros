@@ -1,10 +1,13 @@
 'use client';
 import React, { useCallback, useRef, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { Input } from './input';
 import { Button } from './button';
 import { mediaService } from '@/lib/api';
 import { Upload, X, Link, Loader2 } from 'lucide-react';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
 /* ───────────────────────── Textarea ───────────────────────── */
 
@@ -258,6 +261,122 @@ export function MediaField({ value, onChange, label, hint, aspect = 'aspect-vide
         />
       </div>
       {hint && <p className="mt-1 text-xs text-body font-sans">{hint}</p>}
+    </div>
+  );
+}
+
+/* ───────────────────────── MediaLibrary ─────────────────────────
+ * Browser for previously uploaded media assets. Grid view with search, folder filter, and delete.
+ */
+
+interface MediaLibraryProps {
+  tenantId: string;
+  onSelect?: (url: string) => void;
+  folder?: string;
+  open: boolean;
+  onClose: () => void;
+}
+
+export function MediaLibrary({ tenantId, onSelect, folder, open, onClose }: MediaLibraryProps) {
+  const [search, setSearch] = useState('');
+  const [selectedFolder, setSelectedFolder] = useState(folder || '');
+  const [page, setPage] = useState(1);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const qc = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['media-library', tenantId, selectedFolder, search, page],
+    queryFn: () => mediaService.list(tenantId, { folder: selectedFolder || undefined, search: search || undefined, page }),
+    enabled: open,
+  });
+
+  const { data: folders } = useQuery({
+    queryKey: ['media-folders', tenantId],
+    queryFn: () => fetch(`${API_BASE}/media/folders?tenantId=${tenantId}`, { headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` } }).then((r) => r.json()),
+    enabled: open,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => mediaService.remove(id, tenantId),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['media-library'] }); qc.invalidateQueries({ queryKey: ['media-folders'] }); setDeleting(null); },
+  });
+
+  if (!open) return null;
+
+  const items: any[] = data?.data || [];
+  const folderList: any[] = folders || [];
+  const totalPages = data?.meta?.totalPages || 1;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b">
+          <h3 className="text-sm font-semibold text-ink">Media Library</h3>
+          <button onClick={onClose} className="text-ink/40 hover:text-ink text-lg">✕</button>
+        </div>
+        <div className="flex gap-2 px-4 py-2 border-b">
+          <input
+            type="text"
+            placeholder="Search files..."
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            className="flex-1 px-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          <select
+            value={selectedFolder}
+            onChange={(e) => { setSelectedFolder(e.target.value); setPage(1); }}
+            className="px-3 py-1.5 text-sm border rounded-lg"
+          >
+            <option value="">All folders</option>
+            {folderList.map((f: any) => (
+              <option key={f.folder} value={f.folder}>{f.folder} ({f.count})</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">
+          {isLoading ? (
+            <div className="text-center py-8 text-sm text-ink/40">Loading...</div>
+          ) : items.length === 0 ? (
+            <div className="text-center py-8 text-sm text-ink/40">No files found</div>
+          ) : (
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+              {items.map((item: any) => (
+                <div key={item.id} className="group relative rounded-lg border overflow-hidden hover:ring-2 hover:ring-primary/50 cursor-pointer" onClick={() => { onSelect?.(item.url); onClose(); }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={item.url} alt={item.originalName} className="w-full aspect-square object-cover" />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-end">
+                    <div className="w-full p-1.5 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                      <p className="text-[10px] text-white truncate">{item.originalName}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setDeleting(item.id); }}
+                    className="absolute top-1 right-1 w-5 h-5 bg-danger text-white rounded-full text-[10px] items-center justify-center opacity-0 group-hover:flex hover:bg-danger/80"
+                  >✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 px-4 py-2 border-t">
+            <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="px-2 py-1 text-xs border rounded disabled:opacity-40">Prev</button>
+            <span className="text-xs text-ink/50">{page} / {totalPages}</span>
+            <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="px-2 py-1 text-xs border rounded disabled:opacity-40">Next</button>
+          </div>
+        )}
+      </div>
+      {deleting && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg p-4 shadow-xl max-w-sm">
+            <p className="text-sm text-ink mb-3">Delete this file? This cannot be undone.</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDeleting(null)} className="px-3 py-1.5 text-sm border rounded-lg">Cancel</button>
+              <button onClick={() => deleteMutation.mutate(deleting)} className="px-3 py-1.5 text-sm bg-danger text-white rounded-lg">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

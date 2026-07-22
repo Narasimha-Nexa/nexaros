@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Monitor, Tablet, Smartphone, RefreshCw, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -21,12 +21,45 @@ export function LivePreview({ config, device, slug }: PreviewProps) {
   const deviceCfg = DEVICE_CONFIGS[device];
   const DeviceIcon = deviceCfg.icon;
   const [key, setKey] = useState(0);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const previewUrl = slug ? `${CUSTOMER_SITE}/restaurant/${slug}` : '';
 
   useEffect(() => {
     setKey((k) => k + 1);
   }, [slug]);
+
+  // Send theme CSS variables to iframe via postMessage whenever config changes
+  useEffect(() => {
+    if (!iframeRef.current || !slug) return;
+    const themePayload = {
+      type: 'nexaros:theme-update',
+      theme: {
+        '--color-primary': config.primaryColor || '#2563eb',
+        '--color-secondary': config.secondaryColor || '#171717',
+        '--color-accent': config.accentColor || '#f59e0b',
+        '--font-heading': config.fontHeading || 'Playfair Display',
+        '--font-body': config.fontBody || 'Inter',
+        '--border-radius': config.borderRadius || 'xl',
+        '--container-width': config.containerWidth || 'max-w-7xl',
+        restaurantName: config.restaurantName,
+        tagline: config.tagline,
+        logo: config.logo,
+      },
+    };
+
+    const sendTheme = () => {
+      try {
+        iframeRef.current?.contentWindow?.postMessage(themePayload, '*');
+      } catch {}
+    };
+
+    const iframe = iframeRef.current;
+    iframe.addEventListener('load', sendTheme);
+    sendTheme();
+
+    return () => iframe.removeEventListener('load', sendTheme);
+  }, [config, slug]);
 
   return (
     <div className="mx-auto transition-all duration-300">
@@ -62,6 +95,7 @@ export function LivePreview({ config, device, slug }: PreviewProps) {
           </div>
           <div className="relative w-full" style={{ paddingBottom: device === 'mobile' ? '178%' : device === 'tablet' ? '132%' : '75%' }}>
             <iframe
+              ref={iframeRef}
               key={key}
               src={previewUrl}
               title="Website Preview"

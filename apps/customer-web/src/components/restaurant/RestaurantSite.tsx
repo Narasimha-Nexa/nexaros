@@ -31,6 +31,27 @@ interface Props {
   slug: string;
 }
 
+// Listen for theme updates from admin portal postMessage (live preview)
+function usePreviewTheme() {
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type !== 'nexaros:theme-update') return;
+      const theme = event.data.theme;
+      if (!theme) return;
+      const root = document.documentElement;
+      Object.entries(theme).forEach(([key, value]) => {
+        if (key.startsWith('--')) root.style.setProperty(key, String(value));
+      });
+      // Apply restaurant name/tagline/logo if provided
+      if (theme.restaurantName) {
+        document.title = String(theme.restaurantName);
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
+}
+
 const DAY_LABELS: Record<string, string> = {
   monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday', thursday: 'Thursday',
   friday: 'Friday', saturday: 'Saturday', sunday: 'Sunday',
@@ -42,6 +63,7 @@ function safeUrl(u?: string | null) {
 }
 
 export function RestaurantSite({ data, gallery, testimonials, offers, announcements, slug }: Props) {
+  usePreviewTheme();
   const w = data.website || ({} as WebsiteResponse['website']);
   const t = data.tenant || ({} as WebsiteResponse['tenant']);
   const name = w.restaurantName || t.name || 'Restaurant';

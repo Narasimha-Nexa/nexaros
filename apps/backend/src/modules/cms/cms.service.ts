@@ -97,8 +97,78 @@ export class CmsService {
 
   async publishWebsite(tenantId: string, audit?: AuditCtx) {
     const config = await this.getConfig(tenantId);
+    const now = new Date();
+    await this.prisma.tenantWebsiteConfig.update({
+      where: { tenantId },
+      data: { publishedAt: now, version: { increment: 1 } },
+    });
     await this.afterMutation(tenantId, 'website:published', { config }, audit);
-    return { success: true, publishedAt: new Date().toISOString() };
+    return { success: true, publishedAt: now.toISOString() };
+  }
+
+  async saveRevision(tenantId: string, label?: string, audit?: AuditCtx) {
+    const config = await this.getConfig(tenantId);
+    const snapshot = {
+      restaurantName: config.restaurantName,
+      tagline: config.tagline,
+      logo: config.logo,
+      favicon: config.favicon,
+      phone: config.phone,
+      email: config.email,
+      address: config.address,
+      mapUrl: config.mapUrl,
+      whatsappNumber: config.whatsappNumber,
+      currency: config.currency,
+      timezone: config.timezone,
+      primaryColor: config.primaryColor,
+      secondaryColor: config.secondaryColor,
+      accentColor: config.accentColor,
+      fontHeading: config.fontHeading,
+      fontBody: config.fontBody,
+      borderRadius: config.borderRadius,
+      containerWidth: config.containerWidth,
+      features: config.features,
+      seo: config.seo,
+      openingHours: config.openingHours,
+      socialLinks: config.socialLinks,
+      analytics: config.analytics,
+      legalPages: config.legalPages,
+      homeSections: config.homeSections,
+    };
+    const revision = await this.prisma.websiteRevision.create({
+      data: {
+        tenantId,
+        configId: config.id,
+        version: config.version,
+        label: label || `Draft v${config.version}`,
+        snapshot: snapshot as any,
+        createdBy: audit?.adminId || null,
+      },
+    });
+    return revision;
+  }
+
+  async listRevisions(tenantId: string) {
+    return this.prisma.websiteRevision.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+  }
+
+  async revertToRevision(tenantId: string, revisionId: string, audit?: AuditCtx) {
+    const revision = await this.prisma.websiteRevision.findFirst({
+      where: { id: revisionId, tenantId },
+    });
+    if (!revision) throw new NotFoundException('Revision not found');
+
+    const snapshot = revision.snapshot as any;
+    const updated = await this.prisma.tenantWebsiteConfig.update({
+      where: { tenantId },
+      data: snapshot,
+    });
+    await this.afterMutation(tenantId, 'website:updated', { section: 'revert', revisionId }, audit);
+    return updated;
   }
 
   async resetToDefaults(tenantId: string, audit?: AuditCtx) {

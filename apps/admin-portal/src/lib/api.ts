@@ -735,6 +735,21 @@ class AdminApiClient {
     return this.request(`/admin/tenants/${tenantId}/website/reset`, { method: 'POST' });
   }
 
+  async saveRevision(tenantId: string, label?: string) {
+    return this.request(`/admin/tenants/${tenantId}/website/revisions`, {
+      method: 'POST',
+      body: JSON.stringify({ label }),
+    });
+  }
+
+  async listRevisions(tenantId: string) {
+    return this.request(`/admin/tenants/${tenantId}/website/revisions`);
+  }
+
+  async revertRevision(tenantId: string, revisionId: string) {
+    return this.request(`/admin/tenants/${tenantId}/website/revisions/${revisionId}/revert`, { method: 'POST' });
+  }
+
   // ─── Offers (super-admin, tenant-scoped) ───
   async listOffers(tenantId: string) {
     return this.request(`/admin/tenants/${tenantId}/offers`);

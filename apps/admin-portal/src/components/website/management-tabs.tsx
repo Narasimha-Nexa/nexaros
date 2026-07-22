@@ -1,6 +1,10 @@
 'use client';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, useSortable, rectSortingStrategy, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { GripVertical } from 'lucide-react';
 import { adminApi } from '@/lib/api';
 import { useToastStore } from '@/stores/ui.store';
 import { Input } from '@/components/ui/input';
@@ -205,15 +209,47 @@ export function AnnouncementsTab({ tenantId }: { tenantId: string }) {
 
 /* ───────────── Gallery ───────────── */
 
+function SortableGalleryCard({ item, onEdit, onDelete }: { item: any; onEdit: (item: any) => void; onDelete: (item: any) => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
+  const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 10 : 1, opacity: isDragging ? 0.8 : 1 };
+
+  return (
+    <div ref={setNodeRef} style={style} className={`group relative rounded-lg border overflow-hidden bg-white ${isDragging ? 'shadow-lg' : ''}`}>
+      <div {...attributes} {...listeners} className="absolute top-1 left-1 z-10 cursor-grab active:cursor-grabbing bg-white/80 rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <GripVertical size={14} className="text-ink/40" />
+      </div>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={item.imageUrl} alt={item.altText || item.caption || ''} className="h-28 w-full object-cover" />
+      <div className="flex items-center justify-between p-1.5">
+        <span className="text-[10px] truncate flex-1">{item.caption || 'No caption'}{item.isFeatured ? ' ★' : ''}</span>
+        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={() => onEdit(item)} className="p-1 text-ink/40 hover:text-primary text-[10px]">Edit</button>
+          <button onClick={() => onDelete(item)} className="p-1 text-ink/40 hover:text-danger text-[10px]">✕</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function GalleryTab({ tenantId }: { tenantId: string }) {
   const { addToast } = useToastStore();
   const qc = useQueryClient();
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<any>({});
   const [deleting, setDeleting] = useState<any>(null);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
   const { data, isLoading } = useQuery({
     queryKey: ['admin-gallery', tenantId],
     queryFn: () => adminApi.listGallery(tenantId),
+  });
+
+  const reorderMutation = useMutation({
+    mutationFn: (orderedIds: string[]) => {
+      const updates = orderedIds.map((id, i) => adminApi.updateGalleryImage(tenantId, id, { displayOrder: i }));
+      return Promise.all(updates);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-gallery', tenantId] }),
   });
 
   const open = (g?: any) => {
@@ -233,29 +269,35 @@ export function GalleryTab({ tenantId }: { tenantId: string }) {
     onError: (e: any) => addToast(e.message || 'Failed', 'error'),
   });
 
-  const items: any[] = data || [];
+  const items: any[] = (data || []).sort((a: any, b: any) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+
+  const handleDragEnd = (event: any) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = items.findIndex((i: any) => i.id === active.id);
+    const newIndex = items.findIndex((i: any) => i.id === over.id);
+    const reordered = arrayMove(items, oldIndex, newIndex);
+    const orderedIds = reordered.map((i: any) => i.id);
+    reorderMutation.mutate(orderedIds);
+  };
+
   return (
     <div>
       <div className="flex justify-end mb-3">
         <Button size="sm" onClick={() => open()}>+ Add Image</Button>
       </div>
-      {isLoading ? <p className="text-body">Loading...</p> : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {items.map((g) => (
-            <Card key={g.id} className="p-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={g.imageUrl} alt={g.altText || g.caption || ''} className="h-28 w-full object-cover rounded-lg" />
-              <div className="flex items-center justify-between mt-2">
-                <span className="text-xs truncate">{g.caption || 'No caption'}{g.isFeatured ? ' 🌟' : ''}</span>
-                <div className="flex gap-1">
-                  <Button size="sm" variant="ghost" onClick={() => open(g)}>Edit</Button>
-                  <Button size="sm" variant="danger" onClick={() => setDeleting(g)}>✕</Button>
-                </div>
-              </div>
-            </Card>
-          ))}
-          {items.length === 0 && <p className="text-body col-span-full">No gallery images yet.</p>}
-        </div>
+      {isLoading ? <p className="text-body">Loading...</p> : items.length === 0 ? (
+        <p className="text-body text-center py-8 text-ink/40">No gallery images yet.</p>
+      ) : (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={items.map((i: any) => i.id)} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {items.map((g: any) => (
+                <SortableGalleryCard key={g.id} item={g} onEdit={open} onDelete={setDeleting} />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
       {editing && (
         <Dialog open onClose={() => setEditing(null)} title={editing.id ? 'Edit Image' : 'Add Image'} size="lg">

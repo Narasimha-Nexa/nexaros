@@ -13,13 +13,14 @@ import { LivePreview } from '@/components/website/LivePreview';
 import { OffersTab, AnnouncementsTab, GalleryTab } from '@/components/website/management-tabs';
 import {
   Palette, Type, Search, Share2, Clock, Phone, FileText, LayoutGrid, ToggleLeft,
-  Tag, Megaphone, Images, Eye, Rocket,
+  Tag, Megaphone, Images, Eye, Rocket, History,
 } from 'lucide-react';
+import { Dialog, DialogFooter } from '@/components/ui/dialog';
 
 type TabId =
   | 'branding' | 'theme' | 'typography' | 'seo' | 'social'
   | 'contact' | 'legal' | 'sections' | 'features' | 'offers'
-  | 'announcements' | 'gallery' | 'preview';
+  | 'announcements' | 'gallery' | 'preview' | 'history';
 
 const FONT_OPTIONS = [
   'Playfair Display', 'Inter', 'Lora', 'Montserrat', 'Poppins',
@@ -105,9 +106,18 @@ export default function WebsiteHub() {
     onError: (e: any) => addToast(e.message || 'Save failed', 'error'),
   });
 
+  const [confirmPublish, setConfirmPublish] = useState(false);
+
   const publishMutation = useMutation({
-    mutationFn: () => adminApi.publishWebsite(tenantId),
-    onSuccess: () => addToast('Website published & cache refreshed', 'success'),
+    mutationFn: async () => {
+      await adminApi.saveRevision(tenantId, 'Pre-publish snapshot');
+      return adminApi.publishWebsite(tenantId);
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['website', tenantId] });
+      addToast('Website published & cache refreshed', 'success');
+      setConfirmPublish(false);
+    },
     onError: (e: any) => addToast(e.message || 'Publish failed', 'error'),
   });
 
@@ -133,6 +143,7 @@ export default function WebsiteHub() {
     { id: 'offers', label: 'Offers', icon: <Tag size={16} /> },
     { id: 'announcements', label: 'Announcements', icon: <Megaphone size={16} /> },
     { id: 'gallery', label: 'Gallery', icon: <Images size={16} /> },
+    { id: 'history', label: 'History', icon: <History size={16} /> },
     { id: 'preview', label: 'Preview & Publish', icon: <Eye size={16} /> },
   ];
 
@@ -148,12 +159,27 @@ export default function WebsiteHub() {
             <Button variant="outline" onClick={() => router.push('/website')}>Change Tenant</Button>
             <Button variant="ghost" onClick={() => resetMutation.mutate()} isLoading={resetMutation.isPending}>Reset</Button>
             <Button variant="outline" onClick={() => saveMutation.mutate(draft)} isLoading={saveMutation.isPending}>Save</Button>
-            <Button onClick={() => publishMutation.mutate()} isLoading={publishMutation.isPending}>
+            <Button onClick={() => setConfirmPublish(true)} isLoading={publishMutation.isPending}>
               <Rocket size={16} className="mr-1" /> Publish
             </Button>
           </div>
         }
       />
+
+      {confirmPublish && (
+        <Dialog open onClose={() => setConfirmPublish(false)} title="Publish Website" size="sm">
+          <p className="text-sm text-ink/70 mb-1">This will save a revision snapshot and publish all current changes to the live website.</p>
+          {draft.publishedAt && (
+            <p className="text-xs text-ink/50 mb-3">Last published: {new Date(draft.publishedAt).toLocaleString()}</p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmPublish(false)}>Cancel</Button>
+            <Button onClick={() => publishMutation.mutate()} isLoading={publishMutation.isPending}>
+              <Rocket size={14} className="mr-1" /> Confirm Publish
+            </Button>
+          </DialogFooter>
+        </Dialog>
+      )}
 
       <div className="grid lg:grid-cols-[1fr_420px] gap-6 items-start">
         <Card className="p-5">
@@ -171,6 +197,7 @@ export default function WebsiteHub() {
             {tab === 'offers' && <OffersTab tenantId={tenantId} />}
             {tab === 'announcements' && <AnnouncementsTab tenantId={tenantId} />}
             {tab === 'gallery' && <GalleryTab tenantId={tenantId} />}
+            {tab === 'history' && <HistoryTab tenantId={tenantId} draft={draft} setDraft={setDraft} />}
             {tab === 'preview' && <PreviewTab draft={draft} />}
           </div>
         </Card>
@@ -184,7 +211,12 @@ export default function WebsiteHub() {
               ))}
             </div>
             <LivePreview config={draft} device={device} slug={slug} />
-            <Button variant="outline" size="sm" className="mt-3 w-full"
+            {draft.publishedAt && (
+              <p className="text-[10px] text-ink/40 text-center mt-2">
+                Last published: {new Date(draft.publishedAt).toLocaleString()}
+              </p>
+            )}
+            <Button variant="outline" size="sm" className="mt-2 w-full"
               onClick={() => window.open(`${process.env.NEXT_PUBLIC_CUSTOMER_SITE_URL || 'http://localhost:3001'}/restaurant/${draft.slug || ''}`, '_blank')}>
               Open Live Site ↗
             </Button>
@@ -422,10 +454,75 @@ function FeaturesTab({ draft, setJson }: any) {
 function PreviewTab({ draft }: any) {
   return (
     <div className="space-y-3">
-      <p className="text-body">This is a quick themed preview. Use “Open Live Site” for the full customer experience. Changes are pushed live instantly after Publish via real-time sync.</p>
+      <p className="text-body">This is a quick themed preview. Use "Open Live Site" for the full customer experience. Changes are pushed live instantly after Publish via real-time sync.</p>
       <pre className="text-xs bg-canvas border border-ink/10 rounded-lg p-3 overflow-auto max-h-64">
         {JSON.stringify({ restaurantName: draft.restaurantName, primaryColor: draft.primaryColor, features: draft.features, homeSections: draft.homeSections }, null, 2)}
       </pre>
+    </div>
+  );
+}
+
+function HistoryTab({ tenantId, draft, setDraft }: { tenantId: string; draft: any; setDraft: (fn: (d: any) => any) => void }) {
+  const { addToast } = useToastStore();
+  const qc = useQueryClient();
+  const [reverting, setReverting] = useState<any>(null);
+
+  const { data: revisions, isLoading } = useQuery({
+    queryKey: ['website-revisions', tenantId],
+    queryFn: () => adminApi.listRevisions(tenantId),
+  });
+
+  const revertMutation = useMutation({
+    mutationFn: (revisionId: string) => adminApi.revertRevision(tenantId, revisionId),
+    onSuccess: (data: any) => {
+      setDraft(() => data);
+      qc.invalidateQueries({ queryKey: ['website-revisions', tenantId] });
+      setReverting(null);
+      addToast('Reverted to previous revision', 'success');
+    },
+    onError: (e: any) => addToast(e.message || 'Revert failed', 'error'),
+  });
+
+  const items: any[] = revisions || [];
+
+  return (
+    <div>
+      <p className="text-body-sm text-ink/60 mb-3">Snapshots are automatically saved when you publish. You can revert to any previous version.</p>
+      {isLoading ? (
+        <p className="text-body text-sm">Loading history...</p>
+      ) : items.length === 0 ? (
+        <p className="text-body text-sm text-ink/40">No revisions yet. Publish your website to create the first snapshot.</p>
+      ) : (
+        <div className="space-y-2">
+          {items.map((r: any) => (
+            <div key={r.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-canvas/50 transition-colors">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-ink truncate">{r.label || `Revision v${r.version}`}</p>
+                <p className="text-xs text-ink/40">
+                  {new Date(r.createdAt).toLocaleString()} · v{r.version}
+                </p>
+              </div>
+              <Button size="sm" variant="ghost" onClick={() => setReverting(r)}>
+                Revert
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+      {reverting && (
+        <Dialog open onClose={() => setReverting(null)} title="Revert to Revision" size="sm">
+          <p className="text-sm text-ink/70 mb-1">
+            Revert the website config to <strong>{reverting.label || `v${reverting.version}`}</strong>?
+          </p>
+          <p className="text-xs text-ink/50 mb-3">
+            This will overwrite your current settings. A new revision will be saved automatically.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReverting(null)}>Cancel</Button>
+            <Button onClick={() => revertMutation.mutate(reverting.id)} isLoading={revertMutation.isPending}>Revert</Button>
+          </DialogFooter>
+        </Dialog>
+      )}
     </div>
   );
 }

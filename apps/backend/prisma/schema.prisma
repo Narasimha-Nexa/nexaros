@@ -196,7 +196,8 @@ model Tenant {
     whatsappCampaigns    WhatsAppBulkCampaign[]
     whatsappAutomations  WhatsAppAutomation[]
     whatsappAnalytics    WhatsAppAnalytics[]
-    mediaAssets          MediaAsset[]
+     mediaAssets          MediaAsset[]
+     websiteRevisions     WebsiteRevision[]
 
   @@index([ownerProfileId])
   @@map("tenants")
@@ -1848,14 +1849,15 @@ enum SenderType {
 // ─────────────────────────────────────────────
 
 model TenantWebsiteConfig {
-  id        String    @id @default(cuid())
-  tenantId  String    @unique
-  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  version   Int       @default(1)
-  deletedAt DateTime?
-  createdBy String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id          String    @id @default(cuid())
+  tenantId    String    @unique
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  version     Int       @default(1)
+  publishedAt DateTime?
+  deletedAt   DateTime?
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   // ── Global Settings ──
   restaurantName String  @default("")
@@ -1888,8 +1890,27 @@ model TenantWebsiteConfig {
   legalPages   Json @default("{}")
   homeSections Json @default("[]")
 
+  revisions WebsiteRevision[]
+
   @@index([tenantId])
   @@map("tenant_website_configs")
+}
+
+model WebsiteRevision {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  configId   String
+  config     TenantWebsiteConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  version    Int
+  label      String?
+  snapshot   Json
+  createdBy  String?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, version])
+  @@index([configId])
+  @@map("website_revisions")
 }
 
 // ─────────────────────────────────────────────
