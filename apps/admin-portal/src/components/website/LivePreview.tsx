@@ -1,12 +1,14 @@
 'use client';
-import React, { useEffect, useRef, useState } from 'react';
-import { Monitor, Tablet, Smartphone, RefreshCw, ExternalLink } from 'lucide-react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { Monitor, Tablet, Smartphone, RefreshCw, ExternalLink, Pencil, PencilOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useToastStore } from '@/stores/ui.store';
 
 interface PreviewProps {
   config: Record<string, any>;
   device: 'desktop' | 'tablet' | 'mobile';
   slug?: string;
+  onFieldEdit?: (field: string, value: string) => void;
 }
 
 const DEVICE_CONFIGS = {
@@ -17,49 +19,108 @@ const DEVICE_CONFIGS = {
 
 const CUSTOMER_SITE = process.env.NEXT_PUBLIC_CUSTOMER_SITE_URL || 'http://localhost:3001';
 
-export function LivePreview({ config, device, slug }: PreviewProps) {
+export function LivePreview({ config, device, slug, onFieldEdit }: PreviewProps) {
   const deviceCfg = DEVICE_CONFIGS[device];
   const DeviceIcon = deviceCfg.icon;
   const [key, setKey] = useState(0);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [activeField, setActiveField] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const { addToast } = useToastStore();
 
-  const previewUrl = slug ? `${CUSTOMER_SITE}/restaurant/${slug}` : '';
+  const previewUrl = slug ? `${CUSTOMER_SITE}/${slug}` : '';
 
   useEffect(() => {
     setKey((k) => k + 1);
   }, [slug]);
 
-  // Send theme CSS variables to iframe via postMessage whenever config changes
+  // Listen for messages from the iframe
   useEffect(() => {
-    if (!iframeRef.current || !slug) return;
-    const themePayload = {
-      type: 'nexaros:theme-update',
-      theme: {
-        '--color-primary': config.primaryColor || '#E51A24',
-        '--color-secondary': config.secondaryColor || '#111111',
-        '--color-accent': config.accentColor || '#F1B31C',
-        '--font-heading': config.fontHeading || 'Playfair Display',
-        '--font-body': config.fontBody || 'Inter',
-        '--border-radius': config.borderRadius || 'xl',
-        '--container-width': config.containerWidth || 'max-w-7xl',
-        restaurantName: config.restaurantName,
-        tagline: config.tagline,
-        logo: config.logo,
-      },
+    const handler = (event: MessageEvent) => {
+      const data = event.data;
+      if (!data) return;
+
+      if (data.type === 'nexaros:field-edit') {
+        if (onFieldEdit) {
+          onFieldEdit(data.field, data.value);
+        }
+      }
+
+      if (data.type === 'nexaros:field-clicked') {
+        setActiveField(data.field);
+      }
     };
 
-    const sendTheme = () => {
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [onFieldEdit]);
+
+  // Send theme + edit mode to iframe
+  useEffect(() => {
+    if (!iframeRef.current || !slug) return;
+
+    const sendPayload = () => {
       try {
+        const themePayload = {
+          type: 'nexaros:theme-update',
+          theme: {
+            '--color-primary': config.primaryColor || '#E51A24',
+            '--color-secondary': config.secondaryColor || '#111111',
+            '--color-accent': config.accentColor || '#F1B31C',
+            '--font-heading': config.fontHeading || 'Playfair Display',
+            '--font-body': config.fontBody || 'Inter',
+            '--border-radius': config.borderRadius || 'xl',
+            '--container-width': config.containerWidth || 'max-w-7xl',
+            restaurantName: config.restaurantName,
+            tagline: config.tagline,
+            logo: config.logo,
+          },
+        };
         iframeRef.current?.contentWindow?.postMessage(themePayload, '*');
+
+        // Send edit mode state
+        const editPayload = {
+          type: 'nexaros:edit-mode',
+          enabled: isEditMode,
+        };
+        iframeRef.current?.contentWindow?.postMessage(editPayload, '*');
+
+        // Send active field highlight
+        if (activeField) {
+          iframeRef.current?.contentWindow?.postMessage({
+            type: 'nexaros:set-active-field',
+            field: activeField,
+          }, '*');
+        }
       } catch {}
     };
 
     const iframe = iframeRef.current;
-    iframe.addEventListener('load', sendTheme);
-    sendTheme();
+    iframe.addEventListener('load', sendPayload);
+    sendPayload();
 
-    return () => iframe.removeEventListener('load', sendTheme);
-  }, [config, slug]);
+    return () => iframe.removeEventListener('load', sendPayload);
+  }, [config, slug, isEditMode, activeField]);
+
+  // Re-send edit mode when toggled
+  const toggleEditMode = useCallback(() => {
+    const next = !isEditMode;
+    setIsEditMode(next);
+    if (!next) setActiveField(null);
+
+    setTimeout(() => {
+      try {
+        iframeRef.current?.contentWindow?.postMessage({
+          type: 'nexaros:edit-mode',
+          enabled: next,
+        }, '*');
+      } catch {}
+    }, 100);
+
+    if (next) {
+      addToast('Edit mode enabled — click text in the preview to edit', 'info');
+    }
+  }, [isEditMode, addToast]);
 
   return (
     <div className="mx-auto transition-all duration-300">
@@ -71,6 +132,15 @@ export function LivePreview({ config, device, slug }: PreviewProps) {
           <span className="text-[10px] text-ink/30">{deviceCfg.width}</span>
         </div>
         <div className="flex gap-1">
+          <Button
+            size="sm"
+            variant={isEditMode ? 'primary' : 'ghost'}
+            onClick={toggleEditMode}
+            title={isEditMode ? 'Exit edit mode' : 'Enable inline editing'}
+          >
+            {isEditMode ? <PencilOff size={12} /> : <Pencil size={12} />}
+            <span className="ml-1 hidden sm:inline">{isEditMode ? 'Editing' : 'Edit'}</span>
+          </Button>
           <Button size="sm" variant="ghost" onClick={() => setKey((k) => k + 1)} title="Refresh preview">
             <RefreshCw size={12} />
           </Button>
@@ -91,7 +161,10 @@ export function LivePreview({ config, device, slug }: PreviewProps) {
             <span className="h-2 w-2 rounded-full bg-danger/70" />
             <span className="h-2 w-2 rounded-full bg-warning/70" />
             <span className="h-2 w-2 rounded-full bg-success/70" />
-            <span className="ml-1 truncate">{slug}.nexaros.in</span>
+            <span className="ml-1 truncate">{CUSTOMER_SITE}/{slug}</span>
+            {isEditMode && (
+              <span className="ml-auto px-1.5 py-0.5 rounded text-[10px] font-bold bg-primary text-white">LIVE EDIT</span>
+            )}
           </div>
           <div className="relative w-full" style={{ paddingBottom: device === 'mobile' ? '178%' : device === 'tablet' ? '132%' : '75%' }}>
             <iframe

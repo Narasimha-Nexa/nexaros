@@ -181,7 +181,7 @@ export const useWebsiteBuilderStore = create<WebsiteBuilderState>((set, get) => 
           autosave: { ...s.autosave, isAutosaving: false, autosaveError: error.message || 'Autosave failed' },
         }));
       }
-    }, 30000);
+    }, 300);
 
     set((s) => ({
       autosave: { ...s.autosave, autosaveTimer: timer },

@@ -20,8 +20,10 @@ import {
   Building2, Search, Plus, RefreshCw, Download, Filter, MoreHorizontal,
   Eye, Edit, Trash2, Pause, Play, LogIn, ChevronDown, X, Check,
   Users, GitBranch, ShoppingCart, ArrowUpDown, ChevronLeft, ChevronRight,
-  ChevronsLeft, ChevronsRight, ExternalLink, Copy, Loader2,
+  ChevronsLeft, ChevronsRight, ExternalLink, Copy, Loader2, Globe,
 } from 'lucide-react';
+
+const CUSTOMER_SITE_URL = process.env.NEXT_PUBLIC_CUSTOMER_SITE_URL || 'http://localhost:3001';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
@@ -155,8 +157,8 @@ export default function TenantsPage() {
     try {
       await startImpersonation(tenant.id, tenant.owner.id);
       addToast(`Impersonating ${tenant.name}`, 'success');
-      if (tenant.subdomain) {
-        window.open(`https://${tenant.subdomain}.nexaros.in`, '_blank');
+      if (tenant.slug) {
+        window.open(`${CUSTOMER_SITE_URL}/${tenant.slug}`, '_blank');
       } else {
         router.push(`/tenants/${tenant.id}`);
       }
@@ -391,7 +393,24 @@ export default function TenantsPage() {
                         </div>
                         <div>
                           <p className="font-sans font-semibold text-body-sm">{t.name}</p>
-                          <p className="text-caption font-mono text-body">{t.subdomain || t.slug}.nexaros.in</p>
+                          <div className="flex items-center gap-1.5">
+                            <a
+                              href={`${CUSTOMER_SITE_URL}/${t.slug}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-caption font-mono text-primary hover:underline truncate max-w-[200px]"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {CUSTOMER_SITE_URL}/{t.slug}
+                            </a>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); window.open(`${CUSTOMER_SITE_URL}/${t.slug}`, '_blank'); }}
+                              className="text-caption text-body hover:text-ink transition-colors"
+                              title="Open website"
+                            >
+                              <ExternalLink size={12} />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -442,9 +461,9 @@ export default function TenantsPage() {
                                   <LogIn size={14} /> Login as Owner
                                 </button>
                               )}
-                              {t.subdomain && (
-                                <a href={`https://${t.subdomain}.nexaros.in`} target="_blank" rel="noopener noreferrer" className="w-full text-left px-3 py-2 text-body-sm font-sans hover:bg-ink hover:text-canvas flex items-center gap-2" onClick={() => setActionMenu(null)}>
-                                  <ExternalLink size={14} /> View Website
+                              {t.slug && (
+                                <a href={`${CUSTOMER_SITE_URL}/${t.slug}`} target="_blank" rel="noopener noreferrer" className="w-full text-left px-3 py-2 text-body-sm font-sans hover:bg-ink hover:text-canvas flex items-center gap-2" onClick={() => setActionMenu(null)}>
+                                  <Globe size={14} /> Open Website
                                 </a>
                               )}
                               <div className="border-t border-hairline" />
@@ -520,7 +539,16 @@ export default function TenantsPage() {
               </div>
               <div>
                 <h3 className="font-display text-display-sm">{viewTenant.name}</h3>
-                <p className="text-body-sm font-sans text-body">{viewTenant.subdomain}.nexaros.in</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-body-sm font-sans text-body">{CUSTOMER_SITE_URL}/{viewTenant.slug}</p>
+                  <button
+                    onClick={() => window.open(`${CUSTOMER_SITE_URL}/${viewTenant.slug}`, '_blank')}
+                    className="text-body hover:text-ink transition-colors"
+                    title="Open website"
+                  >
+                    <ExternalLink size={12} />
+                  </button>
+                </div>
               </div>
             </div>
 

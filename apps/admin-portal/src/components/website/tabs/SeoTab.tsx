@@ -7,7 +7,7 @@ import { GoogleSearchPreview, SocialCardPreview } from '../SearchPreviews';
 export function SeoTab({ tenantId, draft, setJson }: any) {
   const seo = draft.seo || {};
   const slug = draft.slug || '';
-  const siteUrl = `https://${slug}.example.com`;
+  const siteUrl = `${process.env.NEXT_PUBLIC_CUSTOMER_SITE_URL || 'http://localhost:3001'}/${slug}`;
 
   return (
     <div className="space-y-6">

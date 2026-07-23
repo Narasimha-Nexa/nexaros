@@ -100,7 +100,7 @@ export default function WebsiteHub() {
       } catch (error: any) {
         console.error('[Autosave] Failed:', error.message);
       }
-    }, 30000);
+    }, 300);
     return () => clearTimeout(timer);
   }, [draft, tenantId]);
 
@@ -176,6 +176,37 @@ export default function WebsiteHub() {
   const set = (key: string, value: any) => store.setDraft((d) => ({ ...d, [key]: value }));
   const setJson = (key: string, patch: Record<string, any>) => store.setDraft((d) => ({ ...d, [key]: { ...(d[key] || {}), ...patch } }));
 
+  const handleFieldEdit = useCallback((field: string, value: string) => {
+    const fieldMap: Record<string, string> = {
+      restaurantName: 'restaurantName',
+      tagline: 'tagline',
+      heroTitle: 'homeSections',
+      aboutTitle: 'homeSections',
+      aboutContent: 'homeSections',
+      address: 'address',
+    };
+
+    if (field === 'heroTitle' || field === 'aboutTitle' || field === 'aboutContent') {
+      store.setDraft((d) => {
+        const sections = [...(d.homeSections || [])];
+        const sectionType = field === 'heroTitle' ? 'hero' : 'about';
+        const idx = sections.findIndex((s: any) => s.type === sectionType);
+        const section = idx >= 0 ? { ...sections[idx] } : { type: sectionType };
+
+        if (field === 'heroTitle') section.title = value;
+        else if (field === 'aboutTitle') section.title = value;
+        else if (field === 'aboutContent') section.content = value;
+
+        if (idx >= 0) sections[idx] = section;
+        else sections.push(section);
+
+        return { ...d, homeSections: sections };
+      });
+    } else {
+      store.setDraft((d) => ({ ...d, [field]: value }));
+    }
+  }, [store]);
+
   const leftPanel = (
     <div className="p-3">
       <Tabs tabs={tabs} active={tab} onChange={(t) => setTab(t as TabId)} />
@@ -222,6 +253,7 @@ export default function WebsiteHub() {
         onSave={() => saveMutation.mutate(draft)}
         onPublish={() => setConfirmPublish(true)}
         onSchedulePublish={() => setConfirmSchedule(true)}
+        onFieldEdit={handleFieldEdit}
         isSaving={saveMutation.isPending}
         isPublishing={publishMutation.isPending}
       />

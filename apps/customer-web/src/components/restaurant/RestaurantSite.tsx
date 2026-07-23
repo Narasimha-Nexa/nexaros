@@ -11,6 +11,8 @@ import {
 import { cn } from '@/lib/utils';
 import { formatPrice } from '@/lib/utils';
 import { useTenantSocket } from '@/lib/socket';
+import { useEditMode } from '@/hooks/use-edit-mode';
+import { EditableText } from './EditableText';
 import type { WebsiteResponse } from '@/lib/restaurant-data';
 
 interface MenuItemLite {
@@ -64,6 +66,7 @@ function safeUrl(u?: string | null) {
 
 export function RestaurantSite({ data, gallery, testimonials, offers, announcements, slug }: Props) {
   usePreviewTheme();
+  const { isEditMode, activeField, sendFieldEdit, sendFieldClicked } = useEditMode();
   const w = data.website || ({} as WebsiteResponse['website']);
   const t = data.tenant || ({} as WebsiteResponse['tenant']);
   const name = w.restaurantName || t.name || 'Restaurant';
@@ -185,7 +188,16 @@ export function RestaurantSite({ data, gallery, testimonials, offers, announceme
                   {brandInitials}
                 </div>
               )}
-              <span className="font-bold text-lg" style={{ color: 'var(--r-secondary)' }}>{name}</span>
+              <EditableText
+                field="restaurantName"
+                value={name}
+                isEditMode={isEditMode}
+                isActive={activeField === 'restaurantName'}
+                onEdit={(f, v) => sendFieldEdit(f, v)}
+                onClick={sendFieldClicked}
+                className="font-bold text-lg"
+                style={{ color: 'var(--r-secondary)' }}
+              />
             </a>
 
             <nav className="hidden lg:flex items-center gap-1">
@@ -233,13 +245,35 @@ export function RestaurantSite({ data, gallery, testimonials, offers, announceme
         </div>
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-16 sm:py-24 w-full">
           <div className="max-w-2xl">
-            <p className="text-sm font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--r-primary)' }}>
-              {(hero.subtitle as string) || w.tagline || 'Welcome'}
-            </p>
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight mb-4" style={{ fontFamily: 'var(--r-font-display)', color: 'var(--r-secondary)' }}>
-              {(hero.title as string) || `Welcome to ${name}`}
-            </h1>
-            <p className="text-lg text-neutral-600 mb-8 max-w-xl">{t.address || w.address || ''}</p>
+            <EditableText
+              field="tagline"
+              value={(hero.subtitle as string) || w.tagline || 'Welcome'}
+              isEditMode={isEditMode}
+              isActive={activeField === 'tagline'}
+              onEdit={(f, v) => sendFieldEdit(f, v)}
+              onClick={sendFieldClicked}
+              className="text-sm font-semibold uppercase tracking-widest mb-3"
+              style={{ color: 'var(--r-primary)' }}
+            />
+            <EditableText
+              field="heroTitle"
+              value={(hero.title as string) || `Welcome to ${name}`}
+              isEditMode={isEditMode}
+              isActive={activeField === 'heroTitle'}
+              onEdit={(f, v) => sendFieldEdit(f, v)}
+              onClick={sendFieldClicked}
+              className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight mb-4"
+              style={{ fontFamily: 'var(--r-font-display)', color: 'var(--r-secondary)' }}
+            />
+            <EditableText
+              field="address"
+              value={t.address || w.address || ''}
+              isEditMode={isEditMode}
+              isActive={activeField === 'address'}
+              onEdit={(f, v) => sendFieldEdit(f, v)}
+              onClick={sendFieldClicked}
+              className="text-lg text-neutral-600 mb-8 max-w-xl"
+            />
             <div className="flex flex-wrap gap-3">
               <a href="#menu" className="px-7 py-3.5 rounded-full text-white font-semibold text-base transition-transform hover:-translate-y-0.5" style={{ background: 'var(--r-primary)' }}>
                 {(hero.ctaText as string) || 'View Menu'} <ArrowRight className="inline ml-1" size={18} />
@@ -256,12 +290,25 @@ export function RestaurantSite({ data, gallery, testimonials, offers, announceme
       <section id="about" className="py-16 sm:py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 grid md:grid-cols-2 gap-10 items-center">
           <div>
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4" style={{ fontFamily: 'var(--r-font-display)', color: 'var(--r-secondary)' }}>
-              {(about.title as string) || 'Our Story'}
-            </h2>
-            <p className="text-neutral-600 leading-relaxed whitespace-pre-line">
-              {(about.content as string) || `${name} serves authentic flavours crafted with passion. Visit us for a memorable dining experience.`}
-            </p>
+            <EditableText
+              field="aboutTitle"
+              value={(about.title as string) || 'Our Story'}
+              isEditMode={isEditMode}
+              isActive={activeField === 'aboutTitle'}
+              onEdit={(f, v) => sendFieldEdit(f, v)}
+              onClick={sendFieldClicked}
+              className="text-3xl sm:text-4xl font-bold mb-4"
+              style={{ fontFamily: 'var(--r-font-display)', color: 'var(--r-secondary)' }}
+            />
+            <EditableText
+              field="aboutContent"
+              value={(about.content as string) || `${name} serves authentic flavours crafted with passion. Visit us for a memorable dining experience.`}
+              isEditMode={isEditMode}
+              isActive={activeField === 'aboutContent'}
+              onEdit={(f, v) => sendFieldEdit(f, v)}
+              onClick={sendFieldClicked}
+              className="text-neutral-600 leading-relaxed whitespace-pre-line"
+            />
           </div>
           <div className="relative aspect-[4/3] rounded-3xl overflow-hidden bg-neutral-100">
             {about.image ? (

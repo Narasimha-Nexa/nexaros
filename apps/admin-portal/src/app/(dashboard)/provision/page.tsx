@@ -140,6 +140,8 @@ const PROVISIONING_STEPS = [
   { key: 'completed', label: 'Provisioning complete', icon: CheckCircle2 },
 ];
 
+const CUSTOMER_SITE_URL = process.env.NEXT_PUBLIC_CUSTOMER_SITE_URL || 'http://localhost:3001';
+
 const PLAN_FEATURES: Record<string, { features: string[]; highlights: string[] }> = {
   default: {
     features: ['Unlimited Menu', 'QR Ordering', 'Basic Dashboard', 'Basic Reports', 'Email Notifications'],
@@ -500,7 +502,7 @@ export default function ProvisionPage() {
     <h3>Restaurant</h3>
     <div class="row"><span class="label">Name</span><span class="value">${result.restaurant.name}</span></div>
     <div class="row"><span class="label">ID</span><span class="value">${result.restaurant.id}</span></div>
-    <div class="row"><span class="label">Website</span><span class="value">${result.restaurant.subdomain}.nexaros.in</span></div>
+    <div class="row"><span class="label">Website</span><span class="value">${CUSTOMER_SITE_URL}/${result.restaurant.slug}</span></div>
     <h3>Subscription</h3>
     <div class="row"><span class="label">Plan</span><span class="value">${result.subscription?.plan || 'N/A'}</span></div>
     <div class="row"><span class="label">Status</span><span class="value">${result.subscription?.status || 'N/A'}</span></div>
@@ -682,7 +684,7 @@ export default function ProvisionPage() {
               <div className="bg-canvas-soft p-3 border border-hairline flex items-center gap-2">
                 <Globe size={14} className="text-ink/40" />
                 <span className="text-caption font-sans text-ink/60">
-                  Website: <span className="font-mono font-semibold text-ink">{autoSubdomain}.nexaros.in</span>
+                  Website: <span className="font-mono font-semibold text-ink">{CUSTOMER_SITE_URL}/{autoSubdomain}</span>
                 </span>
               </div>
             )}
@@ -1363,7 +1365,7 @@ export default function ProvisionPage() {
                   <div className="space-y-1.5 text-body font-sans">
                     <p><span className="text-ink/50">Name:</span> <span className="font-semibold">{result.restaurant.name}</span></p>
                     <p><span className="text-ink/50">Slug:</span> <span className="font-mono text-body-sm">{result.restaurant.slug}</span></p>
-                    <p><span className="text-ink/50">Website:</span> <span className="font-mono text-body-sm">{result.restaurant.subdomain}.nexaros.in</span></p>
+                    <p><span className="text-ink/50">Website:</span> <span className="font-mono text-body-sm">{CUSTOMER_SITE_URL}/{result.restaurant.slug}</span></p>
                     {result.restaurant.city && <p><span className="text-ink/50">City:</span> <span className="font-semibold">{result.restaurant.city}</span></p>}
                     <p><span className="text-ink/50">Timezone:</span> <span className="font-semibold">{result.restaurant.timezone}</span></p>
                     <p><span className="text-ink/50">Currency:</span> <span className="font-semibold">{result.restaurant.currency}</span></p>
@@ -1440,7 +1442,7 @@ export default function ProvisionPage() {
                 {[
                   { label: 'Email', value: result.owner.email, key: 'email' },
                   { label: 'Password', value: result.owner.password, key: 'password', bold: true },
-                  { label: 'Website', value: `${result.restaurant.subdomain}.nexaros.in`, key: 'url' },
+                  { label: 'Website', value: `${CUSTOMER_SITE_URL}/${result.restaurant.slug}`, key: 'url' },
                 ].map((item) => (
                   <div key={item.key} className="flex items-center justify-between">
                     <span className="text-body font-sans text-ink/60">{item.label}</span>
@@ -1468,7 +1470,7 @@ export default function ProvisionPage() {
             )}
             {mode === 'new_business' && (
               <Button variant="outline" onClick={() => copyToClipboard(
-                `NexaROS Login\nRestaurant: ${result.restaurant.name}\nWebsite: ${result.restaurant.subdomain}.nexaros.in\nEmail: ${result.owner.email}\nPassword: ${result.owner.password}`,
+                `NexaROS Login\nRestaurant: ${result.restaurant.name}\nWebsite: ${CUSTOMER_SITE_URL}/${result.restaurant.slug}\nEmail: ${result.owner.email}\nPassword: ${result.owner.password}`,
                 'all'
               )} className="gap-2">
                 <Copy size={16} /> {copied === 'all' ? 'Copied!' : 'Copy All'}

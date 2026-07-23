@@ -21,7 +21,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
       controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 3000);
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1'}/`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/health`, {
           signal: controller.signal,
         });
         clearTimeout(timeout);
@@ -32,13 +32,25 @@ export function DashboardShell({ children }: DashboardShellProps) {
       }
     };
     check();
-    const interval = setInterval(check, 30000);
+    const interval = setInterval(check, 15000);
     return () => { mounted = false; clearInterval(interval); if (controller) controller.abort(); };
   }, []);
 
   return (
     <div className="h-screen flex overflow-hidden bg-canvas-soft">
-      {/* Connection Status Bar */}
+      {/* Connection Status — prominent banner when disconnected */}
+      {apiStatus !== 'connected' && (
+        <div className="fixed top-0 left-0 right-0 z-[9999] bg-danger text-white px-4 py-2 text-sm font-semibold flex items-center gap-2 shadow-lg">
+          <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+          API Disconnected — changes cannot be saved. Check if the backend is running on port 4000.
+          <button
+            onClick={() => window.location.reload()}
+            className="ml-auto px-3 py-1 bg-white/20 rounded text-xs hover:bg-white/30 transition"
+          >
+            Retry
+          </button>
+        </div>
+      )}
       <div className={`connection-bar ${
         apiStatus === 'connected' ? 'connected' :
         apiStatus === 'reconnecting' ? 'reconnecting' : 'disconnected'
@@ -66,7 +78,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
       >
         <Header />
         <main className="flex-1 overflow-y-auto">
-          <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto w-full">
+          <div className={`p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto w-full ${apiStatus !== 'connected' ? 'pt-12' : ''}`}>
             {children}
           </div>
         </main>

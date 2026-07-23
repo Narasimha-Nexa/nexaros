@@ -19,6 +19,7 @@ interface WebsiteBuilderLayoutProps {
   onSave?: () => void;
   onPublish?: () => void;
   onSchedulePublish?: () => void;
+  onFieldEdit?: (field: string, value: string) => void;
   isSaving?: boolean;
   isPublishing?: boolean;
 }
@@ -31,6 +32,7 @@ export function WebsiteBuilderLayout({
   onSave,
   onPublish,
   onSchedulePublish,
+  onFieldEdit,
   isSaving,
   isPublishing,
 }: WebsiteBuilderLayoutProps) {
@@ -58,7 +60,7 @@ export function WebsiteBuilderLayout({
   const defaultRightPanel = <SeoScorePanel tenantId={tenantId} />;
 
   const CUSTOMER_SITE = process.env.NEXT_PUBLIC_CUSTOMER_SITE_URL || 'http://localhost:3001';
-  const previewUrl = slug ? `${CUSTOMER_SITE}/restaurant/${slug}` : '';
+  const previewUrl = slug ? `${CUSTOMER_SITE}/${slug}` : '';
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
@@ -129,7 +131,7 @@ export function WebsiteBuilderLayout({
             device === 'tablet' ? 'w-[768px]' :
             'w-[375px]'
           }`}>
-            <LivePreview config={draft} device={device} slug={slug} />
+            <LivePreview config={draft} device={device} slug={slug} onFieldEdit={onFieldEdit} />
           </div>
         </div>
 

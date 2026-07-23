@@ -30,6 +30,11 @@ async function bootstrap() {
   // Global prefix with versioning
   app.setGlobalPrefix('api/v1');
 
+  // ── Health check (outside global prefix for simple access) ──
+  app.getHttpAdapter().get('/health', (_req: any, res: any) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
   // ── WhatsApp Webhook (outside global prefix, at /webhook) ──
   // This route must be registered BEFORE the global prefix
   const webhookService = app.get(WhatsAppWebhookService);
