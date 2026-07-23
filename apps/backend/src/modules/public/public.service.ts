@@ -103,7 +103,7 @@ export class PublicService {
           isTodaySpecial: i.isTodaySpecial,
           isNew: i.isNew,
           isSeasonal: i.isSeasonal,
-          image: i.images[0]?.url || null,
+          image: i.images[0]?.url || i.image || null,
           variants: i.variants.map((v) => ({ id: v.id, name: v.name, price: Number(v.price) })),
           addOns: i.addOns.map((a) => ({ id: a.id, name: a.name, price: Number(a.price) })),
           prepTimeMin: i.prepTimeMin,
