@@ -5,6 +5,7 @@ import { RedisService } from '../../common/redis/redis.service';
 import { AdminService } from '../admin/admin.service';
 import { UpdateCmsConfigDto } from './dto/update-cms-config.dto';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { SeoScoreService } from './seo-score.service';
 import type { Prisma } from '@prisma/client';
 
 interface AuditCtx {
@@ -21,6 +22,7 @@ export class CmsService {
     private eventBus: EventBusService,
     private redis: RedisService,
     private adminService: AdminService,
+    private seoScoreService: SeoScoreService,
   ) {}
 
   async getConfig(tenantId: string) {
@@ -277,6 +279,80 @@ export class CmsService {
     } catch (e) {
       this.logger.warn(`afterMutation failed for ${event}: ${e?.message}`);
     }
+  }
+
+  getSeoScore(config: any) {
+    const checks = [
+      {
+        name: 'Meta Title',
+        passed: !!(config.seo?.title && config.seo.title.length >= 30 && config.seo.title.length <= 60),
+        message: config.seo?.title
+          ? `Title is ${config.seo.title.length} chars (optimal: 30-60)`
+          : 'Meta title is missing',
+      },
+      {
+        name: 'Meta Description',
+        passed: !!(config.seo?.description && config.seo.description.length >= 120 && config.seo.description.length <= 160),
+        message: config.seo?.description
+          ? `Description is ${config.seo.description.length} chars (optimal: 120-160)`
+          : 'Meta description is missing',
+      },
+      {
+        name: 'OG Image',
+        passed: !!config.seo?.ogImage,
+        message: config.seo?.ogImage ? 'OG image is set' : 'OG image is missing',
+      },
+      {
+        name: 'Favicon',
+        passed: !!config.favicon,
+        message: config.favicon ? 'Favicon is set' : 'Favicon is missing',
+      },
+      {
+        name: 'Logo',
+        passed: !!config.logo,
+        message: config.logo ? 'Logo is set' : 'Logo is missing',
+      },
+      {
+        name: 'Phone Number',
+        passed: !!config.phone,
+        message: config.phone ? 'Phone number is set' : 'Phone number is missing',
+      },
+      {
+        name: 'Address',
+        passed: !!config.address,
+        message: config.address ? 'Address is set' : 'Address is missing',
+      },
+      {
+        name: 'Social Links (≥2)',
+        passed: config.socialLinks && Object.values(config.socialLinks).filter(Boolean).length >= 2,
+        message: config.socialLinks
+          ? `${Object.values(config.socialLinks).filter(Boolean).length} social links configured`
+          : 'No social links configured',
+      },
+      {
+        name: 'Opening Hours',
+        passed: config.openingHours && Object.keys(config.openingHours).length > 0,
+        message: config.openingHours && Object.keys(config.openingHours).length > 0
+          ? 'Opening hours configured'
+          : 'Opening hours not configured',
+      },
+      {
+        name: 'Home Sections (≥3)',
+        passed: config.homeSections && config.homeSections.length >= 3,
+        message: config.homeSections
+          ? `${config.homeSections.length} home sections enabled`
+          : 'Less than 3 home sections enabled',
+      },
+    ];
+
+    const passed = checks.filter((c) => c.passed).length;
+    const score = Math.round((passed / checks.length) * 100);
+
+    return {
+      score,
+      checks,
+      status: score >= 70 ? 'good' : score >= 40 ? 'needs-improvement' : 'poor',
+    };
   }
 
   @Cron(CronExpression.EVERY_MINUTE)

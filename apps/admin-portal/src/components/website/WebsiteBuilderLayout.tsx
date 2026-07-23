@@ -4,6 +4,7 @@ import { useWebsiteBuilderStore } from '@/stores/website-builder.store';
 import { LivePreview } from './LivePreview';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { SeoScorePanel } from './SeoScorePanel';
 import {
   Undo2, Redo2, Save, Rocket, Eye, EyeOff, Monitor, Tablet, Smartphone,
   ChevronLeft, ChevronRight, Calendar,
@@ -28,6 +29,7 @@ export function WebsiteBuilderLayout({
   rightPanel,
   onSave,
   onPublish,
+  onSchedulePublish,
   isSaving,
   isPublishing,
 }: WebsiteBuilderLayoutProps) {
@@ -45,6 +47,8 @@ export function WebsiteBuilderLayout({
     tablet: <Tablet size={16} />,
     mobile: <Smartphone size={16} />,
   };
+
+  const defaultRightPanel = <SeoScorePanel tenantId={tenantId} />;
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
@@ -112,7 +116,7 @@ export function WebsiteBuilderLayout({
           </div>
         </div>
 
-        {rightPanel && (
+        {rightPanel || defaultRightPanel ? (
           <div className={`border-l bg-white overflow-y-auto transition-all duration-200 ${propertiesPanelOpen ? 'w-[320px]' : 'w-12'}`}>
             <button
               onClick={togglePropertiesPanel}
@@ -120,7 +124,7 @@ export function WebsiteBuilderLayout({
             >
               {propertiesPanelOpen ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
             </button>
-            {propertiesPanelOpen && rightPanel}
+            {propertiesPanelOpen && (rightPanel || defaultRightPanel)}
           </div>
         )}
       </div>

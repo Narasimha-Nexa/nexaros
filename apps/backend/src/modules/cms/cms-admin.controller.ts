@@ -120,7 +120,7 @@ export class CmsAdminController {
     return this.cmsService.schedulePublish(tenantId, new Date(body.scheduledAt), this.audit(req));
   }
 
-  @ApiOperation({ summary: 'Cancel scheduled publish' })
+@ApiOperation({ summary: 'Cancel scheduled publish' })
   @Post('cancel-scheduled-publish')
   @HttpCode(200)
   cancelScheduledPublish(
@@ -128,5 +128,12 @@ export class CmsAdminController {
     @Request() req: any,
   ) {
     return this.cmsService.cancelScheduledPublish(tenantId, this.audit(req));
+  }
+
+  @ApiOperation({ summary: 'Get SEO score for website config' })
+  @Get('seo-score')
+  getSeoScore(@Param('tenantId') tenantId: string) {
+    const config = this.cmsService.getConfig(tenantId);
+    return this.cmsService.getSeoScore(config);
   }
 }
