@@ -10,7 +10,7 @@ const featureGroups = [
   {
     title: 'Point of Sale',
     tag: 'POS',
-    color: '#E23744',
+    color: '#E51A24',
     features: [
       { name: 'Touch-Optimized POS', desc: 'Fast, intuitive interface designed for speed. Add items with a single tap.' },
       { name: 'Table Management', desc: 'Visual floor plan with drag-and-drop. Track table status in real-time.' },

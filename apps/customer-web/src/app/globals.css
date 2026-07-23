@@ -2,22 +2,22 @@
 
 /* ── NexaROS Design System — Customer Web ── */
 :root {
-  --color-primary: #E23744;
-  --color-primary-hover: #C62E3A;
-  --color-primary-muted: #FCE4E6;
+  --color-primary: #E51A24;
+  --color-primary-hover: #B81119;
+  --color-primary-muted: #FFEBEC;
 
-  --color-ink: #171717;
-  --color-ink-dark: #0a0a0a;
-  --color-ink-light: #f5f5f5;
+  --color-ink: #111111;
+  --color-ink-dark: #0B0B0B;
+  --color-ink-light: #F4F4F4;
 
-  --color-body: #737373;
-  --color-hairline: #e5e5e5;
-  --color-canvas: #ffffff;
-  --color-canvas-warm: #FFF9F5;
+  --color-body: #8E8E8E;
+  --color-hairline: #E2E2E2;
+  --color-canvas: #FFFFFF;
+  --color-canvas-warm: #FAFAFA;
 
   --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
+  --color-warning: #F1B31C;
+  --color-danger: #E51A24;
 
   --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
@@ -25,22 +25,22 @@
 }
 
 .dark {
-  --color-primary: #E23744;
-  --color-primary-hover: #C62E3A;
-  --color-primary-muted: #2A1518;
+  --color-primary: #E51A24;
+  --color-primary-hover: #B81119;
+  --color-primary-muted: #6B050A;
 
-  --color-ink: #f5f5f5;
-  --color-ink-dark: #e5e5e5;
-  --color-ink-light: #262626;
+  --color-ink: #F4F4F4;
+  --color-ink-dark: #E2E2E2;
+  --color-ink-light: #222222;
 
-  --color-body: #a3a3a3;
-  --color-hairline: #404040;
-  --color-canvas: #171717;
-  --color-canvas-warm: #1A1A1A;
+  --color-body: #8E8E8E;
+  --color-hairline: #4A4A4A;
+  --color-canvas: #111111;
+  --color-canvas-warm: #111111;
 
   --color-success: #2DB67D;
-  --color-warning: #F5A623;
-  --color-danger: #ef4444;
+  --color-warning: #F1B31C;
+  --color-danger: #E51A24;
 }
 
 @theme {
@@ -171,7 +171,7 @@ body {
 .nonveg-dot {
   display: inline-block;
   width: 14px; height: 14px;
-  border: 2px solid #ef4444;
+  border: 2px solid #E51A24;
   border-radius: 2px;
   position: relative;
 }
@@ -180,7 +180,7 @@ body {
   position: absolute;
   top: 2px; left: 2px;
   width: 6px; height: 6px;
-  background: #ef4444;
+  background: #E51A24;
   border-radius: 50%;
 }
 
@@ -193,7 +193,7 @@ body {
 }
 
 .dark .glass {
-  background: rgba(23, 23, 23, 0.7);
+  background: rgba(17, 17, 17, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 

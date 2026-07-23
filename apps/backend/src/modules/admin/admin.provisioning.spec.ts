@@ -115,7 +115,7 @@ const mockCreatedWebsiteConfig = {
   id: 'wc-1',
   tenantId: 'tenant-new-1',
   restaurantName: 'The Spice Garden',
-  primaryColor: '#E23744',
+  primaryColor: '#E51A24',
 };
 
 describe('AdminService — Provisioning & Impersonation', () => {

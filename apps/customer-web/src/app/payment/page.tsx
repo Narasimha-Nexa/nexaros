@@ -59,7 +59,7 @@ export default function PaymentPage() {
         name: 'NexaROS',
         description: 'Order Payment',
         orderId,
-        theme: { color: '#2563eb' },
+        theme: { color: '#E51A24' },
       });
 
       if (response) {

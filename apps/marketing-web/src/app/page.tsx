@@ -16,7 +16,7 @@ const features = [
     title: 'Point of Sale',
     desc: 'Fast, intuitive POS with table management, split bills, and multiple payment methods.',
     bullets: ['Touch-optimized interface', 'Visual floor plan with drag-and-drop', 'Cash, UPI, cards, wallets — all accepted'],
-    color: '#E23744',
+    color: '#E51A24',
     tag: 'POS',
   },
   {

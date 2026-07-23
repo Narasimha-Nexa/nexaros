@@ -56,7 +56,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
-  themeColor: '#1A1A1A',
+  themeColor: '#111111',
   colorScheme: 'light',
 };
 
@@ -72,7 +72,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-        <meta name="theme-color" content="#1A1A1A" />
+        <meta name="theme-color" content="#111111" />
         <meta name="application-name" content="NexaROS Admin" />
         <meta name="apple-mobile-web-app-title" content="NexaROS" />
         <meta name="apple-mobile-web-app-capable" content="yes" />

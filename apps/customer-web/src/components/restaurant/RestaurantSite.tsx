@@ -67,9 +67,9 @@ export function RestaurantSite({ data, gallery, testimonials, offers, announceme
   const w = data.website || ({} as WebsiteResponse['website']);
   const t = data.tenant || ({} as WebsiteResponse['tenant']);
   const name = w.restaurantName || t.name || 'Restaurant';
-  const primary = w.primaryColor || '#E23744';
-  const secondary = w.secondaryColor || '#171717';
-  const accent = w.accentColor || '#f59e0b';
+  const primary = w.primaryColor || '#E51A24';
+  const secondary = w.secondaryColor || '#111111';
+  const accent = w.accentColor || '#F1B31C';
   const whatsapp = w.whatsappNumber || '';
   const social = w.socialLinks || {};
   const hours: Record<string, { open?: string; close?: string; isOpen?: boolean } | string> = w.openingHours || {};

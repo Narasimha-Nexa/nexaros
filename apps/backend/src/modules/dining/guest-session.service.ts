@@ -7,8 +7,8 @@ import * as crypto from 'crypto';
 @Injectable()
 export class GuestSessionService {
   private readonly AVATAR_COLORS = [
-    '#E23744', '#16A34A', '#D97706', '#7C3AED', '#0891B2',
-    '#DC2626', '#2563EB', '#9333EA', '#CA8A04', '#059669',
+    '#E51A24', '#16A34A', '#F1B31C', '#7C3AED', '#0891B2',
+    '#E51A24', '#E51A24', '#9333EA', '#CA8A04', '#059669',
   ];
 
   constructor(

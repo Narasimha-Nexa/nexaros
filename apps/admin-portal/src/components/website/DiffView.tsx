@@ -84,7 +84,7 @@ export function DiffView({ oldConfig, newConfig, title = 'Changes' }: DiffViewPr
               <span className="text-xs font-mono text-ink/60">{d.path}</span>
               <Badge
                 variant={d.type === 'added' ? 'success' : d.type === 'removed' ? 'danger' : 'warning'}
-                size="xs"
+                size="sm"
               >
                 {d.type}
               </Badge>

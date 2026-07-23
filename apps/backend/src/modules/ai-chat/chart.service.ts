@@ -22,7 +22,7 @@ export class ChartService {
       series: [{ name: 'Revenue', data: data.map(d => d.revenue) }],
       xAxis: 'Date',
       yAxis: 'Revenue (₹)',
-      colors: ['#2563eb'],
+      colors: ['#E51A24'],
     };
   }
 
@@ -49,7 +49,7 @@ export class ChartService {
       ],
       xAxis: 'Branch',
       yAxis: 'Value',
-      colors: ['#2563eb', '#16a34a'],
+      colors: ['#E51A24', '#16a34a'],
     };
   }
 
@@ -59,7 +59,7 @@ export class ChartService {
       title,
       labels,
       series: [{ name: title, data: values }],
-      colors: ['#2563eb', '#16a34a', '#d97706', '#dc2626', '#7c3aed', '#0891b2'],
+      colors: ['#E51A24', '#16a34a', '#F1B31C', '#E51A24', '#7c3aed', '#0891b2'],
     };
   }
 
@@ -71,7 +71,7 @@ export class ChartService {
       series: [{ name: seriesName, data: data.map(d => d.value) }],
       xAxis: 'Date',
       yAxis: seriesName,
-      colors: ['#2563eb'],
+      colors: ['#E51A24'],
     };
   }
 

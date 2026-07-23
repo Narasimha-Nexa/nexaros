@@ -771,7 +771,7 @@ export class ProvisioningService {
           phone: req.phone || req.ownerPhone || null,
           email: req.ownerEmail.trim(),
           address: req.address?.trim() || null,
-          primaryColor: '#E23744', secondaryColor: '#1A1A1A', accentColor: '#f59e0b',
+          primaryColor: '#E51A24', secondaryColor: '#111111', accentColor: '#F1B31C',
           currency: req.currency || 'INR', timezone: req.timezone || 'Asia/Kolkata',
           features: { qrOrdering: true, onlineOrdering: true, reservations: true, gallery: true, reviews: true },
           seo: {

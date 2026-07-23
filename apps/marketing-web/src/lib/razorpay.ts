@@ -47,7 +47,7 @@ export async function openRazorpayCheckout(options: {
       description: options.description || 'Subscription',
       order_id: options.orderId,
       prefill: options.prefill || {},
-      theme: options.theme || { color: '#E23744' },
+      theme: options.theme || { color: '#E51A24' },
       handler: (response: RazorpayResponse) => resolve(response),
       modal: { ondismiss: () => resolve(null) },
     });
@@ -114,7 +114,7 @@ export async function checkoutAndPay(data: {
         name: data.customerName,
         email: data.customerEmail,
       },
-      theme: { color: '#E23744' },
+      theme: { color: '#E51A24' },
     });
 
     if (!paymentResponse) {

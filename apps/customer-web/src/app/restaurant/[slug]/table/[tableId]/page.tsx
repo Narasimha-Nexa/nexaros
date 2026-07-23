@@ -20,7 +20,7 @@ function generateDeviceId(): string {
   return id;
 }
 
-const AVATAR_COLORS = ['#E23744', '#16A34A', '#D97706', '#7C3AED', '#0891B2', '#DC2626', '#2563EB'];
+const AVATAR_COLORS = ['#E51A24', '#16A34A', '#F1B31C', '#7C3AED', '#0891B2', '#E51A24', '#E51A24'];
 
 type View = 'loading' | 'join' | 'menu' | 'cart' | 'bill' | 'payment' | 'confirmed' | 'error';
 

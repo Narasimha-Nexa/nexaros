@@ -4,21 +4,46 @@
 
 /* ═══ NexaROS Design System — Marketing ═══ */
 :root {
-  /* Warm restaurant-brand surfaces */
-  --bg-primary: #FFF9F5;
-  --bg-secondary: #F7F3EF;
-  --bg-tertiary: #EFEAE5;
-  --text-primary: #1A1A1A;
-  --text-secondary: #5F5F5F;
-  --text-muted: #9E9E9E;
-  --border: #E8E0D8;
-  --border-light: #F0EBE6;
+  /* Provided palette */
+  --red-100: #FFEBEC;
+  --red-300: #FFA1A5;
+  --red-500: #E51A24;
+  --red-700: #B81119;
+  --red-900: #6B050A;
+
+  --yellow-100: #FEF7E3;
+  --yellow-300: #FAD575;
+  --yellow-500: #F1B31C;
+  --yellow-700: #C58F0C;
+  --yellow-900: #6F4E02;
+
+  --black-100: #F4F4F4;
+  --black-300: #4A4A4A;
+  --black-500: #111111;
+  --black-700: #0B0B0B;
+  --black-900: #000000;
+
+  --white-100: #FFFFFF;
+  --white-300: #FAFAFA;
+  --white-500: #E2E2E2;
+  --white-700: #8E8E8E;
+  --white-900: #222222;
+
+  /* Design tokens */
+  --bg-primary: var(--white-100);
+  --bg-secondary: var(--white-300);
+  --bg-tertiary: var(--white-100);
+  --text-primary: var(--black-500);
+  --text-secondary: var(--black-300);
+  --text-muted: var(--white-700);
+  --border: var(--black-100);
+  --border-light: var(--white-100);
 
   /* NexaROS Brand — Single accent color */
-  --accent: #E23744;
-  --accent-hover: #C62828;
-  --accent-light: #FDECEE;
-  --accent-text: #FFFFFF;
+  --accent: var(--red-500);
+  --accent-hover: var(--red-700);
+  --accent-light: var(--red-100);
+  --accent-text: var(--white-100);
 
   /* Semantic */
   --success: #2DB67D;
@@ -45,16 +70,35 @@
 }
 
 [data-theme="dark"] {
-  --bg-primary: #0D0D0D;
-  --bg-secondary: #1A1A1A;
-  --bg-tertiary: #252525;
-  --text-primary: #F5F5F5;
-  --text-secondary: #A0A0A0;
-  --text-muted: #666666;
-  --border: #2A2A2A;
-  --border-light: #1F1F1F;
-  --accent-light: #2A1518;
+  /* Dark mode palette */
+  --bg-primary: var(--black-900);
+  --bg-secondary: var(--black-700);
+  --bg-tertiary: var(--black-500);
+  --text-primary: var(--white-100);
+  --text-secondary: var(--white-300);
+  --text-muted: var(--white-500);
+  --border: var(--black-700);
+  --border-light: var(--black-500);
+  --accent: var(--red-500);
+  --accent-hover: var(--red-700);
+  --accent-light: var(--red-300);
+  --accent-text: var(--black-900);
   --success-light: #0D2818;
+
+  /* Typography (same as light) */
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Border Radius (same as light) */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-pill: 9999px;
+
+  /* Elevation (adjusted for dark mode) */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
@@ -191,7 +235,7 @@ body {
 }
 
 /* ── Feature color tokens for brand illustration accents ── */
-.feature-pos { --feature-color: #E23744; }
+.feature-pos { --feature-color: #E51A24; }
 .feature-kitchen { --feature-color: #F58220; }
 .feature-inventory { --feature-color: #F5A623; }
 .feature-staff { --feature-color: #2DB67D; }

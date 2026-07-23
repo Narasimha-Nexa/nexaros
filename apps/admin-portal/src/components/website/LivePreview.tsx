@@ -35,9 +35,9 @@ export function LivePreview({ config, device, slug }: PreviewProps) {
     const themePayload = {
       type: 'nexaros:theme-update',
       theme: {
-        '--color-primary': config.primaryColor || '#2563eb',
-        '--color-secondary': config.secondaryColor || '#171717',
-        '--color-accent': config.accentColor || '#f59e0b',
+        '--color-primary': config.primaryColor || '#E51A24',
+        '--color-secondary': config.secondaryColor || '#111111',
+        '--color-accent': config.accentColor || '#F1B31C',
         '--font-heading': config.fontHeading || 'Playfair Display',
         '--font-body': config.fontBody || 'Inter',
         '--border-radius': config.borderRadius || 'xl',

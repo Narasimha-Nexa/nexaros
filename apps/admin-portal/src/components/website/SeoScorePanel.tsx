@@ -22,7 +22,7 @@ interface SeoScoreData {
 export function SeoScorePanel({ tenantId }: { tenantId: string }) {
   const { draft } = useWebsiteBuilderStore();
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, refetch } = useQuery<SeoScoreData>({
     queryKey: ['website-seo-score', tenantId],
     queryFn: () => adminApi.getSeoScore(tenantId),
     refetchInterval: 30000,
@@ -55,7 +55,7 @@ export function SeoScorePanel({ tenantId }: { tenantId: string }) {
       <div className="mb-4">
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-semibold text-ink">SEO Score</h3>
-          <Badge className={getStatusBg()} variant="secondary">
+          <Badge className={getStatusBg()} variant="soft">
             {getStatusText()}
           </Badge>
         </div>
@@ -124,24 +124,33 @@ export function SeoScorePanel({ tenantId }: { tenantId: string }) {
   );
 }
 
-function Button({ size = 'sm', variant = 'primary', children, onClick, className = '', isLoading }: any) {
-  const variants = {
+function Button({ size = 'sm', variant = 'primary', children, onClick, className = '', isLoading }: {
+  size?: 'sm' | 'md' | 'lg';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'outline' | 'danger';
+  children?: React.ReactNode;
+  onClick?: () => void;
+  className?: string;
+  isLoading?: boolean;
+}) {
+  const variants: Record<string, string> = {
     primary: 'bg-primary text-white hover:bg-primary/90',
     secondary: 'bg-secondary text-white hover:bg-secondary/90',
     ghost: 'bg-transparent hover:bg-ink/5',
     outline: 'border border-ink/20 hover:bg-ink/5',
     danger: 'bg-danger text-white hover:bg-danger/90',
   };
-  const sizes = {
+  const sizes: Record<string, string> = {
     sm: 'px-3 py-1.5 text-xs',
     md: 'px-4 py-2 text-sm',
     lg: 'px-6 py-3 text-base',
   };
+  const variantClass = variants[variant!] || variants.primary;
+  const sizeClass = sizes[size!] || sizes.sm;
   return (
     <button
       onClick={onClick}
       disabled={isLoading}
-      className={`inline-flex items-center justify-center font-medium rounded-lg transition-colors ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`inline-flex items-center justify-center font-medium rounded-lg transition-colors ${variantClass} ${sizeClass} ${className}`}
     >
       {isLoading ? <span className="animate-spin">⏳</span> : children}
     </button>

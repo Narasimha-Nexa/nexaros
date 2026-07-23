@@ -2,38 +2,38 @@
 
 @theme {
   /* ═══ Brand Colors ═══ */
-  --color-primary: #E23744;
-  --color-primary-hover: #C62E3A;
-  --color-primary-muted: #FCE4E6;
-  --color-primary-ghost: #FFF0F1;
+  --color-primary: #E51A24;
+  --color-primary-hover: #B81119;
+  --color-primary-muted: #FFEBEC;
+  --color-primary-ghost: #FFEBEC;
 
   /* ═══ Surface Colors ═══ */
-  --color-ink: #1A1A1A;
-  --color-ink-soft: #333333;
+  --color-ink: #111111;
+  --color-ink-soft: #4A4A4A;
   --color-canvas: #FFFFFF;
-  --color-canvas-soft: #F7F7F8;
-  --color-surface-soft: #F0F0F1;
-  --color-surface-strong: #E8E8EA;
-  --color-hairline: #E5E5E5;
-  --color-hairline-strong: #D4D4D4;
+  --color-canvas-soft: #FAFAFA;
+  --color-surface-soft: #F4F4F4;
+  --color-surface-strong: #E2E2E2;
+  --color-hairline: #E2E2E2;
+  --color-hairline-strong: #8E8E8E;
 
   /* ═══ Text Colors ═══ */
-  --color-body: #737373;
-  --color-body-strong: #525252;
-  --color-muted: #A3A3A3;
-  --color-muted-soft: #D4D4D4;
-  --color-link: #E23744;
+  --color-body: #8E8E8E;
+  --color-body-strong: #4A4A4A;
+  --color-muted: #8E8E8E;
+  --color-muted-soft: #E2E2E2;
+  --color-link: #E51A24;
 
   /* ═══ Semantic Colors ═══ */
   --color-success: #16A34A;
-  --color-warning: #D97706;
-  --color-danger: #DC2626;
+  --color-warning: #F1B31C;
+  --color-danger: #E51A24;
   --color-info: #057DBC;
   --color-semantic-success: #16A34A;
-  --color-semantic-warning: #D97706;
-  --color-semantic-danger: #DC2626;
+  --color-semantic-warning: #F1B31C;
+  --color-semantic-danger: #E51A24;
   --color-semantic-info: #057DBC;
-  --color-semantic-neutral: #737373;
+  --color-semantic-neutral: #8E8E8E;
 
   /* ═══ Typography ═══ */
   --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
@@ -41,40 +41,40 @@
   --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
 
   /* ═══ Dark Mode ═══ */
-  --color-dark-bg: #0F0F0F;
-  --color-dark-surface: #1A1A1A;
-  --color-dark-surface-2: #242424;
-  --color-dark-border: #2A2A2A;
-  --color-dark-text: #E5E5E5;
-  --color-dark-text-muted: #737373;
+  --color-dark-bg: #0B0B0B;
+  --color-dark-surface: #111111;
+  --color-dark-surface-2: #222222;
+  --color-dark-border: #222222;
+  --color-dark-text: #F4F4F4;
+  --color-dark-text-muted: #4A4A4A;
 }
 
 /* ═══ Dark Mode Overrides ═══ */
 .dark {
-  --color-ink: #E5E5E5;
-  --color-ink-soft: #D4D4D4;
-  --color-canvas: #0F0F0F;
-  --color-canvas-soft: #1A1A1A;
-  --color-surface-soft: #242424;
-  --color-surface-strong: #2A2A2A;
-  --color-hairline: #2A2A2A;
-  --color-hairline-strong: #3A3A3A;
+  --color-ink: #F4F4F4;
+  --color-ink-soft: #8E8E8E;
+  --color-canvas: #0B0B0B;
+  --color-canvas-soft: #111111;
+  --color-surface-soft: #222222;
+  --color-surface-strong: #222222;
+  --color-hairline: #222222;
+  --color-hairline-strong: #4A4A4A;
 
-  --color-body: #A3A3A3;
-  --color-body-strong: #D4D4D4;
-  --color-muted: #737373;
-  --color-muted-soft: #525252;
-  --color-link: #F87171;
+  --color-body: #8E8E8E;
+  --color-body-strong: #F4F4F4;
+  --color-muted: #4A4A4A;
+  --color-muted-soft: #4A4A4A;
+  --color-link: #FFA1A5;
 
-  --color-primary: #EF4444;
-  --color-primary-hover: #DC2626;
-  --color-primary-muted: #450A0A;
-  --color-primary-ghost: #1C0A0A;
+  --color-primary: #E51A24;
+  --color-primary-hover: #B81119;
+  --color-primary-muted: #6B050A;
+  --color-primary-ghost: #6B050A;
 }
 
 .dark body {
-  background: #0F0F0F;
-  color: #E5E5E5;
+  background: #0B0B0B;
+  color: #F4F4F4;
 }
 
 .dark ::selection {
@@ -83,17 +83,17 @@
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background: #3A3A3A;
+  background: #4A4A4A;
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: #525252;
+  background: #4A4A4A;
 }
 
 .dark .card,
 .dark .card-elevated {
-  background: #1A1A1A;
-  border-color: #2A2A2A;
+  background: #111111;
+  border-color: #222222;
 }
 
 .dark .card-elevated:hover {
@@ -101,41 +101,41 @@
 }
 
 .dark .input {
-  background: #1A1A1A;
-  border-color: #2A2A2A;
-  color: #E5E5E5;
+  background: #111111;
+  border-color: #222222;
+  color: #F4F4F4;
 }
 
 .dark .input:focus {
-  border-color: #D4D4D4;
-  box-shadow: 0 0 0 1px #D4D4D4;
+  border-color: #8E8E8E;
+  box-shadow: 0 0 0 1px #8E8E8E;
 }
 
 .dark .input::placeholder {
-  color: #737373;
+  color: #8E8E8E;
 }
 
 .dark .table th {
-  background: #1A1A1A;
-  border-bottom-color: #2A2A2A;
+  background: #111111;
+  border-bottom-color: #222222;
 }
 
 .dark .table td {
-  border-bottom-color: #2A2A2A;
+  border-bottom-color: #222222;
 }
 
 .dark .table tbody tr:hover {
-  background: #1A1A1A;
+  background: #111111;
 }
 
 .dark .skeleton {
-  background: linear-gradient(90deg, #1A1A1A 25%, #2A2A2A 50%, #1A1A1A 75%);
+  background: linear-gradient(90deg, #111111 25%, #222222 50%, #111111 75%);
   background-size: 200% 100%;
 }
 
 .dark .toast-card {
-  background: #1A1A1A;
-  border-color: #2A2A2A;
+  background: #111111;
+  border-color: #222222;
 }
 
 @layer base {
@@ -282,8 +282,8 @@
   }
 
   .btn-danger:hover:not(:disabled) {
-    background: #b91c1c;
-    border-color: #b91c1c;
+    background: #B81119;
+    border-color: #B81119;
   }
 
   .btn-sm {
@@ -404,16 +404,16 @@
 
   /* ═══ Semantic Badge Variants ═══ */
   .badge-success { background: #16A34A; color: #ffffff; border-color: #16A34A; }
-  .badge-warning { background: #D97706; color: #ffffff; border-color: #D97706; }
-  .badge-danger { background: #DC2626; color: #ffffff; border-color: #DC2626; }
+  .badge-warning { background: #F1B31C; color: #ffffff; border-color: #F1B31C; }
+  .badge-danger { background: #E51A24; color: #ffffff; border-color: #E51A24; }
   .badge-info { background: #057DBC; color: #ffffff; border-color: #057DBC; }
-  .badge-neutral { background: #737373; color: #ffffff; border-color: #737373; }
+  .badge-neutral { background: #8E8E8E; color: #ffffff; border-color: #8E8E8E; }
 
   .badge-outline-success { background: transparent; color: #16A34A; border-color: #16A34A; }
-  .badge-outline-warning { background: transparent; color: #D97706; border-color: #D97706; }
-  .badge-outline-danger { background: transparent; color: #DC2626; border-color: #DC2626; }
+  .badge-outline-warning { background: transparent; color: #F1B31C; border-color: #F1B31C; }
+  .badge-outline-danger { background: transparent; color: #E51A24; border-color: #E51A24; }
   .badge-outline-info { background: transparent; color: #057DBC; border-color: #057DBC; }
-  .badge-outline-neutral { background: transparent; color: #737373; border-color: #737373; }
+  .badge-outline-neutral { background: transparent; color: #8E8E8E; border-color: #8E8E8E; }
 
   /* ═══ DIVIDERS ═══ */
   .divider {

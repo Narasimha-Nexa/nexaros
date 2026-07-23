@@ -7,22 +7,22 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
-  // ── Brand / Primary (Blue-600) ──
-  static const primary = Color(0xFF2563EB);
-  static const primaryDark = Color(0xFF1D4ED8);
-  static const primaryLight = Color(0xFF3B82F6);
-  static const primary50 = Color(0xFFEFF6FF);
-  static const primary100 = Color(0xFFDBEAFE);
-  static const primary200 = Color(0xFFBFDBFE);
-  static const primary600 = Color(0xFF2563EB);
-  static const primary700 = Color(0xFF1D4ED8);
+  // ── Brand / Primary (Red) ──
+  static const primary = Color(0xFFE51A24);
+  static const primaryDark = Color(0xFFB81119);
+  static const primaryLight = Color(0xFFFFA1A5);
+  static const primary50 = Color(0xFFFFEBEC);
+  static const primary100 = Color(0xFFFFEBEC);
+  static const primary200 = Color(0xFFFFA1A5);
+  static const primary600 = Color(0xFFE51A24);
+  static const primary700 = Color(0xFFB81119);
 
-  // ── Secondary / Accent (Violet-600) ──
-  static const secondary = Color(0xFF7C3AED);
-  static const secondaryDark = Color(0xFF6D28D9);
-  static const secondaryLight = Color(0xFF8B5CF6);
-  static const secondary50 = Color(0xFFF5F3FF);
-  static const secondary100 = Color(0xFFEDE9FE);
+  // ── Secondary / Accent (Black) ──
+  static const secondary = Color(0xFF111111);
+  static const secondaryDark = Color(0xFF0B0B0B);
+  static const secondaryLight = Color(0xFF4A4A4A);
+  static const secondary50 = Color(0xFFF4F4F4);
+  static const secondary100 = Color(0xFFF4F4F4);
 
   // ── Semantic: Success (Emerald) ──
   static const success = Color(0xFF10B981);
@@ -30,17 +30,17 @@ class AppColors {
   static const success50 = Color(0xFFECFDF5);
   static const success100 = Color(0xFFD1FAE5);
 
-  // ── Semantic: Warning (Amber) ──
-  static const warning = Color(0xFFF59E0B);
-  static const warningDark = Color(0xFFD97706);
-  static const warning50 = Color(0xFFFFFBEB);
-  static const warning100 = Color(0xFFFEF3C7);
+  // ── Semantic: Warning (Yellow) ──
+  static const warning = Color(0xFFF1B31C);
+  static const warningDark = Color(0xFFC58F0C);
+  static const warning50 = Color(0xFFFEF7E3);
+  static const warning100 = Color(0xFFFEF7E3);
 
   // ── Semantic: Danger (Red) ──
-  static const danger = Color(0xFFEF4444);
-  static const dangerDark = Color(0xFFDC2626);
-  static const danger50 = Color(0xFFFEF2F2);
-  static const danger100 = Color(0xFFFEE2E2);
+  static const danger = Color(0xFFE51A24);
+  static const dangerDark = Color(0xFFB81119);
+  static const danger50 = Color(0xFFFFEBEC);
+  static const danger100 = Color(0xFFFFEBEC);
 
   // ── Semantic: Info (Cyan) ──
   static const info = Color(0xFF06B6D4);
@@ -48,24 +48,24 @@ class AppColors {
   static const info50 = Color(0xFFECFEFF);
   static const info100 = Color(0xFFCFFAFE);
 
-  // ── Neutral Scale (50→950) ──
-  static const gray50 = Color(0xFFF8FAFC);
-  static const gray100 = Color(0xFFF1F5F9);
-  static const gray200 = Color(0xFFE2E8F0);
-  static const gray300 = Color(0xFFCBD5E1);
-  static const gray400 = Color(0xFF94A3B8);
-  static const gray500 = Color(0xFF64748B);
-  static const gray600 = Color(0xFF475569);
-  static const gray700 = Color(0xFF334155);
-  static const gray800 = Color(0xFF1E293B);
-  static const gray900 = Color(0xFF0F172A);
-  static const gray950 = Color(0xFF020617);
+  // ── Neutral Scale (black/white palette) ──
+  static const gray50 = Color(0xFFF4F4F4);
+  static const gray100 = Color(0xFFF4F4F4);
+  static const gray200 = Color(0xFFE2E2E2);
+  static const gray300 = Color(0xFF8E8E8E);
+  static const gray400 = Color(0xFF8E8E8E);
+  static const gray500 = Color(0xFF4A4A4A);
+  static const gray600 = Color(0xFF4A4A4A);
+  static const gray700 = Color(0xFF222222);
+  static const gray800 = Color(0xFF111111);
+  static const gray900 = Color(0xFF0B0B0B);
+  static const gray950 = Color(0xFF000000);
 
   // ── Aliases for semantic surface roles ──
   static const background = gray50;
   static const surface = white;
   static const border = gray200;
-  static const textPrimary = gray900;
+  static const textPrimary = gray800;
   static const textSecondary = gray500;
   static const textMuted = gray400;
 
@@ -74,29 +74,29 @@ class AppColors {
   static const black = Color(0xFF000000);
 
   // ── Order Status Colors ──
-  static const orderPending = Color(0xFFF59E0B);
+  static const orderPending = Color(0xFFF1B31C);
   static const orderConfirmed = Color(0xFF3B82F6);
   static const orderPreparing = Color(0xFFF97316);
   static const orderReady = Color(0xFF10B981);
   static const orderServed = Color(0xFF06B6D4);
-  static const orderCompleted = Color(0xFF64748B);
-  static const orderCancelled = Color(0xFFEF4444);
+  static const orderCompleted = Color(0xFF4A4A4A);
+  static const orderCancelled = Color(0xFFE51A24);
 
   // ── Table Status Colors ──
   static const tableFree = Color(0xFF10B981);
-  static const tableOccupied = Color(0xFFF59E0B);
+  static const tableOccupied = Color(0xFFF1B31C);
   static const tableReserved = Color(0xFF8B5CF6);
-  static const tableCleaning = Color(0xFF94A3B8);
+  static const tableCleaning = Color(0xFF8E8E8E);
   static const tableReady = Color(0xFF06B6D4);
   static const tableBilling = Color(0xFF3B82F6);
 
   // ── Dark mode surface palette ──
-  static const darkBackground = Color(0xFF0F172A);
-  static const darkSurface = Color(0xFF1E293B);
-  static const darkSurfaceElevated = Color(0xFF334155);
-  static const darkBorder = Color(0xFF334155);
-  static const darkTextPrimary = Color(0xFFF1F5F9);
-  static const darkTextSecondary = Color(0xFF94A3B8);
+  static const darkBackground = Color(0xFF0B0B0B);
+  static const darkSurface = Color(0xFF111111);
+  static const darkSurfaceElevated = Color(0xFF222222);
+  static const darkBorder = Color(0xFF222222);
+  static const darkTextPrimary = Color(0xFFF4F4F4);
+  static const darkTextSecondary = Color(0xFF8E8E8E);
 
   /// Helper: resolve a color based on brightness
   static Color forBrightness(Brightness brightness, {

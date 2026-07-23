@@ -37,7 +37,7 @@ export function HistoryTab({ tenantId, draft, setDraft }: { tenantId: string; dr
   });
 
   const scheduleMutation = useMutation({
-    mutationFn: (scheduledAt: Date) => adminApi.schedulePublish(tenantId, scheduledAt),
+    mutationFn: (scheduledAt: Date) => adminApi.schedulePublish(tenantId, scheduledAt.toISOString()),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['website', tenantId] });
       qc.invalidateQueries({ queryKey: ['website-revisions', tenantId] });

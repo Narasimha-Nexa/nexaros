@@ -8,6 +8,8 @@ import { GripVertical, Eye, EyeOff } from 'lucide-react';
 import { Switch } from '@/components/ui/website-primitives';
 import { Button } from '@/components/ui/button';
 
+type VisibilityDevices = 'desktop' | 'tablet' | 'mobile';
+
 interface SectionItem {
   key: string;
   enabled: boolean;
@@ -20,7 +22,7 @@ interface SectionsTabProps {
   set: (key: string, value: any) => void;
 }
 
-function SortableSectionCard({ item, onToggle, onVisibilityToggle }: { item: SectionItem; onToggle: (key: string) => void; onVisibilityToggle: (key: string, device: keyof SectionItem['visibility']) => void }) {
+function SortableSectionCard({ item, onToggle, onVisibilityToggle }: { item: SectionItem; onToggle: (key: string) => void; onVisibilityToggle: (key: string, device: VisibilityDevices) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.key });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.8 : 1, zIndex: isDragging ? 10 : 1 };
 
@@ -71,7 +73,7 @@ export function SectionsTab({ draft, set }: SectionsTabProps) {
     }
   };
 
-  const visibilityToggle = (key: string, device: keyof SectionItem['visibility']) => {
+  const visibilityToggle = (key: string, device: VisibilityDevices) => {
     set('homeSections', sections.map((s: SectionItem) => s.key === key ? { ...s, visibility: { ...s.visibility, [device]: !s.visibility?.[device] } } : s));
   };
 
@@ -80,8 +82,8 @@ export function SectionsTab({ draft, set }: SectionsTabProps) {
     if (!over || active.id === over.id) return;
     const oldIndex = sections.findIndex((i: any) => i.key === active.id);
     const newIndex = sections.findIndex((i: any) => i.key === over.id);
-    const reordered = arrayMove(sections, oldIndex, newIndex);
-    const updated = reordered.map((s: SectionItem, i: number) => ({ ...s, order: i + 1 }));
+    const reordered: SectionItem[] = arrayMove(sections, oldIndex, newIndex);
+    const updated = reordered.map((s, i) => ({ ...s, order: i + 1 }));
     set('homeSections', updated);
   };
 

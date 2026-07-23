@@ -7,7 +7,7 @@ interface ChartRendererProps {
   chart: ChartData;
 }
 
-const COLORS = ['#E23744', '#16A34A', '#D97706', '#7C3AED', '#0891B2', '#DC2626'];
+const COLORS = ['#E51A24', '#16A34A', '#F1B31C', '#7C3AED', '#0891B2', '#E51A24'];
 
 export function ChartRenderer({ chart }: ChartRendererProps) {
   if (!chart || !chart.labels?.length || !chart.series?.length) return null;

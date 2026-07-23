@@ -95,7 +95,7 @@ export function ColorPicker({ value, onChange, label }: ColorPickerProps) {
           onChange={(e) => onChange(e.target.value)}
           className="h-10 w-12 rounded-lg border-2 border-ink bg-canvas cursor-pointer"
         />
-        <Input value={value || ''} onChange={(e) => onChange(e.target.value)} placeholder="#2563eb" className="flex-1" />
+        <Input value={value || ''} onChange={(e) => onChange(e.target.value)} placeholder="#E51A24" className="flex-1" />
       </div>
     </div>
   );

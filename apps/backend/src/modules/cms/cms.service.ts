@@ -217,9 +217,9 @@ export class CmsService {
     const updated = await this.prisma.tenantWebsiteConfig.update({
       where: { tenantId },
       data: {
-        primaryColor: '#2563eb',
-        secondaryColor: '#171717',
-        accentColor: '#f59e0b',
+        primaryColor: '#E51A24',
+        secondaryColor: '#111111',
+        accentColor: '#F1B31C',
         fontHeading: 'Playfair Display',
         fontBody: 'Inter',
         borderRadius: 'xl',

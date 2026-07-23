@@ -91,7 +91,7 @@ export default function CheckoutPage() {
                 description: `Order #${order.orderNumber || order.id}`,
                 orderId: razorpayOrderId,
                 prefill: { name: customerName, email: customerEmail, contact: customerPhone },
-                theme: { color: '#2563eb' },
+                theme: { color: '#E51A24' },
               });
             }
           }

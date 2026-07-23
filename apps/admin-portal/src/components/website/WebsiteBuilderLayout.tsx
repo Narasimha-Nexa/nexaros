@@ -133,7 +133,7 @@ export function WebsiteBuilderLayout({
           </div>
         </div>
 
-        {rightPanel || defaultRightPanel ? (
+        {(rightPanel || defaultRightPanel) && (
           <div className={`border-l bg-white overflow-y-auto transition-all duration-200 ${propertiesPanelOpen ? 'w-[320px]' : 'w-12'}`}>
             <button
               onClick={togglePropertiesPanel}

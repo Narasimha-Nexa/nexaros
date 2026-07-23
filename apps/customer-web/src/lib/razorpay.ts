@@ -61,7 +61,7 @@ export async function openRazorpayCheckout(options: RazorpayOptions): Promise<Ra
       description: options.description || 'Payment',
       order_id: options.orderId,
       prefill: options.prefill || {},
-      theme: options.theme || { color: '#2563eb' },
+      theme: options.theme || { color: '#E51A24' },
       handler: (response: RazorpayResponse) => {
         resolve(response);
       },
@@ -118,7 +118,7 @@ export async function createAndPayOrder(data: {
         email: data.customerEmail,
         contact: data.customerPhone,
       },
-      theme: { color: '#2563eb' },
+      theme: { color: '#E51A24' },
     });
 
     if (!paymentResponse) {
