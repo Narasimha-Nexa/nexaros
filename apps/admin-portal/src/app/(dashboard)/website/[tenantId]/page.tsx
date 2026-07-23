@@ -17,10 +17,12 @@ import {
 } from '@/components/website/tabs';
 import {
   Palette, Type, Search, Share2, Clock, Phone, FileText, LayoutGrid, ToggleLeft,
-  Tag, Megaphone, Images, Eye, Rocket, History, Star,
+  Tag, Megaphone, Images, Eye, Rocket, History, Star, Calendar,
 } from 'lucide-react';
 import { Dialog, DialogFooter } from '@/components/ui/dialog';
 import { useAuthStore } from '@/stores/auth.store';
+import { Input } from '@/components/ui/input';
+import { Calendar } from 'lucide-react';
 
 type TabId =
   | 'branding' | 'theme' | 'typography' | 'seo' | 'social'
@@ -73,6 +75,7 @@ export default function WebsiteHub() {
   }, [data, slug]);
 
   const { draft, isDirty } = store;
+  const [scheduleDate, setScheduleDate] = useState(new Date(Date.now() + 3600000).toISOString().slice(0, 16));
 
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
@@ -113,6 +116,7 @@ export default function WebsiteHub() {
   });
 
   const [confirmPublish, setConfirmPublish] = useState(false);
+  const [confirmSchedule, setConfirmSchedule] = useState(false);
 
   const publishMutation = useMutation({
     mutationFn: async () => {
@@ -126,6 +130,16 @@ export default function WebsiteHub() {
       setConfirmPublish(false);
     },
     onError: (e: any) => addToast(e.message || 'Publish failed', 'error'),
+  });
+
+  const scheduleMutation = useMutation({
+    mutationFn: (scheduledAt: Date) => adminApi.schedulePublish(tenantId, scheduledAt.toISOString()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['website', tenantId] });
+      addToast('Publish scheduled', 'success');
+      setConfirmSchedule(false);
+    },
+    onError: (e: any) => addToast(e.message || 'Schedule failed', 'error'),
   });
 
   const resetMutation = useMutation({
@@ -208,6 +222,7 @@ export default function WebsiteHub() {
         leftPanel={leftPanel}
         onSave={() => saveMutation.mutate(draft)}
         onPublish={() => setConfirmPublish(true)}
+        onSchedulePublish={() => setConfirmSchedule(true)}
         isSaving={saveMutation.isPending}
         isPublishing={publishMutation.isPending}
       />
@@ -222,6 +237,27 @@ export default function WebsiteHub() {
             <Button variant="outline" onClick={() => setConfirmPublish(false)}>Cancel</Button>
             <Button onClick={() => publishMutation.mutate()} isLoading={publishMutation.isPending}>
               <Rocket size={14} className="mr-1" /> Confirm Publish
+            </Button>
+          </DialogFooter>
+        </Dialog>
+      )}
+
+      {confirmSchedule && (
+        <Dialog open onClose={() => setConfirmSchedule(false)} title="Schedule Publish" size="sm">
+          <p className="text-sm text-ink/70 mb-3">Schedule the website to be published automatically at the specified time.</p>
+          <div className="flex items-center gap-2 mb-4">
+            <Calendar className="w-5 h-5 text-ink/40" />
+            <Input
+              type="datetime-local"
+              value={scheduleDate}
+              onChange={(e) => setScheduleDate(e.target.value)}
+              min={new Date().toISOString().slice(0, 16)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmSchedule(false)}>Cancel</Button>
+            <Button onClick={() => scheduleMutation.mutate(new Date(scheduleDate))} isLoading={scheduleMutation.isPending}>
+              Schedule
             </Button>
           </DialogFooter>
         </Dialog>

@@ -4,7 +4,13 @@ import { EventBusService } from '../../common/event-bus/event-bus.service';
 import { RedisService } from '../../common/redis/redis.service';
 import { AdminService } from '../admin/admin.service';
 import { UpdateCmsConfigDto } from './dto/update-cms-config.dto';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import type { Prisma } from '@prisma/client';
+
+interface AuditCtx {
+  adminId?: string;
+  actorRole?: string;
+}
 
 @Injectable()
 export class CmsService {
@@ -100,10 +106,44 @@ export class CmsService {
     const now = new Date();
     await this.prisma.tenantWebsiteConfig.update({
       where: { tenantId },
-      data: { publishedAt: now, version: { increment: 1 } },
+      data: {
+        publishedAt: now,
+        version: { increment: 1 },
+        status: 'PUBLISHED',
+        scheduledPublishAt: null,
+      },
     });
     await this.afterMutation(tenantId, 'website:published', { config }, audit);
     return { success: true, publishedAt: now.toISOString() };
+  }
+
+  async schedulePublish(tenantId: string, scheduledAt: Date, audit?: AuditCtx) {
+    const config = await this.getConfig(tenantId);
+    await this.prisma.tenantWebsiteConfig.update({
+      where: { tenantId },
+      data: {
+        scheduledPublishAt: scheduledAt,
+        status: 'SCHEDULED',
+      },
+    });
+    await this.afterMutation(tenantId, 'website:scheduled', { scheduledAt: scheduledAt.toISOString() }, audit);
+    return { success: true, scheduledAt: scheduledAt.toISOString() };
+  }
+
+  async cancelScheduledPublish(tenantId: string, audit?: AuditCtx) {
+    const config = await this.getConfig(tenantId);
+    if (config.status !== 'SCHEDULED') {
+      return { success: false, message: 'No scheduled publish to cancel' };
+    }
+    await this.prisma.tenantWebsiteConfig.update({
+      where: { tenantId },
+      data: {
+        scheduledPublishAt: null,
+        status: 'DRAFT',
+      },
+    });
+    await this.afterMutation(tenantId, 'website:schedule_cancelled', {}, audit);
+    return { success: true };
   }
 
   async saveRevision(tenantId: string, label?: string, audit?: AuditCtx) {
@@ -236,6 +276,24 @@ export class CmsService {
       }
     } catch (e) {
       this.logger.warn(`afterMutation failed for ${event}: ${e?.message}`);
+    }
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async checkScheduledPublishes() {
+    const now = new Date();
+    const pending = await this.prisma.tenantWebsiteConfig.findMany({
+      where: {
+        status: 'SCHEDULED',
+        scheduledPublishAt: { lte: now },
+        deletedAt: null,
+      },
+      select: { tenantId: true },
+    });
+
+    for (const config of pending) {
+      await this.publishWebsite(config.tenantId);
+      this.logger.log(`Scheduled publish executed for tenant ${config.tenantId}`);
     }
   }
 }

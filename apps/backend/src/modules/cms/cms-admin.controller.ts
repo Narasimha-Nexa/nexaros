@@ -108,4 +108,25 @@ export class CmsAdminController {
   ) {
     return this.cmsService.revertToRevision(tenantId, revisionId, this.audit(req));
   }
+
+  @ApiOperation({ summary: 'Schedule website publish at a future time' })
+  @Post('schedule-publish')
+  @HttpCode(200)
+  schedulePublish(
+    @Param('tenantId') tenantId: string,
+    @Body() body: { scheduledAt: string },
+    @Request() req: any,
+  ) {
+    return this.cmsService.schedulePublish(tenantId, new Date(body.scheduledAt), this.audit(req));
+  }
+
+  @ApiOperation({ summary: 'Cancel scheduled publish' })
+  @Post('cancel-scheduled-publish')
+  @HttpCode(200)
+  cancelScheduledPublish(
+    @Param('tenantId') tenantId: string,
+    @Request() req: any,
+  ) {
+    return this.cmsService.cancelScheduledPublish(tenantId, this.audit(req));
+  }
 }

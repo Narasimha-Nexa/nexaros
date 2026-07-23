@@ -731,6 +731,17 @@ class AdminApiClient {
     return this.request(`/admin/tenants/${tenantId}/website/publish`, { method: 'POST' });
   }
 
+  async schedulePublish(tenantId: string, scheduledAt: string) {
+    return this.request(`/admin/tenants/${tenantId}/website/schedule`, {
+      method: 'POST',
+      body: JSON.stringify({ scheduledAt }),
+    });
+  }
+
+  async cancelScheduledPublish(tenantId: string) {
+    return this.request(`/admin/tenants/${tenantId}/website/schedule`, { method: 'DELETE' });
+  }
+
   async resetWebsite(tenantId: string) {
     return this.request(`/admin/tenants/${tenantId}/website/reset`, { method: 'POST' });
   }

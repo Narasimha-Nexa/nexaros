@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
   Undo2, Redo2, Save, Rocket, Eye, EyeOff, Monitor, Tablet, Smartphone,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Calendar,
 } from 'lucide-react';
 
 interface WebsiteBuilderLayoutProps {
@@ -16,6 +16,7 @@ interface WebsiteBuilderLayoutProps {
   rightPanel?: React.ReactNode;
   onSave?: () => void;
   onPublish?: () => void;
+  onSchedulePublish?: () => void;
   isSaving?: boolean;
   isPublishing?: boolean;
 }
@@ -82,6 +83,11 @@ export function WebsiteBuilderLayout({
           <Button size="sm" onClick={onPublish} isLoading={isPublishing}>
             <Rocket size={14} className="mr-1" /> Publish
           </Button>
+          {onSchedulePublish && (
+            <Button size="sm" variant="secondary" onClick={onSchedulePublish}>
+              <Calendar size={14} className="mr-1" /> Schedule
+            </Button>
+          )}
         </div>
       </div>
 

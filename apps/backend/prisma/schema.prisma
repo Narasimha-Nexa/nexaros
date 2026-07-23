@@ -1853,51 +1853,61 @@ enum SenderType {
 // ─────────────────────────────────────────────
 
 model TenantWebsiteConfig {
-  id          String    @id @default(cuid())
-  tenantId    String    @unique
-  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  version     Int       @default(1)
-  publishedAt DateTime?
-  deletedAt   DateTime?
-  createdBy   String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id                String                 @id @default(cuid())
+  tenantId          String                 @unique
+  tenant            Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  version           Int                    @default(1)
+  status            WebsiteConfigStatus    @default(DRAFT)
+  publishedAt       DateTime?
+  scheduledPublishAt DateTime?
+  deletedAt         DateTime?
+  createdBy         String?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
 
   // ── Global Settings ──
-  restaurantName String  @default("")
-  tagline        String?
-  logo           String?
-  favicon        String?
-  phone          String?
-  email          String?
-  address        String?
-  mapUrl         String?
-  whatsappNumber String?
-  currency       String  @default("INR")
-  timezone       String  @default("Asia/Kolkata")
+  restaurantName    String                 @default("")
+  tagline           String?
+  logo              String?
+  favicon           String?
+  phone             String?
+  email             String?
+  address           String?
+  mapUrl            String?
+  whatsappNumber    String?
+  currency          String                 @default("INR")
+  timezone          String                 @default("Asia/Kolkata")
 
   // ── Branding ──
-  primaryColor   String @default("#2563eb")
-  secondaryColor String @default("#171717")
-  accentColor    String @default("#f59e0b")
-  fontHeading    String @default("Playfair Display")
-  fontBody       String @default("Inter")
-  borderRadius   String @default("xl")
-  containerWidth String @default("max-w-7xl")
+  primaryColor      String                 @default("#2563eb")
+  secondaryColor    String                 @default("#171717")
+  accentColor       String                 @default("#f59e0b")
+  fontHeading       String                 @default("Playfair Display")
+  fontBody          String                 @default("Inter")
+  borderRadius      String                 @default("xl")
+  containerWidth    String                 @default("max-w-7xl")
 
   // ── JSON Configs ──
-  features     Json @default("{}")
-  seo          Json @default("{}")
-  openingHours Json @default("{}")
-  socialLinks  Json @default("{}")
-  analytics    Json @default("{}")
-  legalPages   Json @default("{}")
-  homeSections Json @default("[]")
+  features          Json                   @default("{}")
+  seo               Json                   @default("{}")
+  openingHours      Json                   @default("{}")
+  socialLinks       Json                   @default("{}")
+  analytics         Json                   @default("{}")
+  legalPages        Json                   @default("{}")
+  homeSections      Json                   @default("[]")
 
-  revisions WebsiteRevision[]
+  revisions         WebsiteRevision[]
 
   @@index([tenantId])
+  @@index([status])
   @@map("tenant_website_configs")
+}
+
+enum WebsiteConfigStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
 }
 
 model WebsiteRevision {
