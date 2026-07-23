@@ -72,7 +72,7 @@ export function RestaurantSite({ data, gallery, testimonials, offers, announceme
   const accent = w.accentColor || '#f59e0b';
   const whatsapp = w.whatsappNumber || '';
   const social = w.socialLinks || {};
-  const hours = w.openingHours || {};
+  const hours: Record<string, { open?: string; close?: string; isOpen?: boolean } | string> = w.openingHours || {};
 
   const [menu, setMenu] = useState(data.categories || []);
   const [isScrolled, setIsScrolled] = useState(false);

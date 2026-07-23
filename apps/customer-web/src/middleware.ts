@@ -41,6 +41,17 @@ async function tenantBySubdomain(subdomain: string): Promise<{ slug: string } | 
   }
 }
 
+async function tenantByCustomDomain(domain: string): Promise<{ slug: string } | null> {
+  try {
+    const res = await fetch(`${API}/public/tenant/domain/${domain}`, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return { slug: data.slug || data.id };
+  } catch {
+    return null;
+  }
+}
+
 function extractSubdomain(hostname: string): string | null {
   const host = hostname.split(':')[0];
   const parts = host.split('.');
@@ -61,6 +72,25 @@ export async function middleware(req: NextRequest) {
   if (pathname.startsWith('/restaurant/')) return NextResponse.next();
   if (pathname.startsWith('/api/') || pathname.startsWith('/_next')) return NextResponse.next();
   if (pathname.startsWith('/sitemap') || pathname.startsWith('/robots')) return NextResponse.next();
+
+  // ── Custom domain resolution ──
+  // Check if the hostname is a custom domain (not localhost, not nexaros.in subdomain)
+  const host = hostname.split(':')[0];
+  const isLocalhost = host === 'localhost' || host.startsWith('127.0.0.1') || host.startsWith('0.0.0.0');
+  const isNexarosSubdomain = host.endsWith(`.${BASE_DOMAIN}`);
+  const isCustomDomain = !isLocalhost && !isNexarosSubdomain;
+
+  if (isCustomDomain) {
+    const tenant = await tenantByCustomDomain(host);
+    if (tenant) {
+      // Rewrite to the restaurant page for this tenant
+      const url = req.nextUrl.clone();
+      url.pathname = `/restaurant/${tenant.slug}${pathname}`;
+      return NextResponse.rewrite(url);
+    }
+    // Unknown custom domain → 404
+    return NextResponse.rewrite(new URL('/not-found', req.url), { status: 404 });
+  }
 
   // ── Subdomain resolution ──
   const subdomain = extractSubdomain(hostname);

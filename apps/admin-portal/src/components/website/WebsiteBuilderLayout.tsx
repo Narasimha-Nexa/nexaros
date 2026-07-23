@@ -8,7 +8,7 @@ import { SeoScorePanel } from './SeoScorePanel';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import {
   Undo2, Redo2, Save, Rocket, Eye, EyeOff, Monitor, Tablet, Smartphone,
-  ChevronLeft, ChevronRight, Calendar,
+  ChevronLeft, ChevronRight, Calendar, ExternalLink,
 } from 'lucide-react';
 
 interface WebsiteBuilderLayoutProps {
@@ -57,6 +57,9 @@ export function WebsiteBuilderLayout({
 
   const defaultRightPanel = <SeoScorePanel tenantId={tenantId} />;
 
+  const CUSTOMER_SITE = process.env.NEXT_PUBLIC_CUSTOMER_SITE_URL || 'http://localhost:3001';
+  const previewUrl = slug ? `${CUSTOMER_SITE}/restaurant/${slug}` : '';
+
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
       <div className="flex items-center justify-between px-4 py-2 border-b bg-white">
@@ -99,6 +102,11 @@ export function WebsiteBuilderLayout({
           {onSchedulePublish && (
             <Button size="sm" variant="secondary" onClick={onSchedulePublish}>
               <Calendar size={14} className="mr-1" /> Schedule
+            </Button>
+          )}
+          {slug && (
+            <Button size="sm" variant="ghost" onClick={() => window.open(previewUrl, '_blank')} title="Open Live Site">
+              <ExternalLink size={14} className="mr-1" /> Live Site
             </Button>
           )}
         </div>

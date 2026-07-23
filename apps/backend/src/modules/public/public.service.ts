@@ -536,6 +536,39 @@ export class PublicService {
     return this.getWebsiteConfig(tenant.slug);
   }
 
+  async getWebsiteConfigByCustomDomain(customDomain: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { customDomain, isActive: true },
+      select: { id: true, slug: true },
+    });
+    if (!tenant) throw new NotFoundException('Restaurant not found');
+    return this.getWebsiteConfig(tenant.slug);
+  }
+
+  async getTenantByCustomDomain(domain: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { customDomain: domain, isActive: true },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        subdomain: true,
+        customDomain: true,
+        logo: true,
+        phone: true,
+        email: true,
+        address: true,
+        city: true,
+        state: true,
+        currency: true,
+        timezone: true,
+        businessType: true,
+      },
+    });
+    if (!tenant) throw new NotFoundException('Restaurant not found');
+    return tenant;
+  }
+
   // ─── Public Website Business Content (delegates to dedicated modules) ───
 
   async getPublicOffers(slug: string) {

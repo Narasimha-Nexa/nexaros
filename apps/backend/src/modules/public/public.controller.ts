@@ -68,6 +68,12 @@ export class PublicController {
     return this.publicService.getTenantBySubdomain(subdomain);
   }
 
+  @Get('tenant/domain/:domain')
+  @ApiOperation({ summary: 'Get tenant by custom domain' })
+  getTenantByCustomDomain(@Param('domain') domain: string) {
+    return this.publicService.getTenantByCustomDomain(domain);
+  }
+
   @Get('website/:slug')
   @ApiOperation({ summary: 'Get full website config (branding, menu, tables, sections) for customer-facing site' })
   getWebsiteConfig(@Param('slug') slug: string) {
@@ -78,6 +84,12 @@ export class PublicController {
   @ApiOperation({ summary: 'Get website config by subdomain (for *.nexaros.in routing)' })
   getWebsiteConfigBySubdomain(@Param('subdomain') subdomain: string) {
     return this.publicService.getWebsiteConfigBySubdomain(subdomain);
+  }
+
+  @Get('website/domain/:customDomain')
+  @ApiOperation({ summary: 'Get website config by custom domain' })
+  getWebsiteConfigByCustomDomain(@Param('customDomain') customDomain: string) {
+    return this.publicService.getWebsiteConfigByCustomDomain(customDomain);
   }
 
   @Get('plans')

@@ -22,7 +22,6 @@ import {
 import { Dialog, DialogFooter } from '@/components/ui/dialog';
 import { useAuthStore } from '@/stores/auth.store';
 import { Input } from '@/components/ui/input';
-import { Calendar } from 'lucide-react';
 
 type TabId =
   | 'branding' | 'theme' | 'typography' | 'seo' | 'social'

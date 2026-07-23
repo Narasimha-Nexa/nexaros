@@ -250,7 +250,7 @@ export class CmsService {
     try {
       const tenant = await this.prisma.tenant.findUnique({
         where: { id: tenantId },
-        select: { id: true, slug: true, subdomain: true },
+        select: { id: true, slug: true, subdomain: true, customDomain: true },
       });
       if (!tenant) {
         this.logger.warn(`afterMutation: tenant ${tenantId} not found — skipping emit/cache-bust`);
@@ -266,6 +266,10 @@ export class CmsService {
       // Subdomain resolution cache (getTenantBySubdomain uses `public:subdomain:${subdomain}`)
       await this.redis.delPattern(`public:subdomain:${tenant.subdomain}*`);
       await this.redis.delPattern(`public:subdomain:${tenant.slug}*`);
+      // Custom domain resolution cache (getTenantByCustomDomain uses `public:domain:${customDomain}`)
+      if (tenant.customDomain) {
+        await this.redis.delPattern(`public:domain:${tenant.customDomain}*`);
+      }
       if (audit?.adminId) {
         await this.adminService.logAction(
           audit.adminId,
