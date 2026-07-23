@@ -748,4 +748,12 @@ export class PublicService {
       take: 20,
     });
   }
+
+  async getTenantSlugs() {
+    const tenants = await this.prisma.tenant.findMany({
+      where: { deletedAt: null, status: 'ACTIVE' },
+      select: { slug: true, subdomain: true },
+    });
+    return tenants.map((t) => ({ slug: t.slug, subdomain: t.subdomain }));
+  }
 }

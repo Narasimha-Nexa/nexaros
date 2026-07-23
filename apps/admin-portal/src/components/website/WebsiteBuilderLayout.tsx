@@ -1,10 +1,11 @@
 'use client';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useWebsiteBuilderStore } from '@/stores/website-builder.store';
 import { LivePreview } from './LivePreview';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { SeoScorePanel } from './SeoScorePanel';
+import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import {
   Undo2, Redo2, Save, Rocket, Eye, EyeOff, Monitor, Tablet, Smartphone,
   ChevronLeft, ChevronRight, Calendar,
@@ -48,6 +49,12 @@ export function WebsiteBuilderLayout({
     mobile: <Smartphone size={16} />,
   };
 
+  useKeyboardShortcuts({
+    onUndo: () => canUndo() && undo(),
+    onRedo: () => canRedo() && redo(),
+    onSave: onSave,
+  });
+
   const defaultRightPanel = <SeoScorePanel tenantId={tenantId} />;
 
   return (
@@ -56,9 +63,11 @@ export function WebsiteBuilderLayout({
         <div className="flex items-center gap-2">
           <Button size="sm" variant="ghost" onClick={undo} disabled={!canUndo()} title="Undo (Ctrl+Z)">
             <Undo2 size={16} />
+            {canUndo() && <span className="ml-1 text-[10px] bg-ink/10 px-1 rounded">1</span>}
           </Button>
           <Button size="sm" variant="ghost" onClick={redo} disabled={!canRedo()} title="Redo (Ctrl+Shift+Z)">
             <Redo2 size={16} />
+            {canRedo() && <span className="ml-1 text-[10px] bg-ink/10 px-1 rounded">1</span>}
           </Button>
           <div className="h-4 w-px bg-ink/10 mx-1" />
           <div className="flex gap-0.5 bg-ink/5 rounded-lg p-0.5">

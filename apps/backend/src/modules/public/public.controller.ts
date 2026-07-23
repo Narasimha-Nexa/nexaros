@@ -159,4 +159,10 @@ export class PublicController {
   getEvents(@Param('slug') slug: string) {
     return this.publicService.getEvents(slug);
   }
+
+  @Get('tenants/slugs')
+  @ApiOperation({ summary: 'Get all active tenant slugs for sitemap generation' })
+  getTenantSlugs() {
+    return this.publicService.getTenantSlugs();
+  }
 }

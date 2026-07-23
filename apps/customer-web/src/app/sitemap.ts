@@ -9,11 +9,10 @@ interface TenantSlug {
 
 async function getTenantSlugs(): Promise<string[]> {
   try {
-    const res = await fetch(`${API_BASE}/public/plans`, { cache: 'no-store' });
+    const res = await fetch(`${API_BASE}/public/tenants/slugs`, { cache: 'no-store' });
     if (!res.ok) return [];
-    // The plans endpoint doesn't list tenants, so we return an empty array.
-    // For production, this should query an admin endpoint listing active tenant slugs.
-    return [];
+    const data = await res.json();
+    return data.data || data.slugs || data || [];
   } catch {
     return [];
   }
