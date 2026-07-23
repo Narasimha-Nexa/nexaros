@@ -83,9 +83,9 @@ export function DashboardShell({ children }: DashboardShellProps) {
           </div>
         </main>
         <footer className="border-t border-hairline px-4 sm:px-6 py-3 flex items-center justify-between shrink-0 bg-canvas">
-          <p className="text-caption text-body font-sans">NexaROS Control Plane v1.0</p>
+          <p className="text-[12px] text-body font-sans">NexaROS Control Plane v1.0</p>
           <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1.5 text-caption font-sans font-semibold">
+            <span className="flex items-center gap-1.5 text-[12px] font-sans font-semibold">
               <span className={`w-1.5 h-1.5 rounded-full ${
                 apiStatus === 'connected' ? 'bg-semantic-success' : 'bg-semantic-danger'
               }`} />

@@ -114,18 +114,20 @@ export function WebsiteBuilderLayout({
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        <div className={`border-r bg-white overflow-y-auto transition-all duration-200 ${sidebarCollapsed ? 'w-12' : 'w-[260px]'}`}>
+      <div className="flex flex-1 overflow-hidden min-h-0">
+        <div className={`relative border-r bg-white overflow-y-auto transition-all duration-200 shrink-0 ${sidebarCollapsed ? 'w-12' : 'w-[260px]'}`}>
           <button
             onClick={toggleSidebar}
-            className="absolute top-14 right-0 z-10 bg-white border border-l-0 rounded-r-md p-1 -mr-3 hover:bg-ink/5"
+            className="sticky top-0 left-0 z-10 w-full flex items-center justify-end px-2 py-1.5 bg-white border-b border-ink/5 hover:bg-ink/5 transition-colors"
           >
             {sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
           </button>
-          {!sidebarCollapsed && leftPanel}
+          <div className="overflow-y-auto">
+            {!sidebarCollapsed && leftPanel}
+          </div>
         </div>
 
-        <div className="flex-1 bg-ink/5 overflow-y-auto flex items-start justify-center p-6">
+        <div className="flex-1 min-w-0 bg-ink/5 overflow-y-auto flex items-start justify-center p-6">
           <div className={`bg-white rounded-lg shadow-lg overflow-hidden transition-all duration-200 ${
             device === 'desktop' ? 'w-full max-w-5xl' :
             device === 'tablet' ? 'w-[768px]' :
@@ -136,10 +138,10 @@ export function WebsiteBuilderLayout({
         </div>
 
         {(rightPanel || defaultRightPanel) && (
-          <div className={`border-l bg-white overflow-y-auto transition-all duration-200 ${propertiesPanelOpen ? 'w-[320px]' : 'w-12'}`}>
+          <div className={`relative border-l bg-white overflow-y-auto transition-all duration-200 shrink-0 ${propertiesPanelOpen ? 'w-[320px]' : 'w-12'}`}>
             <button
               onClick={togglePropertiesPanel}
-              className="absolute top-14 left-0 z-10 bg-white border border-r-0 rounded-l-md p-1 -ml-3 hover:bg-ink/5"
+              className="sticky top-0 left-0 z-10 w-full flex items-center justify-start px-2 py-1.5 bg-white border-b border-ink/5 hover:bg-ink/5 transition-colors"
             >
               {propertiesPanelOpen ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
             </button>

@@ -25,6 +25,8 @@ export function LivePreview({ config, device, slug, onFieldEdit }: PreviewProps)
   const [key, setKey] = useState(0);
   const [isEditMode, setIsEditMode] = useState(false);
   const [activeField, setActiveField] = useState<string | null>(null);
+  const [iframeError, setIframeError] = useState(false);
+  const [iframeLoaded, setIframeLoaded] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const { addToast } = useToastStore();
 
@@ -32,6 +34,8 @@ export function LivePreview({ config, device, slug, onFieldEdit }: PreviewProps)
 
   useEffect(() => {
     setKey((k) => k + 1);
+    setIframeError(false);
+    setIframeLoaded(false);
   }, [slug]);
 
   // Listen for messages from the iframe
@@ -167,15 +171,28 @@ export function LivePreview({ config, device, slug, onFieldEdit }: PreviewProps)
             )}
           </div>
           <div className="relative w-full" style={{ paddingBottom: device === 'mobile' ? '178%' : device === 'tablet' ? '132%' : '75%' }}>
-            <iframe
-              ref={iframeRef}
-              key={key}
-              src={previewUrl}
-              title="Website Preview"
-              className="absolute inset-0 w-full h-full border-0"
-              sandbox="allow-scripts allow-same-origin allow-popups"
-              loading="lazy"
-            />
+            {iframeError ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-white">
+                <Monitor size={40} className="text-ink/20 mb-3" />
+                <p className="text-sm font-semibold text-ink/60 mb-1">Preview unavailable</p>
+                <p className="text-xs text-ink/40 mb-3">The restaurant page could not be loaded. Make sure the backend is running.</p>
+                <Button size="sm" variant="outline" onClick={() => { setIframeError(false); setKey((k) => k + 1); }}>
+                  <RefreshCw size={12} className="mr-1" /> Reload
+                </Button>
+              </div>
+            ) : (
+              <iframe
+                ref={iframeRef}
+                key={key}
+                src={previewUrl}
+                title="Website Preview"
+                className="absolute inset-0 w-full h-full border-0"
+                sandbox="allow-scripts allow-same-origin allow-popups"
+                loading="lazy"
+                onLoad={() => setIframeLoaded(true)}
+                onError={() => setIframeError(true)}
+              />
+            )}
           </div>
         </div>
       ) : (

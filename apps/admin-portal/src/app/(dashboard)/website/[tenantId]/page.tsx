@@ -171,11 +171,6 @@ export default function WebsiteHub() {
     { id: 'preview', label: 'Preview & Publish', icon: <Eye size={16} /> },
   ];
 
-  if (isLoading) return <p className="text-body">Loading website configuration...</p>;
-
-  const set = (key: string, value: any) => store.setDraft((d) => ({ ...d, [key]: value }));
-  const setJson = (key: string, patch: Record<string, any>) => store.setDraft((d) => ({ ...d, [key]: { ...(d[key] || {}), ...patch } }));
-
   const handleFieldEdit = useCallback((field: string, value: string) => {
     const fieldMap: Record<string, string> = {
       restaurantName: 'restaurantName',
@@ -206,6 +201,11 @@ export default function WebsiteHub() {
       store.setDraft((d) => ({ ...d, [field]: value }));
     }
   }, [store]);
+
+  if (isLoading) return <p className="text-body">Loading website configuration...</p>;
+
+  const set = (key: string, value: any) => store.setDraft((d) => ({ ...d, [key]: value }));
+  const setJson = (key: string, patch: Record<string, any>) => store.setDraft((d) => ({ ...d, [key]: { ...(d[key] || {}), ...patch } }));
 
   const leftPanel = (
     <div className="p-3">

@@ -54,7 +54,7 @@ export function SeoScorePanel({ tenantId }: { tenantId: string }) {
     <Card className="p-4">
       <div className="mb-4">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="font-semibold text-ink">SEO Score</h3>
+          <h3 className="text-[13px] font-semibold text-ink font-sans">SEO Score</h3>
           <Badge className={getStatusBg()} variant="soft">
             {getStatusText()}
           </Badge>
@@ -83,7 +83,7 @@ export function SeoScorePanel({ tenantId }: { tenantId: string }) {
               />
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className={`text-2xl font-bold ${getStatusColor()}`}>{score}</span>
+              <span className={`text-xl font-semibold ${getStatusColor()}`}>{score}</span>
             </div>
           </div>
           <div className="flex-1 text-sm text-ink/60">
@@ -114,8 +114,8 @@ export function SeoScorePanel({ tenantId }: { tenantId: string }) {
               {check.passed ? <Check size={12} /> : <X size={12} />}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-ink">{check.name}</p>
-              <p className="text-xs text-ink/50">{check.message}</p>
+              <p className="text-[13px] font-medium text-ink">{check.name}</p>
+              <p className="text-[12px] text-ink/50 mt-0.5">{check.message}</p>
             </div>
           </div>
         ))}

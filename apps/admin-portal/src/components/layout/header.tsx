@@ -66,8 +66,8 @@ export function Header() {
         </div>
       )}
 
-      <header className="h-14 border-b border-hairline bg-canvas flex items-center justify-between px-4 sm:px-6 shrink-0 z-30">
-        <div className="flex items-center gap-3 min-w-0">
+      <header className="h-14 border-b border-hairline bg-canvas flex items-center px-4 sm:px-6 shrink-0 z-30">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
           {/* Mobile hamburger */}
           <button
             onClick={openMobile}
@@ -79,23 +79,21 @@ export function Header() {
           <h1 className="text-body-md font-sans font-semibold truncate">{getPageTitle()}</h1>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0 self-center">
           {/* Search - hidden on mobile */}
-          <div className="relative hidden lg:block">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-body" />
+          <div className="relative hidden lg:flex items-center">
+            <Search size={14} className="absolute left-3 text-body" />
             <input
               type="text"
               placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="h-9 pl-9 pr-3 w-64 text-sm border border-hairline bg-canvas-soft focus:bg-canvas focus:border-ink outline-none transition-colors font-sans"
-              onFocus={(e) => e.target.style.borderColor = 'var(--color-ink)'}
-              onBlur={(e) => e.target.style.borderColor = ''}
             />
           </div>
 
           {/* Notifications */}
-          <button className="relative p-2 text-body hover:text-ink hover:bg-canvas-soft transition-colors">
+          <button className="relative p-2 h-9 w-9 flex items-center justify-center text-body hover:text-ink hover:bg-canvas-soft transition-colors">
             <Bell size={16} />
             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-ink rounded-full" />
           </button>
@@ -107,9 +105,9 @@ export function Header() {
           <div className="relative">
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
-              className="flex items-center gap-2 px-2 py-1 hover:bg-canvas-soft transition-colors"
+              className="flex items-center gap-2 px-2 py-1.5 h-9 hover:bg-canvas-soft transition-colors"
             >
-              <div className="w-7 h-7 bg-ink text-canvas flex items-center justify-center text-[11px] font-bold shrink-0">
+              <div className="w-7 h-7 bg-ink text-canvas flex items-center justify-center text-[11px] font-bold rounded shrink-0">
                 {user ? getInitials(user.name) : 'A'}
               </div>
               <span className="text-sm font-sans hidden sm:block truncate max-w-[120px]">{user?.name || 'Admin'}</span>

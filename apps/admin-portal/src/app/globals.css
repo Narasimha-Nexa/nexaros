@@ -157,6 +157,8 @@
     color: var(--color-ink);
     line-height: 1.6;
     overflow: hidden;
+    font-size: 14px;
+    min-font-size: 12px;
   }
 
   a {

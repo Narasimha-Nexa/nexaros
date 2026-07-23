@@ -12,16 +12,16 @@ interface PageHeaderProps {
 
 export function PageHeader({ eyebrow, title, description, actions, className }: PageHeaderProps) {
   return (
-    <div className={cn('flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4', className)}>
+    <div className={cn('flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3', className)}>
       <div className="min-w-0">
         {eyebrow && (
-          <p className="text-caption font-sans font-semibold tracking-[0.15em] uppercase text-body mb-1">
+          <p className="text-[12px] font-sans font-semibold tracking-[0.15em] uppercase text-body mb-1">
             {eyebrow}
           </p>
         )}
-        <h1 className="font-display text-display-sm sm:text-display-md truncate">{title}</h1>
+        <h1 className="text-[22px] sm:text-[26px] font-display font-semibold text-ink truncate" style={{ fontFamily: 'var(--font-display)' }}>{title}</h1>
         {description && (
-          <p className="text-body-sm text-body font-sans mt-1">{description}</p>
+          <p className="text-[13px] text-body font-sans mt-1 break-all leading-relaxed">{description}</p>
         )}
       </div>
       {actions && (
