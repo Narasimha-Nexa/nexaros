@@ -889,6 +889,9 @@ class AdminApiClient {
   async getBiProfitability(tenantId: string, params: Record<string, string> = {}) {
     return this.request('/admin/bi/profitability', { params: { ...params, tenantId } });
   }
+  async getChannelAnalytics(params: Record<string, string> = {}) {
+    return this.request('/dashboard/channel-analytics', { params });
+  }
   async getBiPeakHours(tenantId: string, params: Record<string, string> = {}) {
     return this.request('/admin/bi/peak-hours', { params: { ...params, tenantId } });
   }

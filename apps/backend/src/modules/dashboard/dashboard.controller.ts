@@ -94,4 +94,15 @@ export class DashboardController {
   getProfitability(@Query('branchId') branchId?: string) {
     return this.dashboardService.getProfitability(branchId);
   }
+
+  @Get('channel-analytics')
+  @ApiOperation({ summary: 'Get orders and revenue breakdown by channel' })
+  @ApiQuery({ name: 'branchId', required: false })
+  @ApiQuery({ name: 'days', required: false })
+  getChannelAnalytics(
+    @Query('branchId') branchId?: string,
+    @Query('days') days?: string,
+  ) {
+    return this.dashboardService.getChannelAnalytics(branchId, days ? parseInt(days) : 30);
+  }
 }

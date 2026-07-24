@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EventBusService } from '../../common/event-bus/event-bus.service';
+import { KitchenService } from '../kitchen/kitchen.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { AddItemDto } from './dto/add-item.dto';
 import { OrderStatus } from '@prisma/client';
@@ -10,6 +11,7 @@ export class OrdersService {
   constructor(
     private prisma: PrismaService,
     private eventBus: EventBusService,
+    private kitchenService: KitchenService,
   ) {}
 
   private async findOneWithTenantValidation(id: string, tenantId: string) {
@@ -113,6 +115,8 @@ export class OrdersService {
           staffId: data.staffId,
           orderNumber,
           type: (data.type as any) || 'DINE_IN',
+          channel: (data.channel as any) || 'DINE_IN',
+          channelOrderId: data.channelOrderId || null,
           status: 'PENDING',
           customerName: data.customerName,
           customerPhone: data.customerPhone,
@@ -158,6 +162,7 @@ export class OrdersService {
       id: order.id,
       orderNumber: order.orderNumber,
       type: order.type,
+      channel: order.channel,
       status: order.status,
       totalAmount: order.totalAmount,
       tableNumber: order.table?.number,
@@ -200,6 +205,9 @@ export class OrdersService {
       orderId: order.id,
       orderNumber: order.orderNumber,
     });
+
+    // Route items to kitchen stations based on channel
+    await this.kitchenService.routeOrderItems(order.id, order.channel || 'DINE_IN');
 
     return order;
   }

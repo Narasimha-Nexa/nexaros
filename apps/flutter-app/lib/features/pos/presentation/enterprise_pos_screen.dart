@@ -23,6 +23,7 @@ class _EnterprisePosScreenState extends ConsumerState<EnterprisePosScreen> {
   String _selectedOrderType = 'DINE_IN';
   bool _showCustomerPanel = false;
   bool _showHeldOrders = false;
+  bool _showOrderList = false;
 
   @override
   void dispose() {
@@ -118,6 +119,15 @@ class _EnterprisePosScreenState extends ConsumerState<EnterprisePosScreen> {
               ),
             ),
 
+          IconButton(
+            icon: Icon(Icons.receipt_long, size: 22, color: _showOrderList ? AppColors.primary : cs.onSurface),
+            onPressed: () {
+              setState(() => _showOrderList = !_showOrderList);
+              if (_showOrderList) pos.loadOrders();
+            },
+            tooltip: 'Recent Orders',
+          ),
+
           if (pos.state.isOffline)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -154,6 +164,15 @@ class _EnterprisePosScreenState extends ConsumerState<EnterprisePosScreen> {
   }
 
   Widget _buildWideLayout(BuildContext context, PosProvider pos, ColorScheme cs) {
+    if (_showOrderList) {
+      return Row(
+        children: [
+          Expanded(flex: 3, child: _buildOrderListPanel(context, pos, cs)),
+          VerticalDivider(width: 1, color: cs.outlineVariant.withValues(alpha: 0.3)),
+          Expanded(flex: 2, child: _buildCartPanel(context, pos, cs)),
+        ],
+      );
+    }
     return Row(
       children: [
         Expanded(flex: 3, child: _buildMenuBrowser(context, pos, cs)),
@@ -164,12 +183,130 @@ class _EnterprisePosScreenState extends ConsumerState<EnterprisePosScreen> {
   }
 
   Widget _buildNarrowLayout(BuildContext context, PosProvider pos, ColorScheme cs) {
+    if (_showOrderList) {
+      return Row(
+        children: [
+          Expanded(flex: 3, child: _buildOrderListPanel(context, pos, cs)),
+          SizedBox(width: 320, child: _buildCartPanel(context, pos, cs)),
+        ],
+      );
+    }
     return Row(
       children: [
         Expanded(flex: 3, child: _buildMenuBrowser(context, pos, cs)),
         SizedBox(
           width: 320,
           child: _buildCartPanel(context, pos, cs),
+        ),
+      ],
+    );
+  }
+
+  // ═══════════════ ORDER LIST (MULTI-CHANNEL) ═══════════════
+
+  Widget _buildOrderListPanel(BuildContext context, PosProvider pos, ColorScheme cs) {
+    final orders = pos.filteredOrders;
+    final channels = ['DINE_IN', 'SWIGGY', 'ZOMATO', 'WHATSAPP', 'QR', 'APP'];
+    final channelColors = <String, Color>{
+      'DINE_IN': AppColors.primary,
+      'SWIGGY': const Color(0xFFFC8019),
+      'ZOMATO': const Color(0xFFE23744),
+      'WHATSAPP': const Color(0xFF25D366),
+      'QR': const Color(0xFF8B5CF6),
+      'APP': const Color(0xFF06B6D4),
+    };
+
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: cs.surface,
+            border: Border(bottom: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3))),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Icon(Icons.receipt_long, size: 18, color: cs.onSurface),
+                const SizedBox(width: 6),
+                Text('Orders', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600)),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: () => pos.loadOrders(),
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: Text('Refresh', style: GoogleFonts.inter(fontSize: 12)),
+                ),
+              ]),
+              const SizedBox(height: 6),
+              SizedBox(
+                height: 30,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    _ChannelPill('All', null, pos.state.orderChannelFilter, cs, () => pos.setOrderChannelFilter(null)),
+                    for (final ch in channels)
+                      _ChannelPill(ch.replaceAll('_', ' '), ch, pos.state.orderChannelFilter, cs, () => pos.setOrderChannelFilter(ch)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: orders.isEmpty
+              ? Center(child: Text('No orders found', style: GoogleFonts.inter(color: cs.onSurfaceVariant)))
+              : ListView.separated(
+                  padding: const EdgeInsets.all(8),
+                  itemCount: orders.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 6),
+                  itemBuilder: (context, index) {
+                    final order = orders[index];
+                    final channel = order['channel']?.toString() ?? 'DINE_IN';
+                    final status = order['status']?.toString() ?? '';
+                    final color = channelColors[channel] ?? AppColors.primary;
+                    final statusColor = status == 'COMPLETED' ? AppColors.success
+                        : status == 'CANCELLED' ? AppColors.danger
+                        : status == 'PENDING' ? AppColors.warning
+                        : AppColors.primary;
+
+                    return Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
+                          child: Text(channel.replaceAll('_', ' '), style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w600, color: color)),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('#${order['orderNumber']}', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                            if (order['customerName'] != null)
+                              Text(order['customerName'].toString(), style: GoogleFonts.inter(fontSize: 11, color: cs.onSurfaceVariant)),
+                          ],
+                        )),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text('₹${order['totalAmount']}', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
+                              child: Text(status, style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w600, color: statusColor)),
+                            ),
+                          ],
+                        ),
+                      ]),
+                    );
+                  },
+                ),
         ),
       ],
     );
@@ -1193,6 +1330,46 @@ class _PaymentSheetState extends State<_PaymentSheet> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ChannelPill extends StatelessWidget {
+  final String label;
+  final String? value;
+  final String? selected;
+  final ColorScheme cs;
+  final VoidCallback onTap;
+  const _ChannelPill(this.label, this.value, this.selected, this.cs, this.onTap);
+
+  static const _colors = <String, Color>{
+    'SWIGGY': Color(0xFFFC8019),
+    'ZOMATO': Color(0xFFE23744),
+    'WHATSAPP': Color(0xFF25D366),
+    'QR': Color(0xFF8B5CF6),
+    'APP': Color(0xFF06B6D4),
+    'DINE_IN': AppColors.primary,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final isActive = selected == value;
+    final color = value != null ? (_colors[value] ?? AppColors.primary) : cs.onSurface;
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: isActive ? color : cs.surfaceContainerHighest.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(12),
+            border: isActive ? Border.all(color: color, width: 1.5) : null,
+          ),
+          child: Text(label, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: isActive ? Colors.white : cs.onSurface)),
         ),
       ),
     );

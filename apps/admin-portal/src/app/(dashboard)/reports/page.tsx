@@ -27,16 +27,38 @@ interface PlatformStats {
   revenueByMonth: Array<{ month: string; revenue: number }>;
 }
 
+interface ChannelAnalytics {
+  totalOrders: number;
+  totalRevenue: number;
+  period: string;
+  breakdown: Array<{
+    channel: string;
+    orders: number;
+    revenue: number;
+    completed: number;
+    cancelled: number;
+    fulfillmentRate: number;
+    avgOrderValue: number;
+    orderShare: number;
+    revenueShare: number;
+  }>;
+}
+
 export default function ReportsPage() {
   const [stats, setStats] = useState<PlatformStats | null>(null);
+  const [channelData, setChannelData] = useState<ChannelAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const { addToast } = useToastStore();
 
   const fetchStats = async () => {
     setLoading(true);
     try {
-      const result = await adminApi.getPlatformStats();
+      const [result, channels] = await Promise.all([
+        adminApi.getPlatformStats(),
+        adminApi.getChannelAnalytics({ days: '30' }).catch(() => null),
+      ]);
       setStats(result);
+      setChannelData(channels);
     } catch (err: any) {
       addToast(err.message || 'Failed to load reports', 'error');
     } finally {
@@ -200,6 +222,62 @@ export default function ReportsPage() {
               {topRestaurantsChart ? <WiredChart options={topRestaurantsChart.options} series={topRestaurantsChart.series} type="bar" height={320} /> : <p className="text-body-sm text-body font-sans">No restaurant data available yet.</p>}
             </Card>
           </div>
+
+          {/* Channel Analytics (Multi-Channel Order Unification) */}
+          {channelData && channelData.breakdown.length > 0 && (
+            <Card padding="md">
+              <h3 className="text-body-sm font-sans font-semibold tracking-[0.1em] uppercase text-body mb-4">Orders by Channel — Last {channelData.period}</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+                <div className="text-center p-3 rounded-lg bg-muted/50">
+                  <p className="text-2xl font-bold font-sans">{channelData.totalOrders}</p>
+                  <p className="text-caption text-body font-sans">Total Orders</p>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-muted/50">
+                  <p className="text-2xl font-bold font-sans">₹{channelData.totalRevenue.toLocaleString('en-IN')}</p>
+                  <p className="text-caption text-body font-sans">Total Revenue</p>
+                </div>
+                {channelData.breakdown.slice(0, 4).map((ch) => (
+                  <div key={ch.channel} className="text-center p-3 rounded-lg bg-muted/50">
+                    <p className="text-lg font-bold font-sans">{ch.orders}</p>
+                    <p className="text-caption font-sans font-medium">{ch.channel.replace('_', ' ')}</p>
+                    <p className="text-[10px] text-body font-sans">₹{ch.revenue.toLocaleString('en-IN')} · {ch.fulfillmentRate}%</p>
+                  </div>
+                ))}
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm font-sans">
+                  <thead>
+                    <tr className="border-b border-hairline">
+                      <th className="text-left py-2 px-3 text-body font-medium">Channel</th>
+                      <th className="text-right py-2 px-3 text-body font-medium">Orders</th>
+                      <th className="text-right py-2 px-3 text-body font-medium">Revenue</th>
+                      <th className="text-right py-2 px-3 text-body font-medium">AOV</th>
+                      <th className="text-right py-2 px-3 text-body font-medium">Fulfillment</th>
+                      <th className="text-right py-2 px-3 text-body font-medium">Order Share</th>
+                      <th className="text-right py-2 px-3 text-body font-medium">Revenue Share</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {channelData.breakdown.map((ch) => (
+                      <tr key={ch.channel} className="border-b border-hairline/50">
+                        <td className="py-2 px-3 font-medium">{ch.channel.replace('_', ' ')}</td>
+                        <td className="py-2 px-3 text-right">{ch.orders}</td>
+                        <td className="py-2 px-3 text-right">₹{ch.revenue.toLocaleString('en-IN')}</td>
+                        <td className="py-2 px-3 text-right">₹{ch.avgOrderValue.toLocaleString('en-IN')}</td>
+                        <td className="py-2 px-3 text-right">
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${ch.fulfillmentRate >= 90 ? 'bg-green-100 text-green-700' : ch.fulfillmentRate >= 70 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
+                            {ch.fulfillmentRate}%
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-right">{ch.orderShare}%</td>
+                        <td className="py-2 px-3 text-right">{ch.revenueShare}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
 
           <Card padding="md">
             <h3 className="text-body-sm font-sans font-semibold tracking-[0.1em] uppercase text-body mb-4">Recent Activity</h3>

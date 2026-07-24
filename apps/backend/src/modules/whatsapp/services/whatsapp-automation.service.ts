@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WhatsAppCloudApiService } from './whatsapp-cloud-api.service';
+import { WhatsAppOrderHandlerService } from './whatsapp-order-handler.service';
 import { EventBusService } from '../../../common/event-bus/event-bus.service';
 import { WhatsAppAutomation, WhatsAppAccount } from '@prisma/client';
 
@@ -23,6 +24,7 @@ export class WhatsAppAutomationService {
     private prisma: PrismaService,
     private cloudApiService: WhatsAppCloudApiService,
     private eventBus: EventBusService,
+    private orderHandler: WhatsAppOrderHandlerService,
   ) {}
 
   /**
@@ -345,8 +347,9 @@ export class WhatsAppAutomationService {
         break;
 
       case 'CREATE_ORDER':
-        // Emit event for order creation
-        await this.eventBus.emitToTenant(automation.tenantId, 'whatsapp:order:create', {
+        // Create order directly and push to kitchen pipeline
+        await this.orderHandler.createOrderFromWhatsApp({
+          tenantId: automation.tenantId,
           accountId: automation.accountId,
           customerPhone: to,
           textContent,

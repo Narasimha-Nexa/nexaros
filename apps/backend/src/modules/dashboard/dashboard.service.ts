@@ -251,4 +251,56 @@ export class DashboardService {
 
     return { revenue, expenses: totalExpenses, profit, margin, breakdown };
   }
+
+  async getChannelAnalytics(branchId?: string, days?: number) {
+    const ctx = requestContext.getStore();
+    const tenantId = ctx?.tenantId;
+    const lookback = days || 30;
+    const since = new Date(Date.now() - lookback * 86_400_000);
+
+    const orders = await this.prisma.order.findMany({
+      where: {
+        createdAt: { gte: since },
+        ...(tenantId ? { branch: { tenantId } } : {}),
+        ...(branchId ? { branchId } : {}),
+      },
+      select: {
+        channel: true,
+        totalAmount: true,
+        status: true,
+        createdAt: true,
+      },
+    });
+
+    const channelMap = new Map<string, { count: number; revenue: number; completed: number; cancelled: number }>();
+
+    for (const order of orders) {
+      const ch = order.channel || 'DINE_IN';
+      const existing = channelMap.get(ch) || { count: 0, revenue: 0, completed: 0, cancelled: 0 };
+      existing.count += 1;
+      existing.revenue += Number(order.totalAmount);
+      if (order.status === 'COMPLETED') existing.completed += 1;
+      if (order.status === 'CANCELLED') existing.cancelled += 1;
+      channelMap.set(ch, existing);
+    }
+
+    const totalOrders = orders.length;
+    const totalRevenue = orders.reduce((sum, o) => sum + Number(o.totalAmount), 0);
+
+    const breakdown = Array.from(channelMap.entries())
+      .map(([channel, data]) => ({
+        channel,
+        orders: data.count,
+        revenue: Math.round(data.revenue * 100) / 100,
+        completed: data.completed,
+        cancelled: data.cancelled,
+        fulfillmentRate: data.count > 0 ? Math.round(data.completed / data.count * 10000) / 100 : 0,
+        avgOrderValue: data.count > 0 ? Math.round(data.revenue / data.count * 100) / 100 : 0,
+        orderShare: totalOrders > 0 ? Math.round(data.count / totalOrders * 10000) / 100 : 0,
+        revenueShare: totalRevenue > 0 ? Math.round(data.revenue / totalRevenue * 10000) / 100 : 0,
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+
+    return { totalOrders, totalRevenue: Math.round(totalRevenue * 100) / 100, breakdown, period: `${lookback} days` };
+  }
 }

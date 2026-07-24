@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService, requestContext } from '../../prisma/prisma.service';
 import { EventBusService } from '../../common/event-bus/event-bus.service';
+import { KitchenService } from '../kitchen/kitchen.service';
 import { CreatePosOrderDto } from './dto/create-pos-order.dto';
 import { ClosePosOrderDto } from './dto/close-pos-order.dto';
 
@@ -9,6 +10,7 @@ export class PosService {
   constructor(
     private prisma: PrismaService,
     private eventBus: EventBusService,
+    private kitchenService: KitchenService,
   ) {}
 
   async getMenu(_branchId: string) {
@@ -74,6 +76,8 @@ export class PosService {
         staffId,
         orderNumber,
         type: dto.type,
+        channel: (dto.channel as any) || 'DINE_IN',
+        channelOrderId: dto.channelOrderId || null,
         tableId: dto.tableId || null,
         customerName: dto.customerName || null,
         customerPhone: dto.customerPhone || null,
@@ -125,7 +129,7 @@ export class PosService {
       orderNumber: order.orderNumber,
       type: order.type,
       status: order.status,
-      channel: 'POS',
+      channel: order.channel || 'DINE_IN',
       priority: 'NORMAL',
       totalAmount: order.totalAmount,
       tableNumber: order.table?.number,
@@ -144,6 +148,9 @@ export class PosService {
       orderId: order.id,
       orderNumber: order.orderNumber,
     });
+
+    // Route items to kitchen stations based on channel
+    await this.kitchenService.routeOrderItems(order.id, order.channel || 'DINE_IN');
 
     return {
       id: order.id,

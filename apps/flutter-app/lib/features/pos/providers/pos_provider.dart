@@ -21,6 +21,8 @@ class PosState {
   final ShiftModel? currentShift;
   final bool isOffline;
   final List<PosAuditEntry> auditLog;
+  final List<Map<String, dynamic>> recentOrders;
+  final String? orderChannelFilter;
 
   const PosState({
     this.categories = const [],
@@ -39,6 +41,8 @@ class PosState {
     this.currentShift,
     this.isOffline = false,
     this.auditLog = const [],
+    this.recentOrders = const [],
+    this.orderChannelFilter,
   });
 
   List<Map<String, dynamic>> get filteredMenuItems {
@@ -83,6 +87,8 @@ class PosState {
     ShiftModel? currentShift,
     bool? isOffline,
     List<PosAuditEntry>? auditLog,
+    List<Map<String, dynamic>>? recentOrders,
+    String? orderChannelFilter,
   }) {
     return PosState(
       categories: categories ?? this.categories,
@@ -101,6 +107,8 @@ class PosState {
       currentShift: currentShift ?? this.currentShift,
       isOffline: isOffline ?? this.isOffline,
       auditLog: auditLog ?? this.auditLog,
+      recentOrders: recentOrders ?? this.recentOrders,
+      orderChannelFilter: orderChannelFilter ?? this.orderChannelFilter,
     );
   }
 }
@@ -188,6 +196,31 @@ class PosProvider extends ChangeNotifier {
       _state = _state.copyWith(isLoading: false, error: e.toString());
     }
     notifyListeners();
+  }
+
+  // ─── Order List (Unified Multi-Channel) ───
+
+  Future<void> loadOrders({String? status}) async {
+    try {
+      final api = _service.api;
+      final orders = await api.getOrders(status: status, limit: 50);
+      final orderList = orders.cast<Map<String, dynamic>>();
+      _state = _state.copyWith(recentOrders: orderList);
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  void setOrderChannelFilter(String? channel) {
+    _state = _state.copyWith(orderChannelFilter: channel);
+    notifyListeners();
+  }
+
+  List<Map<String, dynamic>> get filteredOrders {
+    var orders = _state.recentOrders;
+    if (_state.orderChannelFilter != null && _state.orderChannelFilter!.isNotEmpty) {
+      orders = orders.where((o) => o['channel'] == _state.orderChannelFilter).toList();
+    }
+    return orders;
   }
 
   // ─── Category & Search ───

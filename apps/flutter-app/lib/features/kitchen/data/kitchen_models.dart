@@ -495,6 +495,7 @@ class KitchenFilter {
   final List<String> chefIds;
   final List<KitchenPriority> priorities;
   final List<String> orderTypes;
+  final List<String> channels;
   final String? searchQuery;
   final bool showDelayedOnly;
   final bool showRushOnly;
@@ -505,6 +506,7 @@ class KitchenFilter {
     this.chefIds = const [],
     this.priorities = const [],
     this.orderTypes = const [],
+    this.channels = const [],
     this.searchQuery,
     this.showDelayedOnly = false,
     this.showRushOnly = false,
@@ -512,7 +514,7 @@ class KitchenFilter {
 
   bool get hasActiveFilters =>
       statuses.isNotEmpty || stations.isNotEmpty || chefIds.isNotEmpty ||
-      priorities.isNotEmpty || orderTypes.isNotEmpty ||
+      priorities.isNotEmpty || orderTypes.isNotEmpty || channels.isNotEmpty ||
       (searchQuery != null && searchQuery!.isNotEmpty) ||
       showDelayedOnly || showRushOnly;
 
@@ -522,6 +524,7 @@ class KitchenFilter {
     List<String>? chefIds,
     List<KitchenPriority>? priorities,
     List<String>? orderTypes,
+    List<String>? channels,
     String? searchQuery,
     bool? showDelayedOnly,
     bool? showRushOnly,
@@ -533,6 +536,7 @@ class KitchenFilter {
       chefIds: chefIds ?? this.chefIds,
       priorities: priorities ?? this.priorities,
       orderTypes: orderTypes ?? this.orderTypes,
+      channels: channels ?? this.channels,
       searchQuery: clearSearch ? null : (searchQuery ?? this.searchQuery),
       showDelayedOnly: showDelayedOnly ?? this.showDelayedOnly,
       showRushOnly: showRushOnly ?? this.showRushOnly,

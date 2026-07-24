@@ -32,6 +32,16 @@ export class CreateOrderDto {
   @IsIn(['DINE_IN', 'TAKEAWAY', 'DELIVERY', 'QR_ORDER'])
   type?: string;
 
+  @ApiPropertyOptional({ enum: ['DINE_IN', 'QR', 'APP', 'SWIGGY', 'ZOMATO', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'ONDC'] })
+  @IsOptional()
+  @IsIn(['DINE_IN', 'QR', 'APP', 'SWIGGY', 'ZOMATO', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'ONDC'])
+  channel?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  channelOrderId?: string;
+
   @ApiPropertyOptional()
   @IsString()
   @IsOptional()

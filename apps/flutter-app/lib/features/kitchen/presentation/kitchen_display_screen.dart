@@ -262,6 +262,20 @@ class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
             ref.read(kitchenProvider).updateFilter((f) => f.copyWith(showDelayedOnly: true));
           }),
         ],
+        const SizedBox(width: 12),
+        Container(width: 1, height: 20, color: Colors.grey.shade300),
+        const SizedBox(width: 12),
+        _ChannelFilterChip('POS', 'DINE_IN', state, ref),
+        const SizedBox(width: 6),
+        _ChannelFilterChip('Swiggy', 'SWIGGY', state, ref),
+        const SizedBox(width: 6),
+        _ChannelFilterChip('Zomato', 'ZOMATO', state, ref),
+        const SizedBox(width: 6),
+        _ChannelFilterChip('WhatsApp', 'WHATSAPP', state, ref),
+        const SizedBox(width: 6),
+        _ChannelFilterChip('QR', 'QR', state, ref),
+        const SizedBox(width: 6),
+        _ChannelFilterChip('App', 'APP', state, ref),
       ]),
     );
   }
@@ -478,6 +492,59 @@ class _TvTab extends StatelessWidget {
             ),
           ],
         ]),
+      ),
+    );
+  }
+}
+
+class _ChannelFilterChip extends StatelessWidget {
+  final String label;
+  final String channelValue;
+  final KitchenState state;
+  final WidgetRef ref;
+  const _ChannelFilterChip(this.label, this.channelValue, this.state, this.ref);
+
+  static const _channelColors = <String, Color>{
+    'SWIGGY': Color(0xFFFC8019),
+    'ZOMATO': Color(0xFFE23744),
+    'WHATSAPP': Color(0xFF25D366),
+    'QR': Color(0xFF8B5CF6),
+    'APP': Color(0xFF06B6D4),
+    'DINE_IN': AppColors.primary,
+    'ONDC': Color(0xFF06B6D4),
+    'INSTAGRAM': Color(0xFFE1306C),
+    'FACEBOOK': Color(0xFF1877F2),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final isSelected = state.filter.channels.contains(channelValue);
+    final color = _channelColors[channelValue] ?? AppColors.primary;
+    final count = state.orders.where((o) => o.channel == channelValue).length;
+
+    return GestureDetector(
+      onTap: () => ref.read(kitchenProvider).setChannelFilter(channelValue),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected ? color : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(AppDimens.radiusFull),
+          border: isSelected ? Border.all(color: color, width: 1.5) : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label, style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: isSelected ? Colors.white : Colors.grey[600])),
+            if (count > 0) ...[
+              const SizedBox(width: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(color: isSelected ? Colors.white24 : color.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)),
+                child: Text('$count', style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w700, color: isSelected ? Colors.white : color)),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

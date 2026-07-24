@@ -6,9 +6,12 @@ import { WhatsAppBulkMessagingService } from './services/whatsapp-bulk-messaging
 import { WhatsAppAutomationService } from './services/whatsapp-automation.service';
 import { WhatsAppAnalyticsService } from './services/whatsapp-analytics.service';
 import { WhatsAppNlpService } from './services/whatsapp-nlp.service';
+import { WhatsAppOrderHandlerService } from './services/whatsapp-order-handler.service';
 import { WhatsAppWebhookController } from './controllers/whatsapp-webhook.controller';
 import { WhatsAppManagementController } from './controllers/whatsapp-management.controller';
 import { AiChatModule } from '../ai-chat/ai-chat.module';
+import { PrismaModule } from '../../prisma/prisma.module';
+import { WebsocketsModule } from '../websockets/websockets.module';
 
 /**
  * WhatsApp Business Platform Module
@@ -21,9 +24,10 @@ import { AiChatModule } from '../ai-chat/ai-chat.module';
  * - Automation rules
  * - Analytics tracking
  * - NLP-powered conversations
+ * - Order creation from WhatsApp messages → kitchen pipeline
  */
 @Module({
-  imports: [AiChatModule],
+  imports: [AiChatModule, PrismaModule, WebsocketsModule],
   controllers: [WhatsAppWebhookController, WhatsAppManagementController],
   providers: [
     WhatsAppCloudApiService,
@@ -33,6 +37,7 @@ import { AiChatModule } from '../ai-chat/ai-chat.module';
     WhatsAppAutomationService,
     WhatsAppAnalyticsService,
     WhatsAppNlpService,
+    WhatsAppOrderHandlerService,
   ],
   exports: [
     WhatsAppCloudApiService,
@@ -42,6 +47,7 @@ import { AiChatModule } from '../ai-chat/ai-chat.module';
     WhatsAppAutomationService,
     WhatsAppAnalyticsService,
     WhatsAppNlpService,
+    WhatsAppOrderHandlerService,
   ],
 })
 export class WhatsAppModule {}

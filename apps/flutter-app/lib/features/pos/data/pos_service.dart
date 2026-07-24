@@ -17,6 +17,8 @@ class PosService {
 
   PosService(this._api, this._offlineOrders, this._offlinePayments, this._printer);
 
+  ApiClient get api => _api;
+
   // ─── Menu ───
 
   Future<List<Map<String, dynamic>>> getMenuItems({String? categoryId, String? search}) async {

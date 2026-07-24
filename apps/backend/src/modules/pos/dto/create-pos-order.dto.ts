@@ -31,6 +31,16 @@ export class CreatePosOrderDto {
   @IsEnum(['DINE_IN', 'TAKEAWAY', 'DELIVERY'])
   type: 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
 
+  @ApiPropertyOptional({ enum: ['DINE_IN', 'QR', 'APP', 'SWIGGY', 'ZOMATO', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'ONDC'] })
+  @IsOptional()
+  @IsEnum(['DINE_IN', 'QR', 'APP', 'SWIGGY', 'ZOMATO', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'ONDC'])
+  channel?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  channelOrderId?: string;
+
   @ApiPropertyOptional()
   @IsString()
   @IsOptional()

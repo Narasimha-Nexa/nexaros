@@ -53,6 +53,55 @@ export class KitchenService {
     });
   }
 
+  // ── Channel-Specific Routing ──
+
+  private readonly channelPriorityBoost: Record<string, number> = {
+    SWIGGY: 1,
+    ZOMATO: 1,
+    WHATSAPP: 1,
+    ONDC: 1,
+    INSTAGRAM: 1,
+    FACEBOOK: 1,
+    QR: 0,
+    APP: 0,
+    DINE_IN: 0,
+  };
+
+  async routeOrderItems(orderId: string, channel: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        items: true,
+        branch: { select: { tenantId: true } },
+      },
+    });
+    if (!order) return;
+
+    const stations = await this.prisma.kitchenStation.findMany({
+      where: { branchId: order.branchId, isActive: true },
+      orderBy: { sortOrder: 'asc' },
+    });
+    if (stations.length === 0) return;
+
+    const mainStation = stations[0];
+
+    for (const item of order.items) {
+      if (item.stationId) continue;
+      await this.prisma.orderItem.update({
+        where: { id: item.id },
+        data: { stationId: mainStation.id },
+      });
+    }
+
+    const boost = this.channelPriorityBoost[channel] || 0;
+    if (boost > 0 && order.priority === 'NORMAL') {
+      await this.prisma.order.update({
+        where: { id: orderId },
+        data: { priority: 'HIGH' },
+      });
+    }
+  }
+
   // ── Order Queries ──
 
   async getActiveOrders(branchId: string) {
@@ -228,6 +277,26 @@ export class KitchenService {
         orderNumber: updated.orderNumber,
         tableNumber: updated.table?.number,
       });
+
+      // Auto-create delivery record for DELIVERY orders
+      if (order.type === 'DELIVERY') {
+        const existingDelivery = await this.prisma.delivery.findFirst({ where: { orderId: id } });
+        if (!existingDelivery) {
+          await this.prisma.delivery.create({
+            data: {
+              orderId: id,
+              branchId: order.branchId,
+              status: 'PENDING',
+              customerName: order.customerName,
+              customerPhone: order.customerPhone,
+            },
+          });
+          this.eventBus.emitToBranch(broadcastBranch, 'delivery:created', {
+            orderId: id,
+            orderNumber: updated.orderNumber,
+          });
+        }
+      }
     }
 
     // Emit kitchen-specific bump event for KDS

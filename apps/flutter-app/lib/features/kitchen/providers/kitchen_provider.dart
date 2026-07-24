@@ -123,6 +123,9 @@ class KitchenState {
     if (filter.priorities.isNotEmpty) {
       result = result.where((o) => filter.priorities.contains(o.priority)).toList();
     }
+    if (filter.channels.isNotEmpty) {
+      result = result.where((o) => filter.channels.contains(o.channel)).toList();
+    }
     if (filter.searchQuery != null && filter.searchQuery!.isNotEmpty) {
       final q = filter.searchQuery!.toLowerCase();
       result = result.where((o) =>
@@ -428,6 +431,19 @@ class KitchenProvider extends ChangeNotifier {
 
   void setStationFilter(String? stationName) {
     _state = _state.copyWith(selectedStationFilter: stationName);
+    notifyListeners();
+  }
+
+  void setChannelFilter(String? channel) {
+    if (channel == null || channel.isEmpty) {
+      _state = _state.copyWith(filter: _state.filter.copyWith(channels: []));
+    } else {
+      final current = _state.filter.channels;
+      final updated = current.contains(channel)
+          ? current.where((c) => c != channel).toList()
+          : [...current, channel];
+      _state = _state.copyWith(filter: _state.filter.copyWith(channels: updated));
+    }
     notifyListeners();
   }
 
