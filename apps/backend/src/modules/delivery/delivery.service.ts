@@ -333,4 +333,73 @@ export class DeliveryService {
 
     return this.assignDelivery(pendingDelivery.id, partner.id);
   }
+
+  // ─── Public Tracking ───
+
+  async trackDeliveryPublic(orderId: string, token?: string) {
+    const delivery = await this.prisma.delivery.findFirst({
+      where: { orderId, deletedAt: null },
+      include: {
+        partner: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            vehicleType: true,
+            latitude: true,
+            longitude: true,
+            rating: true,
+          },
+        },
+        order: {
+          select: {
+            orderNumber: true,
+            customerName: true,
+            customerPhone: true,
+            totalAmount: true,
+            type: true,
+            status: true,
+            createdAt: true,
+          },
+        },
+        locations: {
+          orderBy: { timestamp: 'desc' },
+          take: 50,
+          select: {
+            latitude: true,
+            longitude: true,
+            speed: true,
+            timestamp: true,
+          },
+        },
+      },
+    });
+
+    if (!delivery) return null;
+
+    const statusTimeline = [
+      { status: 'PENDING', label: 'Order placed', timestamp: delivery.createdAt },
+      { status: 'ASSIGNED', label: 'Delivery partner assigned', timestamp: delivery.assignedAt },
+      { status: 'PICKED_UP', label: 'Picked up from restaurant', timestamp: delivery.pickedUpAt },
+      { status: 'IN_TRANSIT', label: 'On the way', timestamp: null },
+      { status: 'DELIVERED', label: 'Delivered', timestamp: delivery.deliveredAt },
+    ].filter((s) => {
+      const idx = ['PENDING', 'ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED'].indexOf(s.status);
+      const currentIdx = ['PENDING', 'ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'FAILED', 'CANCELLED'].indexOf(delivery.status);
+      return idx <= currentIdx || s.timestamp !== null;
+    });
+
+    return {
+      id: delivery.id,
+      status: delivery.status,
+      customerAddress: delivery.customerAddress,
+      customerName: delivery.customerName,
+      estimatedArrival: null,
+      partner: delivery.partner,
+      order: delivery.order,
+      locations: delivery.locations,
+      statusTimeline,
+      createdAt: delivery.createdAt,
+    };
+  }
 }

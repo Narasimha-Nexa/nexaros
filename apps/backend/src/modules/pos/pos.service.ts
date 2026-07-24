@@ -119,6 +119,32 @@ export class PosService {
       status: order.status,
     });
 
+    // Kitchen KDS: instant push for POS orders
+    this.eventBus.kitchenOrderCreated(tenantId, branchId, {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      type: order.type,
+      status: order.status,
+      channel: 'POS',
+      priority: 'NORMAL',
+      totalAmount: order.totalAmount,
+      tableNumber: order.table?.number,
+      itemCount: order.items.length,
+      items: order.items.map(i => ({
+        id: i.id,
+        name: i.name,
+        quantity: i.quantity,
+        notes: i.notes,
+      })),
+      createdAt: order.createdAt,
+    });
+
+    this.eventBus.dashboardRefresh(tenantId, {
+      type: 'order_created',
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+    });
+
     return {
       id: order.id,
       orderNumber: order.orderNumber,
@@ -171,21 +197,90 @@ export class PosService {
       },
     });
 
+    // Table → FREE when order has a table (POS payment is always full amount)
     if (order.tableId) {
       await this.prisma.restaurantTable.update({
         where: { id: order.tableId },
-        data: { status: 'BILLING' },
+        data: { status: 'FREE', occupiedSince: null },
       });
-      this.eventBus.emitToBranch(order.branchId, 'table:status-changed', {
+      await this.eventBus.tableStatusChanged(order.tenantId, order.branchId, {
         tableId: order.tableId,
-        status: 'BILLING',
+        status: 'FREE',
       });
     }
 
-    this.eventBus.emitToBranch(order.branchId, 'order:completed', {
+    // Order lifecycle events
+    await this.eventBus.orderCompleted(order.tenantId, order.branchId, {
       orderId: updated.id,
       orderNumber: updated.orderNumber,
       totalAmount: updated.totalAmount,
+    });
+
+    await this.eventBus.orderTrackingEvent(orderId, 'order:status-changed', {
+      orderId: updated.id,
+      orderNumber: updated.orderNumber,
+      status: 'COMPLETED',
+      totalAmount: updated.totalAmount,
+    });
+
+    // Payment confirmation + invoice generation
+    if (dto.paymentMethod) {
+      await this.eventBus.paymentReceived(order.tenantId, order.branchId, {
+        orderId: updated.id,
+        orderNumber: updated.orderNumber,
+        amount: totalAmount,
+        method: dto.paymentMethod,
+        status: 'COMPLETED',
+      });
+
+      await this.eventBus.orderTrackingEvent(orderId, 'payment:received', {
+        orderId: updated.id,
+        orderNumber: updated.orderNumber,
+        amount: totalAmount,
+        method: dto.paymentMethod,
+      });
+
+      // Auto-generate GST invoice for completed order
+      await this.eventBus.invoiceGenerated(order.tenantId, order.branchId, {
+        orderId: updated.id,
+        orderNumber: updated.orderNumber,
+      });
+
+      // Sync split payment balances across all POS devices
+      await this.eventBus.diningBillUpdated(order.tenantId, order.branchId, {
+        orderId: updated.id,
+        orderNumber: updated.orderNumber,
+        totalAmount: updated.totalAmount,
+        totalPaid: totalAmount,
+        remaining: 0,
+        payment: { method: dto.paymentMethod, amount: totalAmount },
+      });
+
+      await this.eventBus.dashboardStatsUpdated(order.tenantId, order.branchId, {
+        type: 'payment_received',
+        orderId: updated.id,
+        amount: totalAmount,
+        method: dto.paymentMethod,
+      });
+
+      await this.eventBus.dashboardRefresh(order.tenantId, {
+        type: 'payment_received',
+        orderId: updated.id,
+        amount: totalAmount,
+      });
+    }
+
+    this.eventBus.dashboardStatsUpdated(order.tenantId, order.branchId, {
+      type: 'order_completed',
+      orderId: updated.id,
+      orderNumber: updated.orderNumber,
+      totalAmount: updated.totalAmount,
+    });
+
+    this.eventBus.dashboardRefresh(order.tenantId, {
+      type: 'order_completed',
+      orderId: updated.id,
+      orderNumber: updated.orderNumber,
     });
 
     return {

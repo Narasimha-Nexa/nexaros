@@ -100,6 +100,38 @@ interface UseOrderSocketOptions {
     status: string;
     quantity: number;
   }) => void;
+  /** Called when the order is cancelled */
+  onOrderCancelled?: (data: {
+    orderId: string;
+    orderNumber: number;
+    status: string;
+    notes?: string;
+  }) => void;
+  /** Called when items are added/removed from the order */
+  onItemsChanged?: (data: {
+    orderId: string;
+    orderNumber: number;
+    action: 'item_added' | 'item_removed';
+    item: { id: string; name: string; quantity: number };
+    totalAmount: number;
+  }) => void;
+  /** Called when a payment is received for this order */
+  onPaymentReceived?: (data: {
+    orderId: string;
+    orderNumber: number;
+    amount: number;
+    method: string;
+    totalPaid: number;
+    remaining: number;
+  }) => void;
+  /** Called when a payment fails */
+  onPaymentFailed?: (data: {
+    orderId: string;
+    orderNumber: number;
+    amount: number;
+    method: string;
+    reason: string;
+  }) => void;
   enabled?: boolean;
 }
 
@@ -114,6 +146,10 @@ export function useOrderSocket({
   onStatusChange,
   onOrderReady,
   onItemStatusChange,
+  onOrderCancelled,
+  onItemsChanged,
+  onPaymentReceived,
+  onPaymentFailed,
   enabled = true,
 }: UseOrderSocketOptions) {
   const [isConnected, setIsConnected] = useState(false);
@@ -126,19 +162,19 @@ export function useOrderSocket({
   const statusChangeRef = useRef(onStatusChange);
   const orderReadyRef = useRef(onOrderReady);
   const itemStatusChangeRef = useRef(onItemStatusChange);
+  const orderCancelledRef = useRef(onOrderCancelled);
+  const itemsChangedRef = useRef(onItemsChanged);
+  const paymentReceivedRef = useRef(onPaymentReceived);
+  const paymentFailedRef = useRef(onPaymentFailed);
 
   // Keep refs in sync without triggering re-renders
-  useEffect(() => {
-    statusChangeRef.current = onStatusChange;
-  }, [onStatusChange]);
-
-  useEffect(() => {
-    orderReadyRef.current = onOrderReady;
-  }, [onOrderReady]);
-
-  useEffect(() => {
-    itemStatusChangeRef.current = onItemStatusChange;
-  }, [onItemStatusChange]);
+  useEffect(() => { statusChangeRef.current = onStatusChange; }, [onStatusChange]);
+  useEffect(() => { orderReadyRef.current = onOrderReady; }, [onOrderReady]);
+  useEffect(() => { itemStatusChangeRef.current = onItemStatusChange; }, [onItemStatusChange]);
+  useEffect(() => { orderCancelledRef.current = onOrderCancelled; }, [onOrderCancelled]);
+  useEffect(() => { itemsChangedRef.current = onItemsChanged; }, [onItemsChanged]);
+  useEffect(() => { paymentReceivedRef.current = onPaymentReceived; }, [onPaymentReceived]);
+  useEffect(() => { paymentFailedRef.current = onPaymentFailed; }, [onPaymentFailed]);
 
   useEffect(() => {
     if (!orderId || !enabled) return;
@@ -189,11 +225,66 @@ export function useOrderSocket({
       );
     }
 
+    function onOrderCancelled(data: Record<string, unknown>) {
+      if (!mounted) return;
+      setLastEvent({ type: 'order:cancelled', data, timestamp: Date.now() });
+      orderCancelledRef.current?.(
+        data as { orderId: string; orderNumber: number; status: string; notes?: string },
+      );
+    }
+
+    function onItemsChanged(data: Record<string, unknown>) {
+      if (!mounted) return;
+      setLastEvent({ type: 'order:items-changed', data, timestamp: Date.now() });
+      itemsChangedRef.current?.(
+        data as {
+          orderId: string;
+          orderNumber: number;
+          action: 'item_added' | 'item_removed';
+          item: { id: string; name: string; quantity: number };
+          totalAmount: number;
+        },
+      );
+    }
+
+    function onPaymentReceived(data: Record<string, unknown>) {
+      if (!mounted) return;
+      setLastEvent({ type: 'payment:received', data, timestamp: Date.now() });
+      paymentReceivedRef.current?.(
+        data as {
+          orderId: string;
+          orderNumber: number;
+          amount: number;
+          method: string;
+          totalPaid: number;
+          remaining: number;
+        },
+      );
+    }
+
+    function onPaymentFailed(data: Record<string, unknown>) {
+      if (!mounted) return;
+      setLastEvent({ type: 'payment:failed', data, timestamp: Date.now() });
+      paymentFailedRef.current?.(
+        data as {
+          orderId: string;
+          orderNumber: number;
+          amount: number;
+          method: string;
+          reason: string;
+        },
+      );
+    }
+
     s.on('connect', onConnect);
     s.on('disconnect', onDisconnect);
     s.on('order:status-changed', onStatusChange);
     s.on('order:ready', onOrderReady);
     s.on('item:status-changed', onItemStatusChange);
+    s.on('order:cancelled', onOrderCancelled);
+    s.on('order:items-changed', onItemsChanged);
+    s.on('payment:received', onPaymentReceived);
+    s.on('payment:failed', onPaymentFailed);
 
     // If already connected, join immediately
     if (s.connected) {
@@ -208,6 +299,10 @@ export function useOrderSocket({
       s.off('order:status-changed', onStatusChange);
       s.off('order:ready', onOrderReady);
       s.off('item:status-changed', onItemStatusChange);
+      s.off('order:cancelled', onOrderCancelled);
+      s.off('order:items-changed', onItemsChanged);
+      s.off('payment:received', onPaymentReceived);
+      s.off('payment:failed', onPaymentFailed);
 
       if (s.connected) {
         s.emit('leave:order', { orderId });

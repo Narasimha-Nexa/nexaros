@@ -150,7 +150,7 @@ export class OrdersService {
     if (data.tableId) {
       await this.prisma.restaurantTable.update({
         where: { id: data.tableId },
-        data: { status: 'OCCUPIED' },
+        data: { status: 'OCCUPIED', occupiedSince: new Date() },
       });
     }
 
@@ -163,6 +163,42 @@ export class OrdersService {
       tableNumber: order.table?.number,
       itemCount: order.items.length,
       createdAt: order.createdAt,
+    });
+
+    // Emit kitchen-specific event for KDS real-time push
+    await this.eventBus.kitchenOrderCreated(order.tenantId || branchId, branchId, {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      type: order.type,
+      status: order.status,
+      channel: order.channel,
+      priority: order.priority,
+      totalAmount: order.totalAmount,
+      tableNumber: order.table?.number,
+      tableName: null,
+      itemCount: order.items.length,
+      items: order.items.map(i => ({
+        id: i.id,
+        name: i.name,
+        quantity: i.quantity,
+        notes: i.notes,
+      })),
+      customerName: order.customerName,
+      guestCount: order.guestCount,
+      createdAt: order.createdAt,
+    });
+
+    this.eventBus.dashboardStatsUpdated(order.tenantId || branchId, branchId, {
+      type: 'order_created',
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      totalAmount: order.totalAmount,
+    });
+
+    this.eventBus.dashboardRefresh(order.tenantId || branchId, {
+      type: 'order_created',
+      orderId: order.id,
+      orderNumber: order.orderNumber,
     });
 
     return order;
@@ -199,6 +235,31 @@ export class OrdersService {
       totalAmount: updatedOrder.totalAmount,
     });
 
+    // Customer-facing: items changed on running order
+    this.eventBus.orderItemsChanged(order.tenantId, order.branchId, {
+      orderId,
+      orderNumber: updatedOrder.orderNumber,
+      action: 'item_added',
+      item: { id: orderItem.id, name: data.name, quantity: data.quantity, unitPrice: data.unitPrice },
+      totalAmount: updatedOrder.totalAmount,
+    });
+
+    this.eventBus.orderTrackingEvent(orderId, 'order:items-changed', {
+      orderId,
+      orderNumber: updatedOrder.orderNumber,
+      action: 'item_added',
+      item: { id: orderItem.id, name: data.name, quantity: data.quantity },
+      totalAmount: updatedOrder.totalAmount,
+    });
+
+    // Notify POS devices that the bill total changed
+    this.eventBus.diningBillUpdated(order.tenantId, order.branchId, {
+      orderId,
+      orderNumber: updatedOrder.orderNumber,
+      totalAmount: updatedOrder.totalAmount,
+      action: 'item_added',
+    });
+
     return { orderItem, order: updatedOrder };
   }
 
@@ -223,6 +284,31 @@ export class OrdersService {
       action: 'item_removed',
       item: { name: item.name },
       totalAmount: updatedOrder.totalAmount,
+    });
+
+    // Customer-facing: items changed on running order
+    this.eventBus.orderItemsChanged(order.tenantId, order.branchId, {
+      orderId,
+      orderNumber: updatedOrder.orderNumber,
+      action: 'item_removed',
+      item: { id: item.id, name: item.name },
+      totalAmount: updatedOrder.totalAmount,
+    });
+
+    this.eventBus.orderTrackingEvent(orderId, 'order:items-changed', {
+      orderId,
+      orderNumber: updatedOrder.orderNumber,
+      action: 'item_removed',
+      item: { id: item.id, name: item.name },
+      totalAmount: updatedOrder.totalAmount,
+    });
+
+    // Notify POS devices that the bill total changed
+    this.eventBus.diningBillUpdated(order.tenantId, order.branchId, {
+      orderId,
+      orderNumber: updatedOrder.orderNumber,
+      totalAmount: updatedOrder.totalAmount,
+      action: 'item_removed',
     });
 
     return { removed: true, order: updatedOrder };
@@ -261,16 +347,26 @@ export class OrdersService {
 
     if (order.tableId) {
       let tableStatus: string | undefined;
+      let tableUpdateData: Record<string, unknown> = {};
       switch (status) {
         case 'READY': tableStatus = 'ORDER_READY'; break;
         case 'SERVED': tableStatus = 'OCCUPIED'; break;
         case 'COMPLETED': tableStatus = 'BILLING'; break;
-        case 'CANCELLED': tableStatus = 'FREE'; break;
+        case 'CANCELLED': tableStatus = 'FREE'; tableUpdateData.occupiedSince = null; break;
       }
       if (tableStatus) {
+        tableUpdateData.status = tableStatus;
         await this.prisma.restaurantTable.update({
           where: { id: order.tableId },
-          data: { status: tableStatus as any },
+          data: tableUpdateData,
+        });
+        // Emit real-time table status change to floor plan
+        this.eventBus.emitToBranch(order.branchId, 'table:status-changed', {
+          tableId: order.tableId,
+          tableNumber: updated.table?.number,
+          status: tableStatus,
+          orderId: updated.id,
+          orderNumber: updated.orderNumber,
         });
       }
     }
@@ -288,6 +384,17 @@ export class OrdersService {
       status: updated.status,
       tableNumber: updated.table?.number,
     });
+
+    // Emit bill-updated when order moves to BILLING (customer requested check)
+    if (status === 'BILLING') {
+      this.eventBus.diningBillUpdated(order.tenantId, order.branchId, {
+        orderId: updated.id,
+        orderNumber: updated.orderNumber,
+        totalAmount: updated.totalAmount,
+        status: updated.status,
+        action: 'bill_requested',
+      });
+    }
 
     if (status === 'READY') {
       this.eventBus.emitToBranch(order.branchId, 'order:ready', {
@@ -340,7 +447,43 @@ export class OrdersService {
   }
 
   async cancel(id: string, notes?: string, tenantId?: string) {
-    return this.updateStatus(id, 'CANCELLED', notes, tenantId);
+    const order = tenantId
+      ? await this.findOneWithTenantValidation(id, tenantId)
+      : await this.prisma.order.findUnique({ where: { id } });
+
+    const result = await this.updateStatus(id, 'CANCELLED', notes, tenantId);
+
+    // Emit dedicated cancellation event for customer + kitchen
+    if (order) {
+      this.eventBus.orderCancelled(order.tenantId, order.branchId, {
+        orderId: result.id,
+        orderNumber: result.orderNumber,
+        status: 'CANCELLED',
+        notes,
+        tableNumber: result.table?.number,
+      });
+
+      this.eventBus.orderTrackingEvent(id, 'order:cancelled', {
+        orderId: result.id,
+        orderNumber: result.orderNumber,
+        status: 'CANCELLED',
+        notes,
+      });
+
+      this.eventBus.dashboardStatsUpdated(order.tenantId, order.branchId, {
+        type: 'order_cancelled',
+        orderId: result.id,
+        orderNumber: result.orderNumber,
+      });
+
+      this.eventBus.dashboardRefresh(order.tenantId, {
+        type: 'order_cancelled',
+        orderId: result.id,
+        orderNumber: result.orderNumber,
+      });
+    }
+
+    return result;
   }
 
   async getOrderNumber(branchId: string): Promise<number> {

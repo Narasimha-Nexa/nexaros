@@ -8,6 +8,7 @@ import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/orders/presentation/order_list_screen.dart';
 import '../../features/menu/presentation/menu_management_screen.dart';
 import '../../features/tables/presentation/table_grid_screen.dart';
+import '../../features/tables/presentation/floor_plan_screen.dart';
 import '../../features/pos/presentation/enterprise_pos_screen.dart';
 import '../../features/pos/presentation/shift_management_screen.dart';
 import '../../features/pos/presentation/refund_screen.dart';
@@ -106,7 +107,6 @@ import '../../features/support/presentation/ticket_detail_screen.dart';
 import '../../features/support/presentation/create_ticket_screen.dart';
 import '../../features/support/presentation/faq_screen.dart';
 import '../../features/support/presentation/help_center_screen.dart';
-import '../../features/ai_chat/presentation/ai_chat_screen.dart' as old_chat;
 import '../../features/ai_platform/presentation/ai_dashboard_screen.dart';
 import '../../features/ai_platform/presentation/ai_chat_screen.dart';
 import '../../features/ai_platform/presentation/ai_insights_screen.dart';
@@ -281,6 +281,15 @@ GoRouter createRouter(AuthProvider authNotifier) {
             pageBuilder: (context, state) => NoTransitionPage(
               key: state.pageKey,
               child: const TableGridScreen(),
+            ),
+          ),
+          // Floor Plan
+          GoRoute(
+            path: '/shell/floor-plan',
+            name: 'floor-plan',
+            pageBuilder: (context, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: const FloorPlanScreen(),
             ),
           ),
           // POS (Enterprise)

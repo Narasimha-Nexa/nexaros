@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/socket_service.dart';
 import '../../../core/services/event_bus.dart';
 import '../data/kitchen_models.dart';
 import '../data/kitchen_service.dart';
@@ -145,18 +146,22 @@ class KitchenState {
 class KitchenProvider extends ChangeNotifier {
   final ApiClient _api;
   final EventBus _eventBus;
+  final SocketService _socketService;
   late final KitchenService _service;
 
   KitchenState _state = const KitchenState();
   final List<StreamSubscription> _subscriptions = [];
+  Timer? _debounceTimer;
+  String? _currentBranchId;
 
   KitchenState get state => _state;
   KitchenService get service => _service;
 
-  KitchenProvider(this._api, this._eventBus) {
+  KitchenProvider(this._api, this._eventBus, this._socketService) {
     _service = KitchenService(_api);
     _listenToEvents();
     _listenToNotifications();
+    _listenToSocketEvents();
   }
 
   void _listenToEvents() {
@@ -168,7 +173,7 @@ class KitchenProvider extends ChangeNotifier {
       BusEventType.itemStatusChanged,
     ];
     for (final type in types) {
-      _subscriptions.add(_eventBus.listen(type, (_) => loadOrders()));
+      _subscriptions.add(_eventBus.listen(type, (_) => _debouncedLoad()));
     }
   }
 
@@ -183,14 +188,183 @@ class KitchenProvider extends ChangeNotifier {
     }));
   }
 
+  /// Subscribe to Socket.IO kitchen events for real-time push updates.
+  void _listenToSocketEvents() {
+    // New order created — add it instantly to the top of the list
+    _subscriptions.add(_socketService.onKitchenOrderCreated.listen((data) {
+      _handleNewOrder(data);
+    }));
+
+    // Order status bumped (PREPARING→READY, etc.) — update in place
+    _subscriptions.add(_socketService.onKitchenOrderBumped.listen((data) {
+      _handleOrderBumped(data);
+    }));
+
+    // Chef assigned — update order in place
+    _subscriptions.add(_socketService.onKitchenOrderAssigned.listen((data) {
+      _handleChefAssigned(data);
+    }));
+
+    // Priority changed — update order in place
+    _subscriptions.add(_socketService.onKitchenPriorityChanged.listen((data) {
+      _handlePriorityChanged(data);
+    }));
+
+    // Item-level status change — update item in place
+    _subscriptions.add(_socketService.onKitchenItemStatus.listen((data) {
+      _handleItemStatusChanged(data);
+    }));
+  }
+
+  // ── Incremental State Updates (Real-Time Push) ──
+
+  void _handleNewOrder(Map<String, dynamic> data) {
+    final orderId = data['id'] as String?;
+    if (orderId == null) return;
+
+    // Avoid duplicates
+    if (_state.orders.any((o) => o.id == orderId)) return;
+
+    // Do a quick fetch of the full order for complete data
+    _fetchAndAddOrder(orderId);
+  }
+
+  Future<void> _fetchAndAddOrder(String orderId) async {
+    try {
+      final orders = await _service.loadOrders(branchId: _currentBranchId);
+      final newOrder = orders.where((o) => o.id == orderId).firstOrNull;
+      if (newOrder != null && !_state.orders.any((o) => o.id == orderId)) {
+        _state = _state.copyWith(
+          orders: [newOrder, ..._state.orders],
+          metrics: _service.calculateMetrics([newOrder, ..._state.orders]),
+        );
+        notifyListeners();
+      }
+    } catch (_) {
+      // Fallback: full reload on error
+      _debouncedLoad();
+    }
+  }
+
+  void _handleOrderBumped(Map<String, dynamic> data) {
+    final orderId = data['orderId'] as String?;
+    final status = data['status'] as String?;
+    if (orderId == null || status == null) return;
+
+    final updatedOrders = _state.orders.map((order) {
+      if (order.id != orderId) return order;
+
+      final newStatus = KitchenOrderStatus.fromName(status);
+      return order.copyWith(
+        status: newStatus,
+        items: order.items.map((item) {
+          // Update item statuses from the payload if provided
+          final items = data['items'] as List<dynamic>?;
+          if (items != null) {
+            final matchingItem = items.firstWhere(
+              (i) => i['id'] == item.id,
+              orElse: () => null,
+            );
+            if (matchingItem != null) {
+              return item.copyWith(
+                status: KitchenOrderStatus.fromName(matchingItem['status'] ?? 'preparing'),
+              );
+            }
+          }
+          return item;
+        }).toList(),
+      );
+    }).toList();
+
+    _state = _state.copyWith(
+      orders: updatedOrders,
+      metrics: _service.calculateMetrics(updatedOrders),
+    );
+    notifyListeners();
+  }
+
+  void _handleChefAssigned(Map<String, dynamic> data) {
+    final orderId = data['orderId'] as String?;
+    final chefId = data['chefId'] as String?;
+    final chefName = data['chefName'] as String?;
+    if (orderId == null) return;
+
+    final updatedOrders = _state.orders.map((order) {
+      if (order.id != orderId) return order;
+      return order.copyWith(
+        assignedChefId: chefId,
+        assignedChefName: chefName,
+      );
+    }).toList();
+
+    _state = _state.copyWith(orders: updatedOrders);
+    notifyListeners();
+  }
+
+  void _handlePriorityChanged(Map<String, dynamic> data) {
+    final orderId = data['orderId'] as String?;
+    final priority = data['priority'] as String?;
+    if (orderId == null || priority == null) return;
+
+    final newPriority = KitchenPriority.fromName(priority);
+    final updatedOrders = _state.orders.map((order) {
+      if (order.id != orderId) return order;
+      return order.copyWith(priority: newPriority);
+    }).toList();
+
+    _state = _state.copyWith(orders: updatedOrders);
+    notifyListeners();
+  }
+
+  void _handleItemStatusChanged(Map<String, dynamic> data) {
+    final orderId = data['orderId'] as String?;
+    final itemId = data['itemId'] as String?;
+    final status = data['status'] as String?;
+    if (orderId == null || itemId == null || status == null) return;
+
+    final newStatus = KitchenOrderStatus.fromName(status);
+    final updatedOrders = _state.orders.map((order) {
+      if (order.id != orderId) return order;
+      return order.copyWith(
+        items: order.items.map((item) {
+          if (item.id != itemId) return item;
+          return item.copyWith(
+            status: newStatus,
+            startedAt: data['startedAt'] != null
+                ? DateTime.tryParse(data['startedAt'])
+                : item.startedAt,
+            completedAt: data['completedAt'] != null
+                ? DateTime.tryParse(data['completedAt'])
+                : item.completedAt,
+          );
+        }).toList(),
+      );
+    }).toList();
+
+    _state = _state.copyWith(
+      orders: updatedOrders,
+      metrics: _service.calculateMetrics(updatedOrders),
+    );
+    notifyListeners();
+  }
+
+  /// Debounced full reload — coalesces rapid events into one fetch
+  void _debouncedLoad() {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      loadOrders();
+    });
+  }
+
   // ─── Order Loading ───
 
   Future<void> loadOrders({String? branchId}) async {
+    if (branchId != null) _currentBranchId = branchId;
     _state = _state.copyWith(isLoading: true, clearError: true);
     notifyListeners();
 
     try {
-      final orders = await _service.loadOrders(branchId: branchId);
+      final orders = await _service.loadOrders(branchId: branchId ?? _currentBranchId);
       final metrics = _service.calculateMetrics(orders);
       _state = _state.copyWith(orders: orders, isLoading: false, metrics: metrics);
     } catch (e) {
@@ -349,6 +523,7 @@ class KitchenProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     for (final sub in _subscriptions) {
       sub.cancel();
     }

@@ -306,6 +306,55 @@ class ApiClient {
     return _handleResponse(response);
   }
 
+  Future<Map<String, dynamic>> mergeTables(List<String> tableIds, {String? name, int? capacity}) async {
+    final body = <String, dynamic>{'tableIds': tableIds};
+    if (name != null) body['name'] = name;
+    if (capacity != null) body['capacity'] = capacity;
+    final response = await _authedPost('$_baseUrl/tables/merge', body);
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> splitTable(String tableId, {int? splitCount}) async {
+    final body = <String, dynamic>{};
+    if (splitCount != null) body['splitCount'] = splitCount;
+    final response = await _authedPost('$_baseUrl/tables/$tableId/split', body);
+    return _handleResponse(response);
+  }
+
+  Future<void> batchUpdateTableStatus(List<String> tableIds, String status) async {
+    final response = await _authedPatch('$_baseUrl/tables/batch-status', {
+      'tableIds': tableIds,
+      'status': status,
+    });
+    _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> getTableUtilization({String? branchId, String? period}) async {
+    final params = <String, String>{};
+    if (branchId != null) params['branchId'] = branchId;
+    if (period != null) params['period'] = period;
+    final uri = Uri.parse('$_baseUrl/tables/utilization').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response);
+  }
+
+  Future<void> updateTablePosition(String id, double posX, double posY, {String? section}) async {
+    final body = <String, dynamic>{'posX': posX, 'posY': posY};
+    if (section != null) body['section'] = section;
+    final response = await _authedPatch('$_baseUrl/tables/$id/position', body);
+    _handleResponse(response);
+  }
+
+  Future<void> batchUpdateTablePositions(List<Map<String, dynamic>> positions) async {
+    final response = await _authedPatch('$_baseUrl/tables/batch/positions', {'positions': positions});
+    _handleResponse(response);
+  }
+
+  Future<void> deleteTable(String id) async {
+    final response = await _authedDelete('$_baseUrl/tables/$id');
+    _handleResponse(response);
+  }
+
   // ─── Payments ───
 
   Future<Map<String, dynamic>> processPayment(String orderId, {required String method, required double amount, String? reference}) async {
@@ -752,6 +801,41 @@ class ApiClient {
     final uri = Uri.parse('$_baseUrl/reports/$type').replace(queryParameters: params);
     final response = await _authedGet(uri.toString());
     return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> getExecutiveSummary({String? branchId}) async {
+    final params = branchId != null ? '?branchId=$branchId' : '';
+    final response = await _authedGet('$_baseUrl/dashboard/executive-summary$params');
+    return _handleResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<List> getRevenueTrend({String? branchId, int days = 30}) async {
+    final params = <String, String>{'days': '$days'};
+    if (branchId != null) params['branchId'] = branchId;
+    final uri = Uri.parse('$_baseUrl/dashboard/revenue-trend').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response) as List;
+  }
+
+  Future<Map<String, dynamic>> getProfitability({String? branchId}) async {
+    final params = branchId != null ? '?branchId=$branchId' : '';
+    final response = await _authedGet('$_baseUrl/dashboard/profitability$params');
+    return _handleResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getDashboardHealth() async {
+    final response = await _authedGet('$_baseUrl/dashboard/health');
+    return _handleResponse(response) as Map<String, dynamic>;
+  }
+
+  Future<List> getDashboardSnapshots({String? branchId, String? from, String? to}) async {
+    final params = <String, String>{};
+    if (branchId != null) params['branchId'] = branchId;
+    if (from != null) params['from'] = from;
+    if (to != null) params['to'] = to;
+    final uri = Uri.parse('$_baseUrl/dashboard/snapshots').replace(queryParameters: params);
+    final response = await _authedGet(uri.toString());
+    return _handleResponse(response) as List;
   }
 
   Future<Map<String, dynamic>> exportReport(String type, String format, String startDate, String endDate) async {

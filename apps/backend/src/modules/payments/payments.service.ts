@@ -20,7 +20,7 @@ export class PaymentsService {
   private async validatePaymentTenant(paymentId: string, tenantId: string) {
     const payment = await this.prisma.payment.findFirst({
       where: { id: paymentId, branch: { tenantId } },
-      include: { order: true },
+      include: { order: true, branch: { select: { tenantId: true } } },
     });
     if (!payment) throw new NotFoundException('Payment not found or does not belong to this tenant');
     return payment;
@@ -85,13 +85,34 @@ export class PaymentsService {
     }
 
     if (shouldComplete) {
-      await this.eventBus.invoiceGenerated(order.tenantId || order.branchId, order.branchId, {
+      await this.eventBus.invoiceGenerated(order.tenantId, order.branchId, {
         orderId: order.id,
         orderNumber: order.orderNumber,
       });
     }
 
-    this.eventBus.emitToBranch(order.branchId, 'payment:received', {
+    // Emit payment:received to branch + customer order room
+    await this.eventBus.paymentReceived(order.tenantId, order.branchId, {
+      orderId,
+      orderNumber: order.orderNumber,
+      amount: data.amount,
+      method: data.method,
+      totalPaid: newTotalPaid,
+      remaining: Number(order.totalAmount) - newTotalPaid,
+    });
+
+    // Emit dining:bill-updated so split payment balances sync across all POS devices
+    await this.eventBus.diningBillUpdated(order.tenantId, order.branchId, {
+      orderId,
+      orderNumber: order.orderNumber,
+      totalAmount: order.totalAmount,
+      totalPaid: newTotalPaid,
+      remaining: Number(order.totalAmount) - newTotalPaid,
+      payment: { id: payment.id, method: data.method, amount: data.amount },
+    });
+
+    // Customer-facing tracking event
+    await this.eventBus.orderTrackingEvent(orderId, 'payment:received', {
       orderId,
       orderNumber: order.orderNumber,
       amount: data.amount,
@@ -154,12 +175,46 @@ export class PaymentsService {
       },
     });
 
-    this.eventBus.emitToBranch(payment.branchId, 'payment:refunded', {
+    await this.eventBus.paymentRefunded(payment.branch.tenantId, payment.branchId, {
       orderId: payment.orderId,
-      amount: payment.amount,
+      paymentId: payment.id,
+      amount: Number(payment.amount),
       method: payment.method,
+      orderNumber: payment.order.orderNumber,
     });
 
     return updated;
+  }
+
+  async failPayment(orderId: string, data: {
+    method: string;
+    amount: number;
+    reason: string;
+    reference?: string;
+  }, tenantId: string) {
+    const order = await this.validateOrderTenant(orderId, tenantId);
+
+    const payment = await this.prisma.payment.create({
+      data: {
+        orderId,
+        tenantId,
+        branchId: order.branchId,
+        method: data.method as any,
+        amount: data.amount,
+        reference: data.reference || `PAY-FAIL-${Date.now()}`,
+        status: 'FAILED',
+      },
+    });
+
+    await this.eventBus.paymentFailed(order.tenantId, order.branchId, {
+      orderId,
+      orderNumber: order.orderNumber,
+      paymentId: payment.id,
+      amount: data.amount,
+      method: data.method,
+      reason: data.reason,
+    });
+
+    return payment;
   }
 }

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EventBusService } from '../../common/event-bus/event-bus.service';
 import { CreateStaffDto} from './dto/create-staff.dto';
 import { UpdateStaffDto } from './dto/update-staff.dto';
 import { CreateShiftDto } from './dto/create-shift.dto';
@@ -11,7 +12,10 @@ import { ProcessPayrollDto } from './dto/process-payroll.dto';
 
 @Injectable()
 export class StaffService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private eventBus: EventBusService,
+  ) {}
 
   private async validateStaffTenant(id: string, tenantId: string) {
     const staff = await this.prisma.staff.findFirst({
@@ -97,23 +101,41 @@ export class StaffService {
       }
     }
 
-    return this.prisma.staff.create({
+    const staff = await this.prisma.staff.create({
       data: { branchId, tenantId, ...dto, status: (dto as any).status || 'ACTIVE' },
       include: {
         role: { select: { id: true, name: true } },
       },
     });
+
+    this.eventBus.staffUpdated(tenantId, branchId, {
+      id: staff.id,
+      name: staff.name,
+      action: 'created',
+      roleId: staff.roleId,
+    });
+
+    return staff;
   }
 
   async updateStaff(id: string, dto: UpdateStaffDto, tenantId: string) {
     await this.validateStaffTenant(id, tenantId);
-    return this.prisma.staff.update({
+    const updated = await this.prisma.staff.update({
       where: { id },
       data: dto,
       include: {
         role: { select: { id: true, name: true } },
+        branch: { select: { id: true, tenantId: true } },
       },
     });
+
+    this.eventBus.staffUpdated(tenantId, updated.branchId, {
+      id: updated.id,
+      name: updated.name,
+      action: 'updated',
+    });
+
+    return updated;
   }
 
   async removeStaff(id: string, tenantId: string) {
@@ -166,17 +188,27 @@ export class StaffService {
     await this.validateStaffTenant(staffId, tenantId);
     await this.validateShiftTenant(shiftId, tenantId);
     const shiftDate = new Date(date);
-    return this.prisma.staffShift.create({
+    const assignment = await this.prisma.staffShift.create({
       data: {
         staffId,
         shiftId,
         date: shiftDate,
       },
       include: {
-        staff: { select: { id: true, name: true } },
+        staff: { select: { id: true, name: true, branchId: true } },
         shift: { select: { id: true, name: true, startTime: true, endTime: true } },
       },
     });
+
+    this.eventBus.shiftAssigned(tenantId, assignment.staff.branchId, {
+      staffId,
+      staffName: assignment.staff.name,
+      shiftId,
+      shiftName: assignment.shift.name,
+      date: assignment.date,
+    });
+
+    return assignment;
   }
 
   async getSchedule(branchId: string, date: string, tenantId: string) {
@@ -213,15 +245,24 @@ export class StaffService {
       throw new BadRequestException('Already clocked in today');
     }
 
-    return this.prisma.attendance.create({
+    const attendance = await this.prisma.attendance.create({
       data: {
         staffId,
         date: today,
         checkIn: new Date(),
         status: 'PRESENT',
       },
-      include: { staff: { select: { id: true, name: true } } },
+      include: { staff: { select: { id: true, name: true, branchId: true } } },
     });
+
+    this.eventBus.attendanceRecorded(tenantId, attendance.staff.branchId, {
+      staffId,
+      staffName: attendance.staff.name,
+      action: 'clock_in',
+      checkIn: attendance.checkIn,
+    });
+
+    return attendance;
   }
 
   async clockOut(staffId: string, tenantId: string) {
@@ -231,6 +272,7 @@ export class StaffService {
 
     const attendance = await this.prisma.attendance.findFirst({
       where: { staffId, date: today },
+      include: { staff: { select: { id: true, name: true, branchId: true } } },
     });
 
     if (!attendance) {
@@ -240,10 +282,20 @@ export class StaffService {
       throw new BadRequestException('Already clocked out today');
     }
 
-    return this.prisma.attendance.update({
+    const updated = await this.prisma.attendance.update({
       where: { id: attendance.id },
       data: { checkOut: new Date() },
     });
+
+    this.eventBus.attendanceRecorded(tenantId, attendance.staff.branchId, {
+      staffId,
+      staffName: attendance.staff.name,
+      action: 'clock_out',
+      checkIn: attendance.checkIn,
+      checkOut: updated.checkOut,
+    });
+
+    return updated;
   }
 
   async getTodayAttendance(branchId: string, tenantId: string) {

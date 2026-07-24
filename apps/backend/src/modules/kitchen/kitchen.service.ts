@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EventBusService } from '../../common/event-bus/event-bus.service';
 
@@ -8,6 +8,52 @@ export class KitchenService {
     private prisma: PrismaService,
     private eventBus: EventBusService,
   ) {}
+
+  // ── Station Management ──
+
+  async getStations(branchId: string) {
+    return this.prisma.kitchenStation.findMany({
+      where: { branchId, isActive: true },
+      orderBy: { sortOrder: 'asc' },
+    });
+  }
+
+  async createStation(data: { branchId: string; tenantId: string; name: string; displayName?: string; sortOrder?: number; maxConcurrentOrders?: number; color?: string }) {
+    return this.prisma.kitchenStation.create({
+      data: {
+        branchId: data.branchId,
+        tenantId: data.tenantId,
+        name: data.name,
+        displayName: data.displayName || data.name,
+        sortOrder: data.sortOrder ?? 0,
+        maxConcurrentOrders: data.maxConcurrentOrders ?? 10,
+        color: data.color,
+      },
+    });
+  }
+
+  async updateStation(id: string, data: { name?: string; displayName?: string; sortOrder?: number; isActive?: boolean; maxConcurrentOrders?: number; color?: string }) {
+    const station = await this.prisma.kitchenStation.findUnique({ where: { id } });
+    if (!station) throw new NotFoundException('Kitchen station not found');
+
+    return this.prisma.kitchenStation.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async deleteStation(id: string) {
+    const station = await this.prisma.kitchenStation.findUnique({ where: { id } });
+    if (!station) throw new NotFoundException('Kitchen station not found');
+
+    // Soft-delete by deactivating
+    return this.prisma.kitchenStation.update({
+      where: { id },
+      data: { isActive: false },
+    });
+  }
+
+  // ── Order Queries ──
 
   async getActiveOrders(branchId: string) {
     return this.prisma.order.findMany({
@@ -45,6 +91,56 @@ export class KitchenService {
       },
       orderBy: { updatedAt: 'desc' },
     });
+  }
+
+  // ── Chef Assignment ──
+
+  async assignChef(orderId: string, chefId: string, chefName: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { table: { select: { number: true } } },
+    });
+    if (!order) throw new NotFoundException('Order not found');
+
+    const updated = await this.prisma.order.update({
+      where: { id: orderId },
+      data: { assignedChefId: chefId, assignedChefName: chefName },
+    });
+
+    this.eventBus.kitchenOrderAssigned(order.tenantId, order.branchId, {
+      orderId: updated.id,
+      orderNumber: updated.orderNumber,
+      chefId,
+      chefName,
+      tableNumber: order.table?.number,
+    });
+
+    return updated;
+  }
+
+  // ── Priority Management ──
+
+  async updatePriority(orderId: string, priority: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { table: { select: { number: true } } },
+    });
+    if (!order) throw new NotFoundException('Order not found');
+
+    const updated = await this.prisma.order.update({
+      where: { id: orderId },
+      data: { priority: priority as any },
+    });
+
+    this.eventBus.kitchenPriorityChanged(order.tenantId, order.branchId, {
+      orderId: updated.id,
+      orderNumber: updated.orderNumber,
+      priority: updated.priority,
+      previousPriority: order.priority,
+      tableNumber: order.table?.number,
+    });
+
+    return updated;
   }
 
   async updateOrderStatus(id: string, status: string, branchId?: string) {
@@ -134,6 +230,21 @@ export class KitchenService {
       });
     }
 
+    // Emit kitchen-specific bump event for KDS
+    this.eventBus.kitchenOrderBumped(order.tenantId, broadcastBranch, {
+      orderId: updated.id,
+      orderNumber: updated.orderNumber,
+      status: updated.status,
+      previousStatus: order.status,
+      tableNumber: updated.table?.number,
+      items: updated.items.map(i => ({
+        id: i.id,
+        name: i.name,
+        quantity: i.quantity,
+        status: i.status,
+      })),
+    });
+
     return updated;
   }
 
@@ -141,14 +252,22 @@ export class KitchenService {
     const item = await this.prisma.orderItem.findFirst({
       where: { id: itemId, orderId },
       include: {
-        order: { select: { id: true, branchId: true, orderNumber: true } },
+        order: { select: { id: true, branchId: true, orderNumber: true, tenantId: true } },
       },
     });
     if (!item) throw new NotFoundException('Order item not found');
 
+    // Set timestamps based on status transition
+    const updateData: Record<string, any> = { status: status as any };
+    if (status === 'PREPARING' && !item.startedAt) {
+      updateData.startedAt = new Date();
+    } else if (status === 'READY' && !item.completedAt) {
+      updateData.completedAt = new Date();
+    }
+
     const updated = await this.prisma.orderItem.update({
       where: { id: itemId },
-      data: { status: status as any },
+      data: updateData,
     });
 
     const payload = {
@@ -158,6 +277,8 @@ export class KitchenService {
       itemName: item.name,
       status,
       quantity: item.quantity,
+      startedAt: updated.startedAt,
+      completedAt: updated.completedAt,
     };
 
     // Emit to staff devices (branch room)
@@ -165,6 +286,9 @@ export class KitchenService {
 
     // Emit to customer tracking page (order room on /public namespace)
     this.eventBus.orderTrackingEvent(orderId, 'item:status-changed', payload);
+
+    // Emit kitchen-specific item bump event
+    this.eventBus.itemStatusChanged(item.order.tenantId, item.order.branchId, payload);
 
     return updated;
   }

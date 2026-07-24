@@ -583,6 +583,17 @@ export const api = {
     return api.getOrder(orderId);
   },
 
+  // ── Delivery Tracking ──
+
+  async getDeliveryByOrder(orderId: string): Promise<any | null> {
+    try {
+      const data = await apiClient.get<any>(`delivery/track/${orderId}`);
+      return data;
+    } catch {
+      return null;
+    }
+  },
+
   // ── Reservations ──
 
   async createReservation(data: {

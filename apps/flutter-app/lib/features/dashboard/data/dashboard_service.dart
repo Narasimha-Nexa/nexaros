@@ -29,6 +29,8 @@ class DashboardService {
         _api.getFinanceOverview(startDate: s, endDate: e),
         _api.getNotifications(limit: 20),
         _api.getProfile(),
+        _api.getExecutiveSummary(branchId: b).catchError((_) => <String, dynamic>{}),
+        _api.getProfitability(branchId: b).catchError((_) => <String, dynamic>{}),
       ]);
 
       return _build(
@@ -45,6 +47,8 @@ class DashboardService {
         financeOverview: r[10] as Map<String, dynamic>,
         notifications: r[11] as List,
         profile: r[12] as Map<String, dynamic>,
+        executiveSummary: r[13] as Map<String, dynamic>,
+        profitability: r[14] as Map<String, dynamic>,
         filter: filter,
       );
     } catch (e) {
@@ -66,6 +70,8 @@ class DashboardService {
     required Map<String, dynamic> financeOverview,
     required List notifications,
     required Map<String, dynamic> profile,
+    required Map<String, dynamic> executiveSummary,
+    required Map<String, dynamic> profitability,
     required DashboardFilter filter,
   }) {
     final totalRevenue = (stats['totalRevenue'] as num?)?.toDouble() ?? 0;
@@ -101,16 +107,23 @@ class DashboardService {
     );
 
     final kpis = _buildKpis(
-      totalRevenue: totalRevenue, totalOrders: totalOrders, avgOrder: avgOrder,
-      pendingOrders: pendingOrders, completedOrders: completedOrders,
-      cancelledOrders: cancelledOrders, customerAnalytics: customerAnalytics,
-      financeOverview: financeOverview, tableCount: tables.length,
-      tables: tables, pendingPayments: (financeOverview['outstanding'] as num?)?.toDouble() ?? 0,
+      totalRevenue: executiveSummary['todayRevenue'] as double? ?? totalRevenue,
+      totalOrders: executiveSummary['todayOrders'] as int? ?? totalOrders,
+      avgOrder: executiveSummary['aov'] as double? ?? avgOrder,
+      pendingOrders: pendingOrders,
+      completedOrders: completedOrders,
+      cancelledOrders: cancelledOrders,
+      customerAnalytics: customerAnalytics,
+      financeOverview: financeOverview,
+      tableCount: tables.length,
+      tables: tables,
+      pendingPayments: (financeOverview['outstanding'] as num?)?.toDouble() ?? 0,
       refunds: (financeOverview['refunds'] as num?)?.toDouble() ?? 0,
       discounts: (financeOverview['discounts'] as num?)?.toDouble() ?? 0,
       tax: (financeOverview['totalTax'] as num?)?.toDouble() ?? 0,
-      expenses: (financeOverview['totalExpenses'] as num?)?.toDouble() ?? 0,
-      profit: totalRevenue - ((financeOverview['totalExpenses'] as num?)?.toDouble() ?? 0),
+      expenses: profitability['expenses'] as double? ?? (financeOverview['totalExpenses'] as num?)?.toDouble() ?? 0,
+      profit: profitability['profit'] as double? ?? (totalRevenue - ((financeOverview['totalExpenses'] as num?)?.toDouble() ?? 0)),
+      profitMargin: profitability['margin'] as double? ?? 0,
       invValue: (inventoryAnalytics['totalValue'] as num?)?.toDouble() ?? 0,
       foodCost: (inventoryAnalytics['foodCost'] as num?)?.toDouble() ?? 0,
       laborCost: (staffAnalytics['laborCost'] as num?)?.toDouble() ?? 0,
@@ -171,6 +184,7 @@ class DashboardService {
     required int tableCount, required List tables,
     required double pendingPayments, required double refunds, required double discounts,
     required double tax, required double expenses, required double profit,
+    double profitMargin = 0,
     required double invValue, required double foodCost, required double laborCost,
     required int reservations, required int deliveryOrders,
     required int takeawayOrders, required int dineInOrders,
@@ -196,6 +210,7 @@ class DashboardService {
       DashboardKpi(id: 'tables', label: 'Table Occupancy', value: '$occupied/$tableCount', icon: Icons.table_restaurant, color: const Color(0xFF06B6D4), category: 'operations'),
       DashboardKpi(id: 'reservations', label: 'Reservations', value: '$reservations', icon: Icons.event_seat, color: const Color(0xFF8B5CF6), category: 'operations'),
       DashboardKpi(id: 'profit', label: 'Net Profit', value: '₹${profit.toStringAsFixed(0)}', icon: Icons.trending_up, color: profit >= 0 ? const Color(0xFF10B981) : const Color(0xFFEF4444), category: 'finance'),
+      DashboardKpi(id: 'profit_margin', label: 'Profit Margin', value: '${profitMargin.toStringAsFixed(1)}%', icon: Icons.percent, color: profitMargin >= 15 ? const Color(0xFF10B981) : profitMargin >= 5 ? const Color(0xFFF59E0B) : const Color(0xFFEF4444), category: 'finance'),
       DashboardKpi(id: 'expenses', label: 'Expenses', value: '₹${expenses.toStringAsFixed(0)}', icon: Icons.trending_down, color: const Color(0xFFEF4444), category: 'finance'),
       DashboardKpi(id: 'tax', label: 'Tax (GST)', value: '₹${tax.toStringAsFixed(0)}', icon: Icons.receipt, color: const Color(0xFF6366F1), category: 'finance'),
       DashboardKpi(id: 'refunds', label: 'Refunds', value: '₹${refunds.toStringAsFixed(0)}', icon: Icons.undo, color: const Color(0xFFF59E0B), category: 'finance'),

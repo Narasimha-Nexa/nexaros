@@ -209,7 +209,7 @@ final inventoryProvider = ChangeNotifierProvider<InventoryProvider>((ref) {
 final kitchenProvider = ChangeNotifierProvider<KitchenProvider>((ref) {
   final api = ref.watch(apiClientProvider);
   final appState = ref.watch(appStateProvider);
-  final provider = KitchenProvider(api, appState.eventBus);
+  final provider = KitchenProvider(api, appState.eventBus, appState.socket);
   ref.onDispose(() => provider.dispose());
   return provider;
 });

@@ -3,9 +3,10 @@ import { InventoryService } from './inventory.service';
 import { InventoryController } from './inventory.controller';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
+import { EventBusModule } from '../../common/event-bus/event-bus.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AuthModule, EventBusModule],
   controllers: [InventoryController],
   providers: [InventoryService],
   exports: [InventoryService],

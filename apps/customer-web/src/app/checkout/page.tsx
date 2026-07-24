@@ -73,6 +73,8 @@ export default function CheckoutPage() {
 
       if (paymentMethod === 'online' && order) {
         const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+
+        // 1. Create Razorpay order
         const orderRes = await fetch(`${API_BASE}/billing/create-order`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -84,14 +86,39 @@ export default function CheckoutPage() {
           if (razorpayOrderId) {
             const { openRazorpayCheckout } = await import('@/lib/razorpay');
             const loaded = await import('@/lib/razorpay').then(m => m.loadRazorpayScript());
+
             if (loaded) {
-              await openRazorpayCheckout({
+              // 2. Open Razorpay and await the payment result
+              const paymentResponse = await openRazorpayCheckout({
                 amount: getTotal(),
                 name: 'NexaROS',
                 description: `Order #${order.orderNumber || order.id}`,
                 orderId: razorpayOrderId,
                 prefill: { name: customerName, email: customerEmail, contact: customerPhone },
                 theme: { color: '#E51A24' },
+              });
+
+              if (!paymentResponse) {
+                // User dismissed Razorpay — record failure
+                await fetch(`${API_BASE}/payments/orders/${order.id}/fail`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ method: 'ONLINE', amount: getTotal(), reason: 'Payment cancelled by user' }),
+                });
+                alert('Payment was cancelled. You can retry from your order history.');
+                setPlacing(false);
+                return;
+              }
+
+              // 3. Record the successful payment via backend
+              await fetch(`${API_BASE}/payments/orders/${order.id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  method: 'ONLINE',
+                  amount: getTotal(),
+                  reference: paymentResponse.razorpay_payment_id,
+                }),
               });
             }
           }

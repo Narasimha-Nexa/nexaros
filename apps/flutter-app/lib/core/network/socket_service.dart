@@ -4,7 +4,7 @@ import 'package:socket_io_client/socket_io_client.dart';
 /// Connection state for the Socket.IO service.
 enum SocketConnectionState { disconnected, connecting, connected, reconnecting }
 
-/// Socket.IO service with presence, typing indicators, and heartbeat.
+/// Socket.IO service with presence, typing indicators, heartbeat, and kitchen real-time events.
 class SocketService {
   Socket? _socket;
   String? _baseUrl;
@@ -19,6 +19,18 @@ class SocketService {
   final _presenceController = StreamController<Map<String, dynamic>>.broadcast();
   final _typingController = StreamController<Map<String, dynamic>>.broadcast();
 
+  // ── Kitchen Event Streams ──
+  final _kitchenOrderCreatedController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _kitchenOrderBumpedController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _kitchenOrderAssignedController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _kitchenPriorityChangedController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _kitchenItemStatusController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
   SocketConnectionState _state = SocketConnectionState.disconnected;
   final Map<String, bool> _presence = {};
   final Set<String> _typingUsers = {};
@@ -31,6 +43,18 @@ class SocketService {
   SocketConnectionState get currentState => _state;
   Map<String, bool> get presence => Map.unmodifiable(_presence);
   Set<String> get typingUsers => Set.unmodifiable(_typingUsers);
+
+  // ── Kitchen Event Accessors ──
+  Stream<Map<String, dynamic>> get onKitchenOrderCreated =>
+      _kitchenOrderCreatedController.stream;
+  Stream<Map<String, dynamic>> get onKitchenOrderBumped =>
+      _kitchenOrderBumpedController.stream;
+  Stream<Map<String, dynamic>> get onKitchenOrderAssigned =>
+      _kitchenOrderAssignedController.stream;
+  Stream<Map<String, dynamic>> get onKitchenPriorityChanged =>
+      _kitchenPriorityChangedController.stream;
+  Stream<Map<String, dynamic>> get onKitchenItemStatus =>
+      _kitchenItemStatusController.stream;
 
   void connect(String baseUrl, String token) {
     _baseUrl = baseUrl;
@@ -115,6 +139,43 @@ class SocketService {
     _socket!.on('pong', (_) {
       // Heartbeat acknowledged
     });
+
+    // ── Kitchen Real-Time Event Listeners ──
+    _socket!.on('kitchen:order-created', (data) {
+      if (data is Map<String, dynamic>) {
+        _kitchenOrderCreatedController.add(data);
+      }
+    });
+
+    _socket!.on('kitchen:order-bumped', (data) {
+      if (data is Map<String, dynamic>) {
+        _kitchenOrderBumpedController.add(data);
+      }
+    });
+
+    _socket!.on('kitchen:order-assigned', (data) {
+      if (data is Map<String, dynamic>) {
+        _kitchenOrderAssignedController.add(data);
+      }
+    });
+
+    _socket!.on('kitchen:priority-changed', (data) {
+      if (data is Map<String, dynamic>) {
+        _kitchenPriorityChangedController.add(data);
+      }
+    });
+
+    _socket!.on('item:status-changed', (data) {
+      if (data is Map<String, dynamic>) {
+        _kitchenItemStatusController.add(data);
+      }
+    });
+
+    _socket!.on('order:status-changed', (data) {
+      if (data is Map<String, dynamic>) {
+        _kitchenOrderBumpedController.add(data);
+      }
+    });
   }
 
   void _setState(SocketConnectionState newState) {
@@ -183,5 +244,10 @@ class SocketService {
     _connectionStateController.close();
     _presenceController.close();
     _typingController.close();
+    _kitchenOrderCreatedController.close();
+    _kitchenOrderBumpedController.close();
+    _kitchenOrderAssignedController.close();
+    _kitchenPriorityChangedController.close();
+    _kitchenItemStatusController.close();
   }
 }

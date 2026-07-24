@@ -153,6 +153,7 @@ model Tenant {
   orders               Order[]
   deliveryPartners     DeliveryPartner[]
   wallets              Wallet[]
+  kitchenStations      KitchenStation[]
   loyaltyPoints        LoyaltyPoints[]
   tenantFeatureFlags   TenantFeatureFlag[]
   leaveRequests        LeaveRequest[]
@@ -266,6 +267,7 @@ model Branch {
   announcements             Announcement[]
   galleryImages             GalleryImage[]
   diningSessions            DiningSession[]
+  kitchenStations           KitchenStation[]
 
   branchSnapshots          BranchAnalyticsSnapshot[]
 
@@ -585,6 +587,17 @@ model RestaurantTable {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
+  // Floor plan positioning
+  section         String?
+  posX            Float?
+  posY            Float?
+
+  // Occupancy tracking
+  occupiedSince   DateTime?
+
+  // Merge tracking
+  mergedFrom      Json?
+
   orders       Order[]
   reservations Reservation[]
   diningSessions DiningSession[] @relation("DiningSessionTable")
@@ -600,6 +613,56 @@ enum TableStatus {
   CLEANING
   ORDER_READY
   BILLING
+}
+
+// ─────────────────────────────────────────────
+// KITCHEN STATIONS
+// ─────────────────────────────────────────────
+
+model KitchenStation {
+  id                  String   @id @default(cuid())
+  branchId            String
+  branch              Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  tenantId            String
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name                String
+  displayName         String?
+  sortOrder           Int      @default(0)
+  isActive            Boolean  @default(true)
+  maxConcurrentOrders Int      @default(10)
+  color               String?
+  createdBy           String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  orderItems          OrderItem[]
+
+  @@unique([branchId, name])
+  @@index([branchId])
+  @@index([tenantId])
+  @@map("kitchen_stations")
+}
+
+enum KitchenPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+  VIP
+
+  @@map("kitchen_priorities")
+}
+
+enum CourseType {
+  APPETIZER
+  STARTER
+  MAIN_COURSE
+  SIDE
+  DESSERT
+  BEVERAGE
+  CUSTOM
+
+  @@map("course_types")
 }
 
 // ─────────────────────────────────────────────
@@ -633,6 +696,11 @@ model Order {
   channelData          Json?
   channelRawPayloadRef String?
   needsManualReview    Boolean      @default(false)
+
+  // ── Kitchen Fields ──
+  priority          KitchenPriority @default(NORMAL)
+  assignedChefId    String?
+  assignedChefName  String?
 
   customerName   String?
   customerPhone  String?
@@ -725,9 +793,19 @@ model OrderItem {
   createdBy  String?
   updatedBy  String?
 
+  // ── Kitchen Fields ──
+  stationId  String?
+  station    KitchenStation? @relation(fields: [stationId], references: [id], onDelete: SetNull)
+  chefId     String?
+  chefName   String?
+  courseType CourseType?
+  startedAt  DateTime?
+  completedAt DateTime?
+
   addOns OrderItemAddOn[]
 
   @@index([orderId])
+  @@index([stationId])
   @@map("order_items")
 }
 
@@ -2361,8 +2439,10 @@ model Delivery {
 enum DeliveryStatus {
   PENDING
   ASSIGNED
+  DISPATCHED
   PICKED_UP
   IN_TRANSIT
+  ARRIVING
   DELIVERED
   FAILED
   CANCELLED

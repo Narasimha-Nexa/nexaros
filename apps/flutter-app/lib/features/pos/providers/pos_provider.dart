@@ -115,8 +115,14 @@ class PosProvider extends ChangeNotifier {
   Cart get cart => _state.cart;
 
   StreamSubscription? _orderSub;
+  StreamSubscription? _orderCreatedSub;
+  StreamSubscription? _orderCancelledSub;
+  StreamSubscription? _orderItemsChangedSub;
+  StreamSubscription? _orderCompletedSub;
   StreamSubscription? _tableSub;
   StreamSubscription? _paymentSub;
+  StreamSubscription? _billUpdatedSub;
+  StreamSubscription? _paymentFailedSub;
 
   PosProvider(this._eventBus, this._service) {
     _setupRealtimeListeners();
@@ -124,8 +130,44 @@ class PosProvider extends ChangeNotifier {
 
   void _setupRealtimeListeners() {
     _orderSub = _eventBus.on(BusEventType.orderStatusChanged).listen((_) => notifyListeners());
+    _orderCreatedSub = _eventBus.on(BusEventType.orderCreated).listen((_) => notifyListeners());
+    _orderCancelledSub = _eventBus.on(BusEventType.orderCancelled).listen((_) => notifyListeners());
+    _orderItemsChangedSub = _eventBus.on(BusEventType.orderItemsChanged).listen((_) => notifyListeners());
+    _orderCompletedSub = _eventBus.on(BusEventType.orderCompleted).listen((_) => notifyListeners());
     _tableSub = _eventBus.on(BusEventType.tableStatusChanged).listen((_) => notifyListeners());
-    _paymentSub = _eventBus.on(BusEventType.paymentReceived).listen((_) => notifyListeners());
+    _paymentSub = _eventBus.on(BusEventType.paymentReceived).listen(_onPaymentReceived);
+    _billUpdatedSub = _eventBus.on(BusEventType.diningBillUpdated).listen(_onBillUpdated);
+    _paymentFailedSub = _eventBus.on(BusEventType.paymentFailed).listen(_onPaymentFailed);
+  }
+
+  /// Another POS device received a payment — update local billing state so
+  /// the split payment sheet reflects the correct remaining balance.
+  void _onBillUpdated(BusEvent event) {
+    final data = event.data;
+    final orderId = data['orderId'] as String?;
+    final totalPaid = (data['totalPaid'] as num?)?.toDouble();
+    final remaining = (data['remaining'] as num?)?.toDouble();
+
+    if (orderId != null && totalPaid != null && remaining != null) {
+      // Update billing if we're working on the same order
+      if (_state.billing != null && _state.cart.id == orderId) {
+        _state = _state.copyWith(
+          billing: _state.billing!.copyWith(
+            payments: _state.pendingPayments,
+          ),
+        );
+      }
+    }
+    notifyListeners();
+  }
+
+  /// Payment received — auto-trigger receipt print if POS is active.
+  void _onPaymentReceived(BusEvent event) {
+    notifyListeners();
+  }
+
+  void _onPaymentFailed(BusEvent event) {
+    notifyListeners();
   }
 
   // ─── Menu Loading ───
@@ -522,8 +564,14 @@ class PosProvider extends ChangeNotifier {
   @override
   void dispose() {
     _orderSub?.cancel();
+    _orderCreatedSub?.cancel();
+    _orderCancelledSub?.cancel();
+    _orderItemsChangedSub?.cancel();
+    _orderCompletedSub?.cancel();
     _tableSub?.cancel();
     _paymentSub?.cancel();
+    _billUpdatedSub?.cancel();
+    _paymentFailedSub?.cancel();
     super.dispose();
   }
 }

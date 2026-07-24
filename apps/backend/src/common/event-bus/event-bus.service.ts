@@ -71,6 +71,28 @@ export class EventBusService {
     this.gateway.emitToBranch(branchId, 'kot:ready', data);
   }
 
+  async orderCancelled(tenantId: string, branchId: string, data: Record<string, unknown>) {
+    this.gateway.emitToBranch(branchId, 'order:cancelled', data);
+    await this.fireWebhook(tenantId, 'order.cancelled', { ...data, branchId });
+    await this.fireDomainEvent(tenantId, 'order.cancelled', { ...data, branchId });
+  }
+
+  async orderModified(tenantId: string, branchId: string, data: Record<string, unknown>) {
+    this.gateway.emitToBranch(branchId, 'order:modified', data);
+    await this.fireWebhook(tenantId, 'order.modified', { ...data, branchId });
+  }
+
+  async orderItemsChanged(tenantId: string, branchId: string, data: Record<string, unknown>) {
+    this.gateway.emitToBranch(branchId, 'order:items-changed', data);
+    await this.fireWebhook(tenantId, 'order.items_changed', { ...data, branchId });
+  }
+
+  async orderCompleted(tenantId: string, branchId: string, data: Record<string, unknown>) {
+    this.gateway.emitToBranch(branchId, 'order:completed', data);
+    await this.fireWebhook(tenantId, 'order.completed', { ...data, branchId });
+    await this.fireDomainEvent(tenantId, 'order.completed', { ...data, branchId });
+  }
+
   // ── Menu ──
 
   async menuUpdated(tenantId: string, data: Record<string, unknown>) {
@@ -84,14 +106,37 @@ export class EventBusService {
     await this.fireWebhook(tenantId, 'table.status_changed', { ...data, branchId });
   }
 
+  async tableMerged(tenantId: string, branchId: string, data: Record<string, unknown>) {
+    this.gateway.emitToBranch(branchId, 'table:merged', data);
+    await this.fireWebhook(tenantId, 'table.merged', { ...data, branchId });
+  }
+
+  async tableSplit(tenantId: string, branchId: string, data: Record<string, unknown>) {
+    this.gateway.emitToBranch(branchId, 'table:split', data);
+    await this.fireWebhook(tenantId, 'table.split', { ...data, branchId });
+  }
+
+  async tableBatchUpdated(tenantId: string, branchId: string, data: Record<string, unknown>) {
+    this.gateway.emitToBranch(branchId, 'table:batch-updated', data);
+    await this.fireWebhook(tenantId, 'table.batch_updated', { ...data, branchId });
+  }
+
   async paymentReceived(tenantId: string, branchId: string, data: Record<string, unknown>) {
     this.gateway.emitToBranch(branchId, 'payment:received', data);
     await this.fireWebhook(tenantId, 'payment.received', { ...data, branchId });
+    await this.fireDomainEvent(tenantId, 'payment.received', { ...data, branchId });
+  }
+
+  async paymentFailed(tenantId: string, branchId: string, data: Record<string, unknown>) {
+    this.gateway.emitToBranch(branchId, 'payment:failed', data);
+    await this.fireWebhook(tenantId, 'payment.failed', { ...data, branchId });
+    await this.fireDomainEvent(tenantId, 'payment.failed', { ...data, branchId });
   }
 
   async paymentRefunded(tenantId: string, branchId: string, data: Record<string, unknown>) {
     this.gateway.emitToBranch(branchId, 'payment:refunded', data);
     await this.fireWebhook(tenantId, 'payment.refunded', { ...data, branchId });
+    await this.fireDomainEvent(tenantId, 'payment.refunded', { ...data, branchId });
   }
 
   async reservationCreated(tenantId: string, data: Record<string, unknown>) {
@@ -195,6 +240,33 @@ export class EventBusService {
     this.gateway.emitToBranch(branchId, 'item:status-changed', data);
   }
 
+  // ── Kitchen Real-Time Events ──
+
+  async kitchenOrderCreated(tenantId: string, branchId: string, data: Record<string, unknown>) {
+    this.gateway.emitToBranch(branchId, 'kitchen:order-created', data);
+    await this.fireWebhook(tenantId, 'kitchen.order.created', { ...data, branchId });
+  }
+
+  async kitchenOrderAssigned(tenantId: string, branchId: string, data: Record<string, unknown>) {
+    this.gateway.emitToBranch(branchId, 'kitchen:order-assigned', data);
+  }
+
+  async kitchenPriorityChanged(tenantId: string, branchId: string, data: Record<string, unknown>) {
+    this.gateway.emitToBranch(branchId, 'kitchen:priority-changed', data);
+  }
+
+  async kitchenOrderBumped(tenantId: string, branchId: string, data: Record<string, unknown>) {
+    this.gateway.emitToBranch(branchId, 'kitchen:order-bumped', data);
+  }
+
+  async kitchenOrderHeld(tenantId: string, branchId: string, data: Record<string, unknown>) {
+    this.gateway.emitToBranch(branchId, 'kitchen:order-held', data);
+  }
+
+  async kitchenOrderRecalled(tenantId: string, branchId: string, data: Record<string, unknown>) {
+    this.gateway.emitToBranch(branchId, 'kitchen:order-recalled', data);
+  }
+
   // ── Dining Sessions ──
 
   async diningSessionCreated(tenantId: string, branchId: string, data: Record<string, unknown>) {
@@ -221,11 +293,14 @@ export class EventBusService {
 
   async diningBillUpdated(tenantId: string, branchId: string, data: Record<string, unknown>) {
     this.gateway.emitToBranch(branchId, 'dining:bill-updated', data);
+    await this.fireWebhook(tenantId, 'dining.bill_updated', { ...data, branchId });
+    await this.fireDomainEvent(tenantId, 'dining.bill_updated', { ...data, branchId });
   }
 
   async diningPaymentReceived(tenantId: string, branchId: string, data: Record<string, unknown>) {
     this.gateway.emitToBranch(branchId, 'dining:payment-received', data);
     await this.paymentReceived(tenantId, branchId, data);
+    await this.fireWebhook(tenantId, 'dining.payment_received', { ...data, branchId });
   }
 
   async diningSessionSettled(tenantId: string, branchId: string, data: Record<string, unknown>) {
@@ -237,6 +312,16 @@ export class EventBusService {
 
   async orderTrackingEvent(orderId: string, event: string, data: Record<string, unknown>) {
     this.gateway.emitToOrder(orderId, event, data);
+  }
+
+  // ── Dashboard Real-Time Events ──
+
+  async dashboardStatsUpdated(tenantId: string, branchId: string, data: Record<string, unknown>) {
+    this.gateway.emitToBranch(branchId, 'dashboard:stats-updated', data);
+  }
+
+  async dashboardRefresh(tenantId: string, data: Record<string, unknown>) {
+    this.gateway.emitToTenant(tenantId, 'dashboard:refresh', data);
   }
 
   // ── Generic ──

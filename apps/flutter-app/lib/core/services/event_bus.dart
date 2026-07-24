@@ -9,9 +9,16 @@ enum BusEventType {
   orderUpdated,
   orderStatusChanged,
   orderReady,
+  orderCancelled,
+  orderItemsChanged,
+  orderCompleted,
   tableStatusChanged,
   paymentReceived,
+  paymentFailed,
   paymentRefunded,
+  diningBillUpdated,
+  diningPaymentReceived,
+  invoiceGenerated,
   reservationCreated,
   reservationUpdated,
   reservationDeleted,
@@ -32,6 +39,14 @@ enum BusEventType {
   customerDeleted,
   loyaltyUpdated,
   walletUpdated,
+  kitchenOrderCreated,
+  kitchenOrderBumped,
+  kitchenOrderAssigned,
+  kitchenPriorityChanged,
+  tableMerged,
+  tableSplit,
+  tableBatchUpdated,
+  dashboardRefresh,
 }
 
 /// A single event on the bus carries its type and the raw payload.
@@ -95,9 +110,16 @@ class EventBus {
     _register('order:updated', BusEventType.orderUpdated);
     _register('order:status-changed', BusEventType.orderStatusChanged);
     _register('order:ready', BusEventType.orderReady);
+    _register('order:cancelled', BusEventType.orderCancelled);
+    _register('order:items-changed', BusEventType.orderItemsChanged);
+    _register('order:completed', BusEventType.orderCompleted);
     _register('table:status-changed', BusEventType.tableStatusChanged);
     _register('payment:received', BusEventType.paymentReceived);
+    _register('payment:failed', BusEventType.paymentFailed);
     _register('payment:refunded', BusEventType.paymentRefunded);
+    _register('dining:bill-updated', BusEventType.diningBillUpdated);
+    _register('dining:payment-received', BusEventType.diningPaymentReceived);
+    _register('invoice:generated', BusEventType.invoiceGenerated);
     _register('reservation:created', BusEventType.reservationCreated);
     _register('reservation:updated', BusEventType.reservationUpdated);
     _register('reservation:deleted', BusEventType.reservationDeleted);
@@ -118,6 +140,14 @@ class EventBus {
     _register('crm:customer-deleted', BusEventType.customerDeleted);
     _register('crm:loyalty-updated', BusEventType.loyaltyUpdated);
     _register('crm:wallet-updated', BusEventType.walletUpdated);
+    _register('kitchen:order-created', BusEventType.kitchenOrderCreated);
+    _register('kitchen:order-bumped', BusEventType.kitchenOrderBumped);
+    _register('kitchen:order-assigned', BusEventType.kitchenOrderAssigned);
+    _register('kitchen:priority-changed', BusEventType.kitchenPriorityChanged);
+    _register('table:merged', BusEventType.tableMerged);
+    _register('table:split', BusEventType.tableSplit);
+    _register('table:batch-updated', BusEventType.tableBatchUpdated);
+    _register('dashboard:refresh', BusEventType.dashboardRefresh);
   }
 
   /// Register a single socket event → BusEventType mapping.

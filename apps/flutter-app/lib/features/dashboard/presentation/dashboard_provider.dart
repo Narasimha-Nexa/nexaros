@@ -16,7 +16,7 @@ class DashboardProvider extends ChangeNotifier {
   List<DashboardWidgetConfig> _widgetConfigs;
   bool _autoRefresh = true;
   Timer? _refreshTimer;
-  StreamSubscription<BusEvent>? _socketSubscription;
+  final List<StreamSubscription<BusEvent>> _socketSubscriptions = [];
   DashboardCacheService? _cache;
   bool _initialized = false;
 
@@ -91,22 +91,32 @@ class DashboardProvider extends ChangeNotifier {
   }
 
   void _subscribeToSocketEvents() {
-    _socketSubscription?.cancel();
+    for (final sub in _socketSubscriptions) {
+      sub.cancel();
+    }
+    _socketSubscriptions.clear();
     final eventBus = _eventBus;
     if (eventBus == null) return;
 
-    _socketSubscription = eventBus.on(BusEventType.orderCreated).listen((_) => _onRealtimeEvent('order'));
-    eventBus.on(BusEventType.orderStatusChanged).listen((_) => _onRealtimeEvent('order'));
-    eventBus.on(BusEventType.orderReady).listen((_) => _onRealtimeEvent('order'));
-    eventBus.on(BusEventType.tableStatusChanged).listen((_) => _onRealtimeEvent('table'));
-    eventBus.on(BusEventType.paymentReceived).listen((_) => _onRealtimeEvent('payment'));
-    eventBus.on(BusEventType.paymentRefunded).listen((_) => _onRealtimeEvent('payment'));
-    eventBus.on(BusEventType.itemStatusChanged).listen((_) => _onRealtimeEvent('kitchen'));
-    eventBus.on(BusEventType.inventoryUpdated).listen((_) => _onRealtimeEvent('inventory'));
-    eventBus.on(BusEventType.stockLow).listen((_) => _onRealtimeEvent('inventory'));
-    eventBus.on(BusEventType.notification).listen((_) => _onRealtimeEvent('notification'));
-    eventBus.on(BusEventType.staffUpdated).listen((_) => _onRealtimeEvent('staff'));
-    eventBus.on(BusEventType.deliveryStatusChanged).listen((_) => _onRealtimeEvent('delivery'));
+    _socketSubscriptions.add(eventBus.on(BusEventType.orderCreated).listen((_) => _onRealtimeEvent('order')));
+    _socketSubscriptions.add(eventBus.on(BusEventType.orderStatusChanged).listen((_) => _onRealtimeEvent('order')));
+    _socketSubscriptions.add(eventBus.on(BusEventType.orderReady).listen((_) => _onRealtimeEvent('order')));
+    _socketSubscriptions.add(eventBus.on(BusEventType.tableStatusChanged).listen((_) => _onRealtimeEvent('table')));
+    _socketSubscriptions.add(eventBus.on(BusEventType.paymentReceived).listen((_) => _onRealtimeEvent('payment')));
+    _socketSubscriptions.add(eventBus.on(BusEventType.paymentRefunded).listen((_) => _onRealtimeEvent('payment')));
+    _socketSubscriptions.add(eventBus.on(BusEventType.itemStatusChanged).listen((_) => _onRealtimeEvent('kitchen')));
+    _socketSubscriptions.add(eventBus.on(BusEventType.inventoryUpdated).listen((_) => _onRealtimeEvent('inventory')));
+    _socketSubscriptions.add(eventBus.on(BusEventType.stockLow).listen((_) => _onRealtimeEvent('inventory')));
+    _socketSubscriptions.add(eventBus.on(BusEventType.notification).listen((_) => _onRealtimeEvent('notification')));
+    _socketSubscriptions.add(eventBus.on(BusEventType.staffUpdated).listen((_) => _onRealtimeEvent('staff')));
+    _socketSubscriptions.add(eventBus.on(BusEventType.deliveryStatusChanged).listen((_) => _onRealtimeEvent('delivery')));
+    _socketSubscriptions.add(eventBus.on(BusEventType.dashboardRefresh).listen((_) => _onDashboardRefresh()));
+  }
+
+  void _onDashboardRefresh() {
+    _refreshTimer?.cancel();
+    load();
+    _setupAutoRefresh();
   }
 
   void _onRealtimeEvent(String category) {
@@ -278,7 +288,10 @@ class DashboardProvider extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _refreshTimer?.cancel();
-    _socketSubscription?.cancel();
+    for (final sub in _socketSubscriptions) {
+      sub.cancel();
+    }
+    _socketSubscriptions.clear();
     super.dispose();
   }
 }

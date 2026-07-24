@@ -21,17 +21,20 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [expiringSoon, setExpiringSoon] = useState<any[]>([]);
+  const [health, setHealth] = useState<any>(null);
   const { addToast } = useToastStore();
 
   const fetchDashboard = async () => {
     setLoading(true);
     try {
-      const [statsRes, expiringRes] = await Promise.all([
+      const [statsRes, expiringRes, healthRes] = await Promise.all([
         adminApi.getPlatformStats().catch(() => null),
         adminApi.getExpiringSoon(7).catch(() => null),
+        adminApi.getDashboardHealth().catch(() => null),
       ]);
       if (statsRes) setStats(statsRes);
       if (expiringRes) setExpiringSoon(expiringRes.data || expiringRes.subscriptions || []);
+      if (healthRes) setHealth(healthRes);
     } catch {          // Silently fail on initial load
     } finally {
       setLoading(false);
@@ -39,6 +42,13 @@ export default function DashboardPage() {
   };
 
   useEffect(() => { fetchDashboard(); }, []);
+
+  const systemHealth = [
+    { name: 'API Server', status: stats ? 'Operational' : 'Degraded', uptime: stats ? '99.98%' : '—' },
+    { name: 'Database', status: health?.database?.status === 'healthy' ? 'Operational' : 'Degraded', uptime: health?.database?.status === 'healthy' ? '99.99%' : '—' },
+    { name: 'Redis Cache', status: stats ? 'Operational' : 'Degraded', uptime: stats ? '100%' : '—' },
+    { name: 'Background Jobs', status: stats ? 'Operational' : 'Degraded', uptime: stats ? '99.9%' : '—' },
+  ];
 
   const totalRestaurants = stats?.tenants?.total || stats?.totalTenants || 0;
   const activeSubscriptions = stats?.subscriptions?.active || 0;
@@ -127,13 +137,6 @@ export default function DashboardPage() {
 
   // Recent activity from audit logs or stats
   const recentActivity = stats?.recentActivity || stats?.activity || [];
-
-  const systemHealth = [
-    { name: 'API Server', status: stats ? 'Operational' : 'Degraded', uptime: stats ? '99.98%' : '—' },
-    { name: 'Database', status: stats ? 'Operational' : 'Degraded', uptime: stats ? '99.99%' : '—' },
-    { name: 'Redis Cache', status: stats ? 'Operational' : 'Degraded', uptime: stats ? '100%' : '—' },
-    { name: 'Background Jobs', status: stats ? 'Operational' : 'Degraded', uptime: stats ? '99.9%' : '—' },
-  ];
 
   return (
     <div className="space-y-6">

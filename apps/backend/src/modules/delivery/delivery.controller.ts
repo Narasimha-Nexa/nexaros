@@ -27,32 +27,35 @@ export class DeliveryController {
 
   @Get('partners')
   @ApiOperation({ summary: 'List delivery partners' })
-  @ApiQuery({ name: 'tenantId', required: true })
-  @ApiQuery({ name: 'branchId', required: false })
-  findAllPartners(@Query('tenantId') tenantId: string, @Query('branchId') branchId?: string) {
+  @RequirePermissions('delivery:read')
+  findAllPartners(@CurrentTenant() tenantId: string, @Query('branchId') branchId?: string) {
     return this.deliveryService.findAllPartners(tenantId, branchId);
   }
 
   @Get('partners/:id')
   @ApiOperation({ summary: 'Get partner details' })
+  @RequirePermissions('delivery:read')
   findPartner(@Param('id') id: string, @CurrentTenant() tenantId: string) {
     return this.deliveryService.findPartner(id, tenantId);
   }
 
   @Put('partners/:id')
   @ApiOperation({ summary: 'Update delivery partner' })
+  @RequirePermissions('delivery:write')
   updatePartner(@Param('id') id: string, @CurrentTenant() tenantId: string, @Body() dto: UpdateDeliveryPartnerDto) {
     return this.deliveryService.updatePartner(id, tenantId, dto);
   }
 
   @Delete('partners/:id')
   @ApiOperation({ summary: 'Deactivate delivery partner' })
+  @RequirePermissions('delivery:delete')
   deletePartner(@Param('id') id: string, @CurrentTenant() tenantId: string) {
     return this.deliveryService.deletePartner(id, tenantId);
   }
 
   @Patch('partners/:id/location')
   @ApiOperation({ summary: 'Update partner live location' })
+  @RequirePermissions('delivery:write')
   updatePartnerLocation(@Param('id') id: string, @Body() body: { latitude: number; longitude: number }) {
     return this.deliveryService.updatePartnerLocation(id, body.latitude, body.longitude);
   }
@@ -68,12 +71,14 @@ export class DeliveryController {
 
   @Post('unassign')
   @ApiOperation({ summary: 'Unassign a delivery from partner' })
+  @RequirePermissions('delivery:write')
   unassignDelivery(@Body() body: { deliveryId: string }) {
     return this.deliveryService.unassignDelivery(body.deliveryId);
   }
 
   @Patch(':id/status')
   @ApiOperation({ summary: 'Update delivery status' })
+  @RequirePermissions('delivery:write')
   updateDeliveryStatus(
     @Param('id') id: string,
     @Body() body: { status: string; lat?: number; lng?: number },
@@ -87,6 +92,7 @@ export class DeliveryController {
 
   @Post(':id/location')
   @ApiOperation({ summary: 'Record GPS location for a delivery' })
+  @RequirePermissions('delivery:write')
   recordLocation(
     @Param('id') id: string,
     @Body() body: { latitude: number; longitude: number; speed?: number; accuracy?: number },
@@ -98,6 +104,7 @@ export class DeliveryController {
 
   @Get('active')
   @ApiOperation({ summary: 'Get active deliveries' })
+  @RequirePermissions('delivery:read')
   @ApiQuery({ name: 'branchId', required: false })
   getActiveDeliveries(@Query('branchId') branchId?: string) {
     return this.deliveryService.getActiveDeliveries(branchId);
@@ -105,6 +112,7 @@ export class DeliveryController {
 
   @Get('history')
   @ApiOperation({ summary: 'Get delivery history' })
+  @RequirePermissions('delivery:read')
   @ApiQuery({ name: 'branchId', required: false })
   getDeliveryHistory(
     @Query('branchId') branchId?: string,
@@ -116,6 +124,7 @@ export class DeliveryController {
 
   @Get('stats')
   @ApiOperation({ summary: 'Get delivery dashboard stats' })
+  @RequirePermissions('delivery:read')
   @ApiQuery({ name: 'branchId', required: false })
   getDashboardStats(@Query('branchId') branchId?: string) {
     return this.deliveryService.getDashboardStats(branchId);
@@ -123,24 +132,28 @@ export class DeliveryController {
 
   @Get('order/:orderId')
   @ApiOperation({ summary: 'Get delivery by order ID' })
+  @RequirePermissions('delivery:read')
   findDeliveryByOrder(@Param('orderId') orderId: string) {
     return this.deliveryService.findDeliveryByOrder(orderId);
   }
 
   @Get(':id/locations')
   @ApiOperation({ summary: 'Get delivery GPS location history' })
+  @RequirePermissions('delivery:read')
   getDeliveryLocations(@Param('id') id: string) {
     return this.deliveryService.getDeliveryLocations(id);
   }
 
   @Get('pending-orders/:branchId')
   @ApiOperation({ summary: 'Get pending orders that need delivery assignment' })
+  @RequirePermissions('delivery:read')
   getPendingOrdersForDelivery(@Param('branchId') branchId: string) {
     return this.deliveryService.getPendingOrdersForDelivery(branchId);
   }
 
   @Post('from-order/:orderId')
   @ApiOperation({ summary: 'Create delivery record from an existing order' })
+  @RequirePermissions('delivery:write')
   createDeliveryFromOrder(
     @Param('orderId') orderId: string,
     @Body() body: { customerAddress?: string; customerLat?: number; customerLng?: number },

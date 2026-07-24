@@ -9,6 +9,7 @@ import '../../../shared/widgets/shared_widgets.dart';
 import '../data/pos_models.dart';
 import '../providers/pos_provider.dart';
 import 'widgets/split_payment_sheet.dart';
+import 'receipt_preview_screen.dart';
 
 class EnterprisePosScreen extends ConsumerStatefulWidget {
   const EnterprisePosScreen({super.key});
@@ -999,6 +1000,23 @@ class _EnterprisePosScreenState extends ConsumerState<EnterprisePosScreen> {
             backgroundColor: AppColors.success,
           ),
         );
+
+        // Auto-navigate to receipt preview after successful payment
+        if (!result.isOffline) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ReceiptPreviewScreen(
+                orderId: result.orderId,
+                orderNumber: result.orderNumber,
+                items: pos.cart.activeItems,
+                billing: billing,
+                tableName: pos.cart.tableNumber,
+                orderType: pos.cart.orderType,
+                config: pos.state.receiptConfig,
+              ),
+            ),
+          );
+        }
       }
       return;
     }

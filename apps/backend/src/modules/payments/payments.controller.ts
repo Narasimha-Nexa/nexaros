@@ -49,4 +49,14 @@ export class PaymentsController {
   refundPayment(@Param('id') id: string, @CurrentTenant() tenantId: string) {
     return this.paymentsService.refundPayment(id, tenantId);
   }
+
+  @Post('orders/:orderId/fail')
+  @ApiOperation({ summary: 'Record a failed payment (e.g. Razorpay webhook)' })
+  failPayment(
+    @Param('orderId') orderId: string,
+    @Body() data: { method: string; amount: number; reason: string; reference?: string },
+    @CurrentTenant() tenantId: string,
+  ) {
+    return this.paymentsService.failPayment(orderId, data, tenantId);
+  }
 }

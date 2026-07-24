@@ -94,6 +94,7 @@ export class StaffController {
 
   @Get('schedule')
   @ApiOperation({ summary: 'Get schedule for date' })
+  @RequirePermissions('staff:read')
   getSchedule(
     @Query('branchId') branchId: string,
     @Query('date') date: string,
@@ -104,6 +105,7 @@ export class StaffController {
 
   @Post('schedule/assign')
   @ApiOperation({ summary: 'Assign staff to shift' })
+  @RequirePermissions('staff:write')
   assignShift(
     @Query('staffId') staffId: string,
     @Query('shiftId') shiftId: string,
@@ -117,24 +119,28 @@ export class StaffController {
 
   @Post('staff/:id/clock-in')
   @ApiOperation({ summary: 'Clock in staff' })
+  @RequirePermissions('staff:write')
   clockIn(@Param('id') id: string, @CurrentTenant() tenantId: string) {
     return this.staffService.clockIn(id, tenantId);
   }
 
   @Post('staff/:id/clock-out')
   @ApiOperation({ summary: 'Clock out staff' })
+  @RequirePermissions('staff:write')
   clockOut(@Param('id') id: string, @CurrentTenant() tenantId: string) {
     return this.staffService.clockOut(id, tenantId);
   }
 
   @Get('attendance')
-  @ApiOperation({ summary: 'Get today\'s attendance by branch' })
+  @ApiOperation({ summary: "Get today's attendance by branch" })
+  @RequirePermissions('staff:read')
   getTodayAttendance(@Query('branchId') branchId: string, @CurrentTenant() tenantId: string) {
     return this.staffService.getTodayAttendance(branchId, tenantId);
   }
 
   @Get('staff/:id/attendance')
   @ApiOperation({ summary: 'Get attendance report for staff' })
+  @RequirePermissions('staff:read')
   getAttendanceReport(
     @Param('id') id: string,
     @Query('from') from: string,

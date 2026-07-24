@@ -134,7 +134,8 @@ class NavigationConfig {
       label: 'Floor',
       items: [
         const NavItem(id: 'tables', label: 'Tables', icon: Icons.table_restaurant_rounded, route: '/shell/tables', order: 20),
-        const NavItem(id: 'reservations', label: 'Reservations', icon: Icons.event_rounded, route: '/shell/reservations', order: 21),
+        const NavItem(id: 'floor-plan', label: 'Floor Plan', icon: Icons.map_rounded, route: '/shell/floor-plan', order: 21),
+        const NavItem(id: 'reservations', label: 'Reservations', icon: Icons.event_rounded, route: '/shell/reservations', order: 22),
       ],
     ),
 

@@ -83,6 +83,11 @@ enum KitchenPriority {
   const KitchenPriority(this.level, this.color);
 
   String get label => name[0].toUpperCase() + name.substring(1);
+
+  static KitchenPriority fromName(String? name) {
+    if (name == null) return KitchenPriority.normal;
+    return KitchenPriority.values.asNameMap()[name.toLowerCase()] ?? KitchenPriority.normal;
+  }
 }
 
 // ─── Course Type ───

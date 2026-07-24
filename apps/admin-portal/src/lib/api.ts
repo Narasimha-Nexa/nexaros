@@ -319,6 +319,21 @@ class AdminApiClient {
     return this.request('/admin/database/stats');
   }
 
+  // Dashboard Health
+  async getDashboardHealth() {
+    return this.request('/admin/dashboard/health');
+  }
+
+  // Dashboard Snapshots
+  async getDashboardSnapshots(branchId?: string, from?: string, to?: string) {
+    const params = new URLSearchParams();
+    if (branchId) params.set('branchId', branchId);
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    const qs = params.toString();
+    return this.request(`/admin/dashboard/snapshots${qs ? `?${qs}` : ''}`);
+  }
+
   // Platform Settings
   async getSettings() {
     return this.request('/platform/settings');
@@ -966,6 +981,126 @@ class AdminApiClient {
     if (conversationId) params.set('conversationId', conversationId);
     const token = this.getToken();
     return new EventSource(`/api/v1/admin/ai-copilot/chat/stream?${params.toString()}`);
+  }
+
+  // ─── Reservations ───
+  async getReservations(params: Record<string, string> = {}) {
+    return this.request('/reservations', { params });
+  }
+
+  async getReservation(id: string) {
+    return this.request(`/reservations/${id}`);
+  }
+
+  async createReservation(data: Record<string, any>) {
+    return this.request('/reservations', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async updateReservation(id: string, data: Record<string, any>) {
+    return this.request(`/reservations/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+  }
+
+  async deleteReservation(id: string) {
+    return this.request(`/reservations/${id}`, { method: 'DELETE' });
+  }
+
+  async getReservationStats(params: Record<string, string> = {}) {
+    return this.request('/reservations/stats', { params });
+  }
+
+  async getReservationAvailability(params: Record<string, string> = {}) {
+    return this.request('/reservations/availability', { params });
+  }
+
+  async getTodayReservations(params: Record<string, string> = {}) {
+    return this.request('/reservations/today', { params });
+  }
+
+  async getUpcomingReservations(params: Record<string, string> = {}) {
+    return this.request('/reservations/upcoming', { params });
+  }
+
+  // ─── Delivery ───
+  async getDeliveryActive(params: Record<string, string> = {}) {
+    return this.request('/delivery/active', { params });
+  }
+
+  async getDeliveryPartners(params: Record<string, string> = {}) {
+    return this.request('/delivery/partners', { params });
+  }
+
+  async getDeliveryStats(params: Record<string, string> = {}) {
+    return this.request('/delivery/stats', { params });
+  }
+
+  async assignDeliveryPartner(data: { deliveryId: string; partnerId: string }) {
+    return this.request('/delivery/assign', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async updateDeliveryStatus(id: string, data: Record<string, any>) {
+    return this.request(`/delivery/${id}/status`, { method: 'PATCH', body: JSON.stringify(data) });
+  }
+
+  async getDeliveryHistory(params: Record<string, string> = {}) {
+    return this.request('/delivery/history', { params });
+  }
+
+  async getDeliveryById(id: string) {
+    return this.request(`/delivery/${id}`);
+  }
+
+  // ─── Inventory ───
+  async getInventory(params: Record<string, string> = {}) {
+    return this.request('/inventory', { params });
+  }
+
+  async getInventoryItem(id: string) {
+    return this.request(`/inventory/${id}`);
+  }
+
+  async createInventoryItem(data: Record<string, any>) {
+    return this.request('/inventory', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async updateInventoryItem(id: string, data: Record<string, any>) {
+    return this.request(`/inventory/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+  }
+
+  async adjustInventoryStock(id: string, data: { quantity: number; type: 'IN' | 'OUT'; reason: string }) {
+    return this.request(`/inventory/${id}/adjust`, { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async getInventoryMovements(id: string, params: Record<string, string> = {}) {
+    return this.request(`/inventory/${id}/movements`, { params });
+  }
+
+  async getInventoryLowStock(params: Record<string, string> = {}) {
+    return this.request('/inventory/low-stock', { params });
+  }
+
+  async deleteInventoryItem(id: string) {
+    return this.request(`/inventory/${id}`, { method: 'DELETE' });
+  }
+
+  // ─── Staff (existing convenience wrappers) ───
+  async getStaffList(params: Record<string, string> = {}) {
+    return this.request('/staff', { params });
+  }
+
+  async getStaffSchedule(params: Record<string, string> = {}) {
+    return this.request('/staff/schedule', { params });
+  }
+
+  async getStaffAttendance(params: Record<string, string> = {}) {
+    return this.request('/staff/attendance', { params });
+  }
+
+  async clockIn(data: { staffId: string; method?: string }) {
+    return this.request('/staff/clock-in', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async clockOut(data: { attendanceId: string }) {
+    return this.request('/staff/clock-out', { method: 'POST', body: JSON.stringify(data) });
   }
 }
 

@@ -17,17 +17,17 @@ class KitchenDisplayScreen extends ConsumerStatefulWidget {
 }
 
 class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
-  Timer? _refreshTimer;
   Timer? _timerTick;
   String _selectedView = 'all'; // all, pending, cooking, ready, rush, delayed
 
   @override
   void initState() {
     super.initState();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) => _loadOrders());
+    // 1-second tick for elapsed time display updates
     _timerTick = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
+    // Initial load — Socket.IO handles subsequent updates
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadOrders());
   }
 
@@ -37,7 +37,6 @@ class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
 
   @override
   void dispose() {
-    _refreshTimer?.cancel();
     _timerTick?.cancel();
     super.dispose();
   }
@@ -66,6 +65,36 @@ class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
         const Icon(Icons.restaurant_menu, size: 20),
         const SizedBox(width: 8),
         Text('Kitchen Display', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+        const SizedBox(width: 12),
+        // Live connection indicator
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: AppColors.success.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  color: AppColors.success,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 5),
+              Text('LIVE', style: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: AppColors.success,
+                letterSpacing: 0.5,
+              )),
+            ],
+          ),
+        ),
         const SizedBox(width: 16),
         _CountBadge('New', state.pendingCount, KitchenOrderStatus.pending.color),
         const SizedBox(width: 6),

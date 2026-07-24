@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Package, CheckCircle2, Circle, Clock, Truck, ChefHat, UtensilsCrossed } from 'lucide-react';
+import { Package, CheckCircle2, Circle, Clock, Truck, ChefHat, UtensilsCrossed, CreditCard, XCircle } from 'lucide-react';
 import { Card, Badge } from '@/components/ui';
 import { cn, formatPrice, formatTime } from '@/lib/utils';
 import { api } from '@/lib/api';
@@ -31,6 +31,8 @@ function TrackOrderContent() {
   const orderId = searchParams.get('id') || '';
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
+  const [paymentStatus, setPaymentStatus] = useState<'idle' | 'paid' | 'failed'>('idle');
+  const [paymentDetail, setPaymentDetail] = useState<{ amount?: number; method?: string; reason?: string } | null>(null);
 
   // Initial fetch
   useEffect(() => {
@@ -120,6 +122,46 @@ function TrackOrderContent() {
         return { ...prev, items: updatedItems };
       });
     },
+    onOrderCancelled: (data) => {
+      setOrder((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          status: 'CANCELLED' as Order['status'],
+          statusHistory: [
+            ...prev.statusHistory,
+            {
+              status: 'CANCELLED',
+              label: 'Cancelled',
+              notes: data.notes || 'Order has been cancelled',
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        };
+      });
+    },
+    onItemsChanged: (data) => {
+      setOrder((prev) => {
+        if (!prev) return prev;
+        // Refresh the full order to get updated items and total
+        api.getOrder(prev.id).then((freshOrder) => {
+          if (freshOrder) setOrder(freshOrder);
+        });
+        return prev;
+      });
+    },
+    onPaymentReceived: (data) => {
+      setPaymentStatus('paid');
+      setPaymentDetail({ amount: data.amount, method: data.method });
+      // Refresh order to pick up new status
+      api.getOrder(orderId).then((freshOrder) => {
+        if (freshOrder) setOrder(freshOrder);
+      });
+    },
+    onPaymentFailed: (data) => {
+      setPaymentStatus('failed');
+      setPaymentDetail({ amount: data.amount, method: data.method, reason: data.reason });
+    },
   });
 
   // Polling fallback — refreshes every 60s in case the WebSocket drops
@@ -149,6 +191,29 @@ function TrackOrderContent() {
         id={orderId}
         orderNumber={order.orderNumber}
       />
+
+      {/* Real-time payment confirmation */}
+      {paymentStatus === 'paid' && paymentDetail && (
+        <div className="mb-6 p-4 rounded-lg bg-green-50 border border-green-200 flex items-center gap-3">
+          <CreditCard className="text-green-600" size={20} />
+          <div>
+            <p className="font-semibold text-green-800">Payment Confirmed</p>
+            <p className="text-sm text-green-600">
+              {formatPrice(paymentDetail.amount!)} paid via {paymentDetail.method}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {paymentStatus === 'failed' && paymentDetail && (
+        <div className="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 flex items-center gap-3">
+          <XCircle className="text-red-600" size={20} />
+          <div>
+            <p className="font-semibold text-red-800">Payment Failed</p>
+            <p className="text-sm text-red-600">{paymentDetail.reason || 'Payment could not be processed'}</p>
+          </div>
+        </div>
+      )}
 
       <div className="text-center mb-8">
         <h1 className="text-2xl font-bold text-ink mb-1">Track Order</h1>
